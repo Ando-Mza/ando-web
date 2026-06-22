@@ -1,0 +1,267 @@
+import { POI, Schedule, AuditLog, GeneralParams, Integration, User } from '../types';
+
+export const mockUsers: User[] = [
+  {
+    id: 'usr-admin-1',
+    name: 'Sofía Romero',
+    email: 'sofia.romero@ando.com',
+    role: 'admin',
+  },
+  {
+    id: 'usr-prov-1',
+    name: 'Santiago Catena',
+    email: 'santiago@catenazapata.com.ar',
+    role: 'provider',
+    businessName: 'Bodega Catena Zapata',
+  },
+];
+
+export const mockPOIs: POI[] = [
+  {
+    id: 'poi-1',
+    name: 'Bodega Catena Zapata',
+    description: 'Reconocida bodega mendocina pionera en la revolución del Malbec de altura. Ofrece visitas guiadas, catas exclusivas y restaurante de alta gama.',
+    category: 'Enoturismo',
+    address: 'Cobos s/n, Luján de Cuyo, Mendoza',
+    location: { lat: -33.0854, lng: -68.8789 },
+    images: [
+      'https://images.unsplash.com/photo-1543418219-44e2fd8516ee?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=800&q=80',
+    ],
+    status: 'approved',
+    createdBy: 'usr-prov-1',
+    updatedAt: '2026-06-20T14:30:00Z',
+  },
+  {
+    id: 'poi-2',
+    name: 'Parque General San Martín',
+    description: 'El principal y más antiguo parque de Mendoza. Diseñado por el paisajista Carlos Thays, cuenta con el Cerro de la Gloria, el Lago y portones históricos.',
+    category: 'Naturaleza',
+    address: 'Av. del Libertador s/n, Ciudad de Mendoza',
+    location: { lat: -32.8894, lng: -68.8681 },
+    images: [
+      'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
+    ],
+    status: 'approved',
+    createdBy: 'usr-admin-1',
+    updatedAt: '2026-06-18T10:00:00Z',
+  },
+  {
+    id: 'poi-3',
+    name: 'Termas de Cacheuta',
+    description: 'Parque de agua termal natural rodeado de la Cordillera de los Andes. Ofrece piletas a distintas temperaturas, grutas y fangoterapia.',
+    category: 'Bienestar',
+    address: 'Ruta Provincial 82, Km 38, Cacheuta, Mendoza',
+    location: { lat: -33.0189, lng: -69.1172 },
+    images: [
+      'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80',
+    ],
+    status: 'pending',
+    createdBy: 'usr-prov-1',
+    updatedAt: '2026-06-22T18:15:00Z',
+  },
+  {
+    id: 'poi-4',
+    name: 'Trekking Corto Aconcagua',
+    description: 'Experiencia guiada de senderismo en el Parque Provincial Aconcagua. Vista de la pared sur del cerro más alto de América.',
+    category: 'Aventura',
+    address: 'Ruta Nacional 7, Km 1220, Las Cuevas, Mendoza',
+    location: { lat: -32.6531, lng: -70.0108 },
+    images: [
+      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
+    ],
+    status: 'pending',
+    createdBy: 'usr-prov-1',
+    updatedAt: '2026-06-22T19:00:00Z',
+  },
+  {
+    id: 'poi-5',
+    name: 'Museo del Área Fundacional',
+    description: 'Museo arqueológico e histórico situado en el corazón del centro histórico de Mendoza. Alberga ruinas del cabildo colonial.',
+    category: 'Cultura',
+    address: 'Plaza Pedro del Castillo, Beltrán y Videla Castillo, Mendoza',
+    location: { lat: -32.8801, lng: -68.8312 },
+    images: [
+      'https://images.unsplash.com/photo-1566121318536-e8832a829f04?auto=format&fit=crop&w=800&q=80',
+    ],
+    status: 'rejected',
+    feedback: 'Falta adjuntar imágenes en alta resolución del interior de las salas de exposición.',
+    createdBy: 'usr-prov-1',
+    updatedAt: '2026-06-19T11:45:00Z',
+  },
+];
+
+export const mockSchedules: Schedule[] = [
+  {
+    id: 'sch-1',
+    poiId: 'poi-1',
+    daysOfWeek: [1, 2, 3, 4, 5, 6], // Lunes a Sábado
+    timeRanges: [
+      { start: '09:00', end: '13:00' },
+      { start: '15:30', end: '19:30' },
+    ],
+    season: 'all',
+    isHoliday: false,
+    description: 'Horario estándar de visitas y degustaciones',
+  },
+  {
+    id: 'sch-2',
+    poiId: 'poi-1',
+    daysOfWeek: [0], // Domingos
+    timeRanges: [
+      { start: '10:00', end: '14:00' }
+    ],
+    season: 'high',
+    isHoliday: false,
+    description: 'Degustaciones de temporada alta (Noviembre a Abril)',
+  },
+  {
+    id: 'sch-3',
+    poiId: 'poi-2',
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // Todos los días
+    timeRanges: [
+      { start: '00:00', end: '23:59' }
+    ],
+    season: 'all',
+    isHoliday: false,
+    description: 'Parque público abierto 24 horas',
+  },
+  {
+    id: 'sch-4',
+    poiId: 'poi-3',
+    daysOfWeek: [1, 2, 3, 4, 5], // Lunes a Viernes
+    timeRanges: [
+      { start: '09:00', end: '18:00' }
+    ],
+    season: 'all',
+    isHoliday: false,
+    description: 'Horario termal de semana',
+  },
+  {
+    id: 'sch-5',
+    poiId: 'poi-3',
+    daysOfWeek: [0, 6], // Sábados y Domingos
+    timeRanges: [
+      { start: '09:00', end: '19:00' }
+    ],
+    season: 'all',
+    isHoliday: false,
+    description: 'Horario termal fines de semana y feriados',
+  }
+];
+
+export const mockLogs: AuditLog[] = [
+  {
+    id: 'log-1',
+    poiId: 'poi-1',
+    poiName: 'Bodega Catena Zapata',
+    action: 'approve',
+    adminName: 'Sofía Romero',
+    comment: 'Validación de bodega y horarios de cata exitosa.',
+    timestamp: '2026-06-20T14:30:00Z',
+  },
+  {
+    id: 'log-2',
+    poiId: 'poi-5',
+    poiName: 'Museo del Área Fundacional',
+    action: 'reject',
+    adminName: 'Sofía Romero',
+    comment: 'Falta adjuntar imágenes en alta resolución del interior de las salas de exposición.',
+    timestamp: '2026-06-19T11:45:00Z',
+  },
+];
+
+export const mockGeneralParams: GeneralParams = {
+  maxImagesPerPOI: 8,
+  maxTimeRangesPerDay: 3,
+  validationGracePeriodDays: 5,
+  requireReviewForEdits: true,
+};
+
+export const mockIntegrations: Integration[] = [
+  {
+    id: 'int-1',
+    name: 'Google Maps API',
+    description: 'Permite geolocalizar POIs y renderizar mapas interactivos dentro de la aplicación móvil y el panel.',
+    enabled: true,
+    type: 'maps',
+  },
+  {
+    id: 'int-2',
+    name: 'OpenWeatherMap API',
+    description: 'Provee datos climáticos en tiempo real y pronósticos para los puntos de interés en el Gran Mendoza.',
+    enabled: true,
+    type: 'weather',
+  },
+  {
+    id: 'int-3',
+    name: 'Mercado Pago SDK',
+    description: 'Procesa transacciones y reservas de visitas o actividades de prestadores directamente en la app.',
+    enabled: false,
+    type: 'payment',
+  },
+];
+
+// Diccionario de Traducciones (US-CYP-02)
+export interface TranslationDict {
+  [lang: string]: {
+    [key: string]: string;
+  };
+}
+
+export const mockTranslations: TranslationDict = {
+  es: {
+    welcome: 'Bienvenido a ANDO',
+    dashboard: 'Tablero Principal',
+    pois: 'Puntos de Interés',
+    schedules: 'Horarios',
+    settings: 'Configuración',
+    validation: 'Validación de Contenido',
+    logout: 'Cerrar Sesión',
+    approve: 'Aprobar',
+    reject: 'Rechazar',
+    pending: 'Pendiente',
+    approved: 'Aprobado',
+    rejected: 'Rechazado',
+    save: 'Guardar Cambios',
+    cancel: 'Cancelar',
+    categories: 'Categorías',
+    integrations: 'Integraciones',
+  },
+  en: {
+    welcome: 'Welcome to ANDO',
+    dashboard: 'Dashboard',
+    pois: 'Points of Interest',
+    schedules: 'Schedules',
+    settings: 'Settings',
+    validation: 'Content Validation',
+    logout: 'Log Out',
+    approve: 'Approve',
+    reject: 'Reject',
+    pending: 'Pending',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    save: 'Save Changes',
+    cancel: 'Cancel',
+    categories: 'Categories',
+    integrations: 'Integrations',
+  },
+  pt: {
+    welcome: 'Bem-vindo ao ANDO',
+    dashboard: 'Painel Principal',
+    pois: 'Pontos de Interesse',
+    schedules: 'Horários',
+    settings: 'Configurações',
+    validation: 'Validação de Conteúdo',
+    logout: 'Sair',
+    approve: 'Aprovar',
+    reject: 'Rejeitar',
+    pending: 'Pendente',
+    approved: 'Aprovado',
+    rejected: 'Rejeitado',
+    save: 'Salvar Alterações',
+    cancel: 'Cancelar',
+    categories: 'Categorias',
+    integrations: 'Integrações',
+  },
+};

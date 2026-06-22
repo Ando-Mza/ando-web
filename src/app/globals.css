@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fillPrimary: #E96509;
+  --color-fillSecondary: #F2904A;
+  --color-bgPrimary: #FFFAF5;
+  --color-accentPurple: #8E527D;
+  --color-accentWine: #750031;
+  --color-textDark: #2C2C2C;
+
+  --font-unbounded: var(--font-unbounded), sans-serif;
+  --font-wixDisplay: var(--font-wix-display), sans-serif;
+  --font-wixText: var(--font-wix-text), sans-serif;
+}
+
+body {
+  background-color: var(--color-bgPrimary);
+  color: var(--color-textDark);
+  font-family: var(--font-wixText);
+}
