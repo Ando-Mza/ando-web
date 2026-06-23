@@ -8,7 +8,6 @@ import {
   Clock, 
   AlertCircle,
   CheckCircle,
-  FileText,
   TrendingUp,
   MapPin
 } from 'lucide-react';
@@ -63,7 +62,7 @@ export default function ProviderDashboard() {
               <div className="space-y-1">
                 <p>Tu publicación fue rechazada por el siguiente motivo: </p>
                 <p className="bg-white/60 p-2.5 rounded-lg font-mono text-[11px] border border-red-200 font-semibold">{myPoi.feedback}</p>
-                <p className="pt-1">Por favor ve a "Datos del Local" para corregir los problemas y volver a enviar.</p>
+                <p className="pt-1">Por favor ve a &quot;Datos del Local&quot; para corregir los problemas y volver a enviar.</p>
               </div>
             )}
           </div>

@@ -3,7 +3,6 @@
 import React from 'react';
 import { useApp } from '@/context/AppContext';
 import { 
-  FileText, 
   CheckCircle, 
   XCircle, 
   Clock, 
@@ -219,7 +218,7 @@ export default function AdminDashboard() {
               <div className="bg-white/80 border border-accentPurple/10 rounded-xl p-3.5 space-y-2">
                 <span className="text-[10px] font-bold text-accentPurple uppercase tracking-wider block">Sugerencia de Optimización</span>
                 <p className="text-xs text-textDark/80 font-medium">
-                  "El prestador Santiago Catena modificó horarios de la Bodega Catena Zapata para temporada alta. Te recomendamos revisar el solapamiento con eventos locales registrados en la agenda de Luján de Cuyo."
+                  &quot;El prestador Santiago Catena modificó horarios de la Bodega Catena Zapata para temporada alta. Te recomendamos revisar el solapamiento con eventos locales registrados en la agenda de Luján de Cuyo.&quot;
                 </p>
               </div>
 

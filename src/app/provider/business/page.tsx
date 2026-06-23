@@ -10,13 +10,11 @@ import {
   Image as ImageIcon, 
   Loader2, 
   Check, 
-  AlertTriangle,
-  MapPin,
-  Tag
+  AlertTriangle
 } from 'lucide-react';
 
 export default function BusinessProfile() {
-  const { pois, updatePOI, generalParams } = useApp();
+  const { pois, updatePOI, generalParams, categories } = useApp();
 
   // Encontrar el POI del prestador
   const myPoi = pois.find((p) => p.createdBy === 'usr-prov-1') || pois[0];
@@ -172,11 +170,13 @@ export default function BusinessProfile() {
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold"
                   >
-                    <option value="Enoturismo">Enoturismo</option>
-                    <option value="Naturaleza">Naturaleza</option>
-                    <option value="Bienestar">Bienestar</option>
-                    <option value="Aventura">Aventura</option>
-                    <option value="Cultura">Cultura</option>
+                    {categories
+                      .filter((cat) => cat.enabled)
+                      .map((cat) => (
+                        <option key={cat.id} value={cat.name}>
+                          {cat.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -211,7 +211,7 @@ export default function BusinessProfile() {
               <div className="bg-yellow-50 text-yellow-800 p-4 rounded-xl border border-yellow-150 flex items-start space-x-2 text-xs leading-relaxed">
                 <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <p>
-                  <strong>Aviso Importante:</strong> Al guardar los cambios, la información de tu establecimiento quedará temporalmente en estado "Pendiente de Validación" y oculta para nuevos visitantes en la aplicación móvil de ANDO hasta que un administrador verifique el contenido.
+                  <strong>Aviso Importante:</strong> Al guardar los cambios, la información de tu establecimiento quedará temporalmente en estado &quot;Pendiente de Validación&quot; y oculta para nuevos visitantes en la aplicación móvil de ANDO hasta que un administrador verifique el contenido.
                 </p>
               </div>
 

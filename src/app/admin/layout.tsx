@@ -8,10 +8,7 @@ import {
   CheckSquare, 
   Settings, 
   LogOut, 
-  Menu, 
-  X, 
   Bell,
-  User as UserIcon,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -27,14 +24,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Asegurar que el usuario esté autenticado para facilitar pruebas
   useEffect(() => {
-    setMounted(true);
-    if (!currentUser) {
-      // Auto-login de administrador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
-      const logged = login('admin');
-      if (!logged) {
-        router.push('/');
+    const timer = setTimeout(() => {
+      setMounted(true);
+      if (!currentUser) {
+        // Auto-login de administrador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
+        const logged = login('admin');
+        if (!logged) {
+          router.push('/');
+        }
       }
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [currentUser, login, router]);
 
   if (!mounted || !currentUser) {

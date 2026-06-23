@@ -10,8 +10,7 @@ import {
   LogOut, 
   ChevronLeft, 
   ChevronRight,
-  Bell,
-  Sparkles
+  Bell
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -25,14 +24,17 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
 
   // Asegurar que el usuario esté autenticado para facilitar pruebas
   useEffect(() => {
-    setMounted(true);
-    if (!currentUser) {
-      // Auto-login de prestador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
-      const logged = login('provider');
-      if (!logged) {
-        router.push('/');
+    const timer = setTimeout(() => {
+      setMounted(true);
+      if (!currentUser) {
+        // Auto-login de prestador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
+        const logged = login('provider');
+        if (!logged) {
+          router.push('/');
+        }
       }
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [currentUser, login, router]);
 
   if (!mounted || !currentUser) {

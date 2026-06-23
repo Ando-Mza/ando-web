@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { LogIn, Shield, Store, Loader2, Sparkles, ArrowRight } from 'lucide-react';
+import { Shield, Store, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();

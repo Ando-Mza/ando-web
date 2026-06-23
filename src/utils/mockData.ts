@@ -1,4 +1,4 @@
-import { POI, Schedule, AuditLog, GeneralParams, Integration, User } from '../types';
+import { POI, Schedule, AuditLog, GeneralParams, Integration, User, Category, ValidationState } from '../types';
 
 export const mockUsers: User[] = [
   {
@@ -181,10 +181,12 @@ export const mockGeneralParams: GeneralParams = {
 export const mockIntegrations: Integration[] = [
   {
     id: 'int-1',
-    name: 'Google Maps API',
-    description: 'Permite geolocalizar POIs y renderizar mapas interactivos dentro de la aplicación móvil y el panel.',
+    name: 'Mapbox API',
+    description: 'Permite geolocalizar POIs y renderizar mapas interactivos mediante vectores de Mapbox dentro de la aplicación móvil y el panel.',
     enabled: true,
     type: 'maps',
+    apiUrl: 'https://api.mapbox.com',
+    apiKey: 'pk.eyJ1IjoibWFjYSIsImEiOiJjbDFhMmIzYzRkNWU2bTNvdzFhNnoifQ_MapboxKey',
   },
   {
     id: 'int-2',
@@ -192,15 +194,26 @@ export const mockIntegrations: Integration[] = [
     description: 'Provee datos climáticos en tiempo real y pronósticos para los puntos de interés en el Gran Mendoza.',
     enabled: true,
     type: 'weather',
-  },
-  {
-    id: 'int-3',
-    name: 'Mercado Pago SDK',
-    description: 'Procesa transacciones y reservas de visitas o actividades de prestadores directamente en la app.',
-    enabled: false,
-    type: 'payment',
+    apiUrl: 'https://api.openweathermap.org/data/2.5',
+    apiKey: 'd1e2f3g4h5i6j7k8l9m0n1o2_WeatherKey',
   },
 ];
+
+export const mockCategories: Category[] = [
+  { id: 'cat-1', name: 'Enoturismo', description: 'Visitas a bodegas, degustaciones de vinos y almuerzos en viñedos.', enabled: true },
+  { id: 'cat-2', name: 'Naturaleza', description: 'Actividades al aire libre, visitas a parques naturales y reservas.', enabled: true },
+  { id: 'cat-3', name: 'Bienestar', description: 'Spa, termas y experiencias de relajación y salud.', enabled: true },
+  { id: 'cat-4', name: 'Aventura', description: 'Trekking, rafting, canopy y deportes extremos en montaña.', enabled: true },
+  { id: 'cat-5', name: 'Cultura', description: 'Museos, monumentos históricos, teatros y paseos urbanos.', enabled: true },
+];
+
+export const mockValidationStates: ValidationState[] = [
+  { id: 'state-pending', name: 'Pendiente de Validación', description: 'Contenido nuevo o editado esperando ser verificado.', enabled: true, allowedTransitions: ['state-approved', 'state-rejected', 'state-correction'] },
+  { id: 'state-approved', name: 'Aprobado', description: 'Contenido validado y visible en la aplicación para los turistas.', enabled: true, allowedTransitions: ['state-rejected', 'state-correction'] },
+  { id: 'state-rejected', name: 'Rechazado', description: 'Contenido que no cumple con las políticas y requiere rehacerse.', enabled: true, allowedTransitions: ['state-pending'] },
+  { id: 'state-correction', name: 'Corrección Solicitada', description: 'El administrador solicitó cambios menores antes de aprobar.', enabled: true, allowedTransitions: ['state-pending', 'state-approved', 'state-rejected'] },
+];
+
 
 // Diccionario de Traducciones (US-CYP-02)
 export interface TranslationDict {
