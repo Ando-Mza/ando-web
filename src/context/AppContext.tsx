@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { POI, Schedule, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus } from '../types';
 import {
   mockPOIs,
@@ -14,9 +14,11 @@ import {
   mockValidationStates,
   TranslationDict
 } from '../utils/mockData';
+import { api } from '../utils/api';
 
 interface AppContextProps {
   currentUser: User | null;
+  users: User[];
   pois: POI[];
   schedules: Schedule[];
   logs: AuditLog[];
@@ -28,7 +30,13 @@ interface AppContextProps {
   currentLanguage: 'es' | 'en' | 'pt';
   setCurrentLanguage: (lang: 'es' | 'en' | 'pt') => void;
   login: (role: UserRole) => boolean;
+  loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; role?: string; error?: string }>;
   logout: () => void;
+  registerProvider: (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }) => Promise<{ success: boolean; error?: string }>;
+  updateProviderProfile: (id: string, updatedData: Partial<User>) => { success: boolean; error?: string };
+  deleteProviderAccount: (id: string) => { success: boolean };
+  adminCreateUser: (userData: Omit<User, 'id'> & { password?: string }) => { success: boolean; error?: string };
+  adminDeleteUser: (id: string) => { success: boolean };
   approvePOI: (id: string, adminName: string) => void;
   rejectPOI: (id: string, adminName: string, feedback: string) => void;
   requestCorrectionPOI: (id: string, adminName: string, feedback: string) => void;
@@ -54,6 +62,7 @@ const AppContext = createContext<AppContextProps | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>(mockUsers);
   const [pois, setPois] = useState<POI[]>(mockPOIs);
   const [schedules, setSchedules] = useState<Schedule[]>(mockSchedules);
   const [logs, setLogs] = useState<AuditLog[]>(mockLogs);
@@ -64,8 +73,93 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [translations, setTranslations] = useState<TranslationDict>(mockTranslations);
   const [currentLanguage, setCurrentLanguage] = useState<'es' | 'en' | 'pt'>('es');
 
+  const loadBackendData = async (role: string) => {
+    try {
+      const cats = await api.getCategories();
+      if (Array.isArray(cats)) {
+        const mappedCats: Category[] = cats.map((c: any) => ({
+          id: c.id,
+          name: c.nombre,
+          description: '',
+          enabled: true,
+        }));
+        setCategories(mappedCats);
+      }
+
+      if (role === 'admin') {
+        const dbUsers = await api.getUsers();
+        if (Array.isArray(dbUsers)) {
+          const mappedUsers: User[] = dbUsers.map((u: any) => {
+            const roleObj = u.usuarioRoles?.[0]?.rol;
+            const rName = roleObj?.nombre?.trim().toLowerCase();
+            const mappedRole = rName === 'administrador' ? 'admin' : (rName === 'prestador' ? 'provider' : 'tourist');
+            return {
+              id: u.id,
+              name: `${u.nombre} ${u.apellido}`,
+              email: u.email,
+              role: mappedRole,
+              phone: u.telefono || '',
+              businessName: u.usuarioOrganizaciones?.[0]?.organizacion?.nombre || '',
+              cuit: '',
+              status: u.fechaBaja ? 'inactive' : 'active',
+            };
+          });
+          setUsers(mappedUsers);
+        }
+      }
+    } catch (err) {
+      console.error('Error al cargar datos desde el backend:', err);
+    }
+  };
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+      if (!token) return;
+      try {
+        const profile = await api.getProfile();
+        if (profile && profile.userId) {
+          const mappedRole = profile.role === 'administrador' ? 'admin' : (profile.role === 'prestador' ? 'provider' : 'tourist');
+          
+          if (mappedRole !== 'admin' && mappedRole !== 'provider') {
+            console.warn('Acceso denegado: El rol no está autorizado para acceder a este portal.');
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            setCurrentUser(null);
+            return;
+          }
+          
+          let nombreCompleto = profile.email.split('@')[0];
+          try {
+            const fullUser = await api.getUser(profile.userId);
+            if (fullUser) {
+              nombreCompleto = `${fullUser.nombre} ${fullUser.apellido}`;
+            }
+          } catch (e) {
+            console.error('Error fetching full user profile details:', e);
+          }
+
+          const loggedUser: User = {
+            id: profile.userId,
+            name: nombreCompleto,
+            email: profile.email,
+            role: mappedRole,
+            status: 'active',
+          };
+          setCurrentUser(loggedUser);
+          await loadBackendData(mappedRole);
+        }
+      } catch (err) {
+        console.error('Sesión expirada o inválida:', err);
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+      }
+    };
+    restoreSession();
+  }, []);
+
   const login = (role: UserRole): boolean => {
-    const user = mockUsers.find((u) => u.role === role);
+    const user = users.find((u) => u.role === role && u.status !== 'inactive');
     if (user) {
       setCurrentUser(user);
       return true;
@@ -73,8 +167,138 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return false;
   };
 
+  const loginWithCredentials = async (email: string, password: string): Promise<{ success: boolean; role?: string; error?: string }> => {
+    try {
+      const data = await api.login({ email, password });
+      if (data && data.accessToken) {
+        const roleName = data.user.role.nombre.trim().toLowerCase();
+        const mappedRole = roleName === 'administrador' ? 'admin' : (roleName === 'prestador' ? 'provider' : 'tourist');
+        
+        if (mappedRole !== 'admin' && mappedRole !== 'provider') {
+          return {
+            success: false,
+            error: 'Acceso denegado. Este portal es exclusivo para administradores y prestadores de servicios.'
+          };
+        }
+
+        localStorage.setItem('accessToken', data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
+        
+        const loggedUser: User = {
+          id: data.user.id,
+          name: `${data.user.nombre} ${data.user.apellido}`,
+          email: data.user.email,
+          role: mappedRole,
+          status: 'active',
+        };
+        
+        setCurrentUser(loggedUser);
+        await loadBackendData(mappedRole);
+        
+        return { success: true, role: mappedRole };
+      }
+      return { success: false, error: 'Respuesta inválida del servidor.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al iniciar sesión.' };
+    }
+  };
+
   const logout = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (token) {
+      api.logout().catch(err => console.error('Error logging out from server:', err));
+    }
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
     setCurrentUser(null);
+  };
+
+  const registerProvider = async (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const nameParts = userData.name.trim().split(' ');
+      const nombre = nameParts[0] || '';
+      const apellido = nameParts.slice(1).join(' ') || '';
+      
+      const payload = {
+        nombre,
+        apellido,
+        email: userData.email,
+        password: userData.password,
+        confirmPassword: userData.password,
+        telefono: userData.phone,
+        aceptaTerminos: true,
+        nombreEmpresa: userData.businessName || '',
+        cuitEmpresa: userData.cuit || '',
+      };
+      
+      await api.registerPrestador(payload);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al registrar el prestador.' };
+    }
+  };
+
+  const updateProviderProfile = (id: string, updatedData: Partial<User>): { success: boolean; error?: string } => {
+    if (updatedData.email) {
+      const emailTaken = users.some((u) => u.id !== id && u.email.toLowerCase() === updatedData.email!.toLowerCase());
+      if (emailTaken) {
+        return { success: false, error: 'El correo electrónico ya está en uso' };
+      }
+    }
+    
+    setUsers((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, ...updatedData } : u))
+    );
+    
+    setCurrentUser((prev) => {
+      if (prev && prev.id === id) {
+        return { ...prev, ...updatedData };
+      }
+      return prev;
+    });
+
+    return { success: true };
+  };
+
+  const deleteProviderAccount = (id: string): { success: boolean } => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, status: 'inactive' } : u))
+    );
+    
+    setPois((prev) =>
+      prev.map((poi) => (poi.createdBy === id ? { ...poi, status: 'rejected', feedback: 'Cuenta del prestador dada de baja.' } : poi))
+    );
+    
+    if (currentUser?.id === id) {
+      setCurrentUser(null);
+    }
+    
+    return { success: true };
+  };
+
+  const adminCreateUser = (userData: Omit<User, 'id'> & { password?: string }): { success: boolean; error?: string } => {
+    const exists = users.some((u) => u.email.toLowerCase() === userData.email.toLowerCase());
+    if (exists) {
+      return { success: false, error: 'El correo electrónico ya está registrado' };
+    }
+    const newUser: User = {
+      ...userData,
+      id: `usr-${userData.role}-${Date.now()}`,
+    };
+    setUsers((prev) => [...prev, newUser]);
+    return { success: true };
+  };
+
+  const adminDeleteUser = (id: string): { success: boolean } => {
+    api.deleteUser(id).catch(err => console.error('Error deleting user from server:', err));
+    
+    setUsers((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, status: 'inactive' } : u))
+    );
+    setPois((prev) =>
+      prev.map((poi) => (poi.createdBy === id ? { ...poi, status: 'rejected', feedback: 'Cuenta desactivada por el administrador.' } : poi))
+    );
+    return { success: true };
   };
 
   const approvePOI = (id: string, adminName: string) => {
@@ -267,22 +491,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // CRUD Categorías (US-CYP-03)
-  const addCategory = (catData: Omit<Category, 'id'>) => {
-    const newCat: Category = {
-      ...catData,
-      id: `cat-${Date.now()}`,
-    };
-    setCategories((prev) => [...prev, newCat]);
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'category_create',
-      adminName: currentUser?.name || 'Sofía Romero',
-      comment: `Creada categoría turística: "${newCat.name}"`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const addCategory = async (catData: Omit<Category, 'id'>) => {
+    try {
+      const dbCat = await api.createCategory(catData.name);
+      const newCat: Category = {
+        id: dbCat.id,
+        name: dbCat.nombre,
+        description: '',
+        enabled: true,
+      };
+      setCategories((prev) => [...prev, newCat]);
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'category_create',
+        adminName: currentUser?.name || 'Sofía Romero',
+        comment: `Creada categoría turística: "${newCat.name}"`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+    } catch (err: any) {
+      alert(err.message || 'Error al crear la categoría');
+    }
   };
 
   const updateCategory = (updatedCat: Category) => {
@@ -390,6 +621,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         currentUser,
+        users,
         pois,
         schedules,
         logs,
@@ -401,7 +633,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentLanguage,
         setCurrentLanguage,
         login,
+        loginWithCredentials,
         logout,
+        registerProvider,
+        updateProviderProfile,
+        deleteProviderAccount,
+        adminCreateUser,
+        adminDeleteUser,
         approvePOI,
         rejectPOI,
         requestCorrectionPOI,

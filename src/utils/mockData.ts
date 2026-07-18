@@ -6,6 +6,8 @@ export const mockUsers: User[] = [
     name: 'Sofía Romero',
     email: 'sofia.romero@ando.com',
     role: 'admin',
+    password: '123456',
+    status: 'active'
   },
   {
     id: 'usr-prov-1',
@@ -13,6 +15,34 @@ export const mockUsers: User[] = [
     email: 'santiago@catenazapata.com.ar',
     role: 'provider',
     businessName: 'Bodega Catena Zapata',
+    phone: '+54 261 490 0200',
+    cuit: '20304567899',
+    password: '123456',
+    status: 'active'
+  },
+  {
+    id: 'usr-tourist-1',
+    name: 'Juan Pérez',
+    email: 'juan.perez@gmail.com',
+    role: 'tourist',
+    phone: '+54 261 555 1234',
+    status: 'active'
+  },
+  {
+    id: 'usr-tourist-2',
+    name: 'Maria Dupont',
+    email: 'maria.dupont@yahoo.fr',
+    role: 'tourist',
+    phone: '+33 6 1234 5678',
+    status: 'active'
+  },
+  {
+    id: 'usr-tourist-3',
+    name: 'John Doe',
+    email: 'john.doe@hotmail.com',
+    role: 'tourist',
+    phone: '+1 555 987 6543',
+    status: 'inactive'
   },
 ];
 
@@ -31,6 +61,8 @@ export const mockPOIs: POI[] = [
     status: 'approved',
     createdBy: 'usr-prov-1',
     updatedAt: '2026-06-20T14:30:00Z',
+    email: 'contacto@catenazapata.com.ar',
+    phone: '+54 261 490 0200',
   },
   {
     id: 'poi-2',
@@ -45,6 +77,8 @@ export const mockPOIs: POI[] = [
     status: 'approved',
     createdBy: 'usr-admin-1',
     updatedAt: '2026-06-18T10:00:00Z',
+    email: 'parques@mendoza.gov.ar',
+    phone: '+54 261 449 2000',
   },
   {
     id: 'poi-3',
@@ -59,6 +93,8 @@ export const mockPOIs: POI[] = [
     status: 'pending',
     createdBy: 'usr-prov-1',
     updatedAt: '2026-06-22T18:15:00Z',
+    email: 'reservas@termascacheuta.com',
+    phone: '+54 261 490 1520',
   },
   {
     id: 'poi-4',
@@ -73,6 +109,8 @@ export const mockPOIs: POI[] = [
     status: 'pending',
     createdBy: 'usr-prov-1',
     updatedAt: '2026-06-22T19:00:00Z',
+    email: 'info@aconcaguatrek.com.ar',
+    phone: '+54 261 422 1530',
   },
   {
     id: 'poi-5',
@@ -88,6 +126,8 @@ export const mockPOIs: POI[] = [
     feedback: 'Falta adjuntar imágenes en alta resolución del interior de las salas de exposición.',
     createdBy: 'usr-prov-1',
     updatedAt: '2026-06-19T11:45:00Z',
+    email: 'museofundacional@ciudaddemendoza.gov.ar',
+    phone: '+54 261 425 6927',
   },
 ];
 

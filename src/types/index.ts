@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'provider';
+export type UserRole = 'admin' | 'provider' | 'tourist';
 
 export interface User {
   id: string;
@@ -6,6 +6,10 @@ export interface User {
   email: string;
   role: UserRole;
   businessName?: string; // Solo para Prestadores
+  phone?: string;        // Opcional para prestadores
+  cuit?: string;         // Opcional para prestadores
+  password?: string;     // Para simulaciones de login/reset
+  status?: 'active' | 'pending' | 'inactive'; // Estado de la cuenta
 }
 
 export type POIStatus = 'pending' | 'approved' | 'rejected' | 'correction';
@@ -25,6 +29,8 @@ export interface POI {
   feedback?: string; // Comentarios de rechazo o solicitud de corrección
   createdBy: string; // ID del prestador
   updatedAt: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface TimeRange {

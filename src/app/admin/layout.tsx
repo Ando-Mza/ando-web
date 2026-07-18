@@ -10,7 +10,8 @@ import {
   LogOut, 
   Bell,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Users
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -21,6 +22,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Asegurar que el usuario esté autenticado para facilitar pruebas
   useEffect(() => {
@@ -32,6 +34,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         if (!logged) {
           router.push('/');
         }
+      } else if (currentUser.role !== 'admin') {
+        router.push('/');
       }
     }, 0);
     return () => clearTimeout(timer);
@@ -62,6 +66,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       desc: 'Auditoría de POIs y horarios'
     },
     {
+      name: 'Gestión de Usuarios',
+      path: '/admin/users',
+      icon: Users,
+      desc: 'Auditoría de cuentas GDU'
+    },
+    {
       name: 'Configuración CYP',
       path: '/admin/settings',
       icon: Settings,
@@ -84,12 +94,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       >
         {/* Brand/Logo */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-black/5">
-          <Link href="/admin/dashboard" className="flex items-center space-x-2">
-            <span className="font-unbounded text-xl font-bold tracking-tight text-accentWine">
-              ANDO{isSidebarOpen && <span className="text-fillPrimary">.</span>}
-            </span>
+          <Link href="/admin/dashboard" className="flex items-center space-x-2 overflow-hidden">
+            {isSidebarOpen ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/brand/logotipoColor1.svg" alt="ANDO" className="h-7 w-auto" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/brand/iconoClaro.svg" alt="ANDO" className="h-6 w-auto invert opacity-75" />
+            )}
             {isSidebarOpen && (
-              <span className="text-[10px] bg-accentPurple/10 text-accentPurple px-2 py-0.5 rounded-full font-semibold uppercase">
+              <span className="text-[10px] bg-accentPurple/10 text-accentPurple px-2 py-0.5 rounded-full font-semibold uppercase flex-shrink-0">
                 Admin
               </span>
             )}
@@ -136,28 +150,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* User Info / Logout */}
         <div className="p-4 border-t border-black/5">
-          {isSidebarOpen ? (
-            <div className="bg-bgPrimary/80 rounded-xl p-3 border border-black/5 mb-3">
-              <div className="flex items-center space-x-3">
-                <div className="h-9 w-9 rounded-full bg-accentWine/10 text-accentWine flex items-center justify-center font-bold">
-                  SR
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-textDark truncate">{currentUser.name}</p>
-                  <p className="text-[10px] text-textDark/50 truncate">sofia.romero@ando.com</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-center mb-3">
-              <div className="h-9 w-9 rounded-full bg-accentWine/10 text-accentWine flex items-center justify-center font-bold">
-                SR
-              </div>
-            </div>
-          )}
-          
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 transition-all duration-200 cursor-pointer ${
               !isSidebarOpen && 'px-0'
             }`}
@@ -206,6 +200,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {children}
         </main>
       </div>
+
+      {/* Logout Confirmation Modal (US-ACC-05) */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-black/5 animate-scale-up space-y-4">
+            <div className="flex items-center space-x-2.5 text-accentWine">
+              <LogOut className="h-5 w-5" />
+              <h4 className="font-wixDisplay font-bold text-textDark">Cerrar Sesión</h4>
+            </div>
+            <p className="text-xs text-textDark/70 leading-relaxed">
+              ¿Está seguro que quiere cerrar la sesión? Si lo hace deberá iniciar sesión nuevamente para acceder a su panel de gestión.
+            </p>
+            <div className="flex space-x-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/10 transition-colors cursor-pointer"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
