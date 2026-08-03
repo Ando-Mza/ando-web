@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'provider';
+export type UserRole = 'admin' | 'provider' | 'tourist';
 
 export interface User {
   id: string;
@@ -6,9 +6,13 @@ export interface User {
   email: string;
   role: UserRole;
   businessName?: string; // Solo para Prestadores
+  phone?: string;        // Opcional para prestadores
+  cuit?: string;         // Opcional para prestadores
+  password?: string;     // Para simulaciones de login/reset
+  status?: 'active' | 'pending' | 'inactive'; // Estado de la cuenta
 }
 
-export type POIStatus = 'pending' | 'approved' | 'rejected';
+export type POIStatus = 'pending' | 'approved' | 'rejected' | 'correction';
 
 export interface POI {
   id: string;
@@ -22,9 +26,11 @@ export interface POI {
   };
   images: string[];
   status: POIStatus;
-  feedback?: string; // Comentarios de rechazo
+  feedback?: string; // Comentarios de rechazo o solicitud de corrección
   createdBy: string; // ID del prestador
   updatedAt: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface TimeRange {
@@ -49,7 +55,7 @@ export interface AuditLog {
   id: string;
   poiId: string;
   poiName: string;
-  action: 'approve' | 'reject';
+  action: 'approve' | 'reject' | 'correction' | 'param_change' | 'param_reset' | 'category_create' | 'category_delete' | 'category_toggle' | 'state_create' | 'state_delete' | 'state_toggle' | 'image_delete' | 'test_connection';
   adminName: string;
   comment?: string;
   timestamp: string;
@@ -67,5 +73,23 @@ export interface Integration {
   name: string;
   description: string;
   enabled: boolean;
-  type: 'maps' | 'weather' | 'payment';
+  type: 'maps' | 'weather';
+  apiUrl?: string;
+  apiKey?: string;
 }
+
+export interface Category {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+export interface ValidationState {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  allowedTransitions: string[]; // IDs de estados destinos válidos
+}
+
