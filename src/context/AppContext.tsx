@@ -107,6 +107,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setUsers(mappedUsers);
         }
       }
+
+      if (role === 'provider' || role === 'admin') {
+        try {
+          const dbPois = await api.getMyPois();
+          if (Array.isArray(dbPois) && dbPois.length > 0) {
+            const mappedPois: POI[] = dbPois.map((p: any) => ({
+              id: p.id,
+              name: p.nombre,
+              description: p.descripcion || '',
+              category: p.categorias?.[0]?.categoria?.nombre || p.categoria || 'Enoturismo',
+              address: p.direccion || '',
+              location: {
+                lat: p.latitud ? Number(p.latitud) : -32.8894,
+                lng: p.longitud ? Number(p.longitud) : -68.8681,
+              },
+              images: Array.isArray(p.imagenes) && p.imagenes.length > 0 
+                ? p.imagenes 
+                : (p.imagenPrincipalUrl ? [p.imagenPrincipalUrl] : []),
+              status: p.estado || 'pending',
+              createdBy: p.creadoPorId || p.organizacionId || 'usr-prov-1',
+              updatedAt: p.updatedAt || new Date().toISOString(),
+              email: p.emailContacto || '',
+              phone: p.telefono || '',
+            }));
+            setPois((prev) => {
+              const map = new Map(prev.map(item => [item.id, item]));
+              mappedPois.forEach(item => map.set(item.id, item));
+              return Array.from(map.values());
+            });
+          }
+        } catch (e) {
+          console.warn('Nota de carga POIs backend:', e);
+        }
+      }
     } catch (err) {
       console.error('Error al cargar datos desde el backend:', err);
     }
@@ -466,7 +500,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  const addPOI = (poiData: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => {
+  const addPOI = async (poiData: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => {
     const newPOI: POI = {
       ...poiData,
       id: `poi-${Date.now()}`,
@@ -475,12 +509,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updatedAt: new Date().toISOString(),
     };
     setPois((prev) => [...prev, newPOI]);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (token) {
+      try {
+        const payload = {
+          nombre: poiData.name,
+          descripcion: poiData.description,
+          direccion: poiData.address,
+          latitud: poiData.location.lat,
+          longitud: poiData.location.lng,
+          telefono: poiData.phone,
+          emailContacto: poiData.email,
+          imagenes: poiData.images,
+          imagenPrincipalUrl: poiData.images?.[0] || '',
+        };
+        await api.createPoi(payload);
+      } catch (err) {
+        console.warn('Nota de sincronización backend POI:', err);
+      }
+    }
   };
 
-  const updatePOI = (updatedPoi: POI) => {
+  const updatePOI = async (updatedPoi: POI) => {
     setPois((prev) =>
       prev.map((p) => (p.id === updatedPoi.id ? { ...updatedPoi, updatedAt: new Date().toISOString() } : p))
     );
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (token && !updatedPoi.id.startsWith('poi-')) {
+      try {
+        const payload = {
+          nombre: updatedPoi.name,
+          descripcion: updatedPoi.description,
+          direccion: updatedPoi.address,
+          latitud: updatedPoi.location.lat,
+          longitud: updatedPoi.location.lng,
+          telefono: updatedPoi.phone,
+          emailContacto: updatedPoi.email,
+          imagenes: updatedPoi.images,
+          imagenPrincipalUrl: updatedPoi.images?.[0] || '',
+        };
+        await api.updatePoi(updatedPoi.id, payload);
+      } catch (err) {
+        console.warn('Nota de sincronización backend POI update:', err);
+      }
+    }
   };
 
   const saveSchedules = (poiId: string, newSchedules: Schedule[]) => {

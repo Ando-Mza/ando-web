@@ -334,8 +334,8 @@ export default function AdminSettings() {
       {/* Overview Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="font-wixDisplay text-2xl font-bold text-accentWine">Configuración del Sistema (CYP)</h3>
-          <p className="text-sm text-textDark/60">
+          <h3 className="font-wixDisplay text-2xl font-bold text-accentWine">Configuración del sistema (CYP)</h3>
+          <p className="text-sm text-textDark/70 mt-1">
             Administra los límites de negocio, diccionarios multiidioma, categorías, flujos de revisión e integraciones de ANDO.
           </p>
         </div>
@@ -345,32 +345,32 @@ export default function AdminSettings() {
       <div className="flex border-b border-black/5 overflow-x-auto scrollbar-thin">
         <button
           onClick={() => setActiveTab('params')}
-          className={`flex items-center space-x-2 py-3.5 px-5 font-semibold text-sm border-b-2 transition-all cursor-pointer flex-shrink-0 ${
+          className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
             activeTab === 'params'
-              ? 'border-fillPrimary text-fillPrimary scale-102'
-              : 'border-transparent text-textDark/50 hover:text-textDark'
+              ? 'border-accentWine text-accentWine'
+              : 'border-transparent text-textDark/60 hover:text-textDark'
           }`}
         >
           <Settings2 className="h-4 w-4" />
-          <span>Parámetros Generales</span>
+          <span>Parámetros generales</span>
         </button>
         <button
           onClick={() => setActiveTab('languages')}
-          className={`flex items-center space-x-2 py-3.5 px-5 font-semibold text-sm border-b-2 transition-all cursor-pointer flex-shrink-0 ${
+          className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
             activeTab === 'languages'
-              ? 'border-fillPrimary text-fillPrimary scale-102'
-              : 'border-transparent text-textDark/50 hover:text-textDark'
+              ? 'border-accentWine text-accentWine'
+              : 'border-transparent text-textDark/60 hover:text-textDark'
           }`}
         >
           <Globe2 className="h-4 w-4" />
-          <span>Idiomas</span>
+          <span>Idiomas y traducción</span>
         </button>
         <button
           onClick={() => setActiveTab('categories')}
-          className={`flex items-center space-x-2 py-3.5 px-5 font-semibold text-sm border-b-2 transition-all cursor-pointer flex-shrink-0 ${
+          className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
             activeTab === 'categories'
-              ? 'border-fillPrimary text-fillPrimary scale-102'
-              : 'border-transparent text-textDark/50 hover:text-textDark'
+              ? 'border-accentWine text-accentWine'
+              : 'border-transparent text-textDark/60 hover:text-textDark'
           }`}
         >
           <FolderHeart className="h-4 w-4" />
@@ -378,25 +378,25 @@ export default function AdminSettings() {
         </button>
         <button
           onClick={() => setActiveTab('states')}
-          className={`flex items-center space-x-2 py-3.5 px-5 font-semibold text-sm border-b-2 transition-all cursor-pointer flex-shrink-0 ${
+          className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
             activeTab === 'states'
-              ? 'border-fillPrimary text-fillPrimary scale-102'
-              : 'border-transparent text-textDark/50 hover:text-textDark'
+              ? 'border-accentWine text-accentWine'
+              : 'border-transparent text-textDark/60 hover:text-textDark'
           }`}
         >
           <ListTodo className="h-4 w-4" />
-          <span>Estados de Validación</span>
+          <span>Estados de validación</span>
         </button>
         <button
           onClick={() => setActiveTab('integrations')}
-          className={`flex items-center space-x-2 py-3.5 px-5 font-semibold text-sm border-b-2 transition-all cursor-pointer flex-shrink-0 ${
+          className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
             activeTab === 'integrations'
-              ? 'border-fillPrimary text-fillPrimary scale-102'
-              : 'border-transparent text-textDark/50 hover:text-textDark'
+              ? 'border-accentWine text-accentWine'
+              : 'border-transparent text-textDark/60 hover:text-textDark'
           }`}
         >
           <Link2 className="h-4 w-4" />
-          <span>Integraciones API</span>
+          <span>Integraciones y APIs</span>
         </button>
       </div>
 

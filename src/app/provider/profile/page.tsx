@@ -303,8 +303,9 @@ export default function ProviderProfilePage() {
               <h4 className="font-wixDisplay font-bold text-lg text-textDark">Eliminar Cuenta de Socio</h4>
             </div>
             <div className="space-y-2 text-xs text-textDark/70 leading-relaxed">
-              <p className="font-semibold text-red-700 bg-red-50 p-3 rounded-xl border border-red-100">
-                🚨 Advertencia Crítica de Baja:
+              <p className="font-semibold text-red-700 bg-red-50 p-3 rounded-xl border border-red-100 flex items-center space-x-2">
+                <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                <span>Advertencia crítica de baja:</span>
               </p>
               <p>Al confirmar esta acción, tu cuenta quedará desactivada de forma permanente y ya no podrás acceder con tus credenciales.</p>
               <p>Además, todos los establecimientos y puntos de interés (POIs) vinculados a tu cuenta (<strong>{currentUser.businessName}</strong>) dejarán de estar visibles en el catálogo y mapas de la aplicación móvil.</p>
