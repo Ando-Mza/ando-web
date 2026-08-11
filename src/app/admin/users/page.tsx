@@ -16,7 +16,8 @@ import {
   Shield, 
   Store,
   User as UserIcon,
-  Eye
+  Eye,
+  Compass
 } from 'lucide-react';
 
 type ViewMode = 'list' | 'create' | 'edit';
@@ -776,11 +777,13 @@ export default function UserManagementPage() {
                 <div>
                   <span className="block text-[9px] font-bold uppercase tracking-wider text-textDark/50">Rol en la Plataforma</span>
                   <span className="text-xs font-semibold text-textDark block mt-0.5">
-                    {selectedUser.role === 'admin' 
-                      ? '🔒 Administrador de Sistemas' 
-                      : selectedUser.role === 'provider' 
-                      ? '🍷 Prestador de Servicios' 
-                      : '🗺️ Turista Común'}
+                    {selectedUser.role === 'admin' ? (
+                      <span className="inline-flex items-center space-x-1.5"><Shield className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" /><span>Administrador de sistemas</span></span>
+                    ) : selectedUser.role === 'provider' ? (
+                      <span className="inline-flex items-center space-x-1.5"><Store className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" /><span>Prestador de servicios</span></span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1.5"><Compass className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" /><span>Turista registrado</span></span>
+                    )}
                   </span>
                 </div>
 

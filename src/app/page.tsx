@@ -17,7 +17,8 @@ import {
   Phone, 
   Lock, 
   Briefcase, 
-  FileText 
+  FileText,
+  Key
 } from 'lucide-react';
 
 type SubView = 'login' | 'register' | 'forgot_password' | 'recovery_sent' | 'reset_password' | 'registration_pending';
@@ -323,17 +324,17 @@ export default function LoginPage() {
           {subView === 'login' && (
             <div className="space-y-6">
               <div className="text-center">
-                <h2 className="text-lg font-bold text-accentWine font-wixDisplay">Ingresar al Portal</h2>
-                <p className="text-xs text-textDark/50 mt-1">Ingresa con tu correo y contraseña para acceder al sistema.</p>
+                <h2 className="text-lg font-bold text-accentWine font-wixDisplay">Ingresar al portal</h2>
+                <p className="text-xs text-textDark/70 mt-1">Ingresa con tu correo y contraseña para acceder al sistema.</p>
               </div>
 
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-textDark/70 mb-1.5 pl-1">
-                    Correo Electrónico
+                    Correo electrónico
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-3.5 top-3 h-4 w-4 text-textDark/40" />
+                    <Mail className="absolute left-3.5 top-3 h-4 w-4 text-textDark/45" />
                     <input
                       type="email"
                       required
@@ -360,7 +361,7 @@ export default function LoginPage() {
                     </button>
                   </div>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-3 h-4 w-4 text-textDark/40" />
+                    <Lock className="absolute left-3.5 top-3 h-4 w-4 text-textDark/45" />
                     <input
                       type="password"
                       required
@@ -374,8 +375,8 @@ export default function LoginPage() {
                 </div>
 
                 {loginError && (
-                  <div className="bg-red-50 text-red-600 border border-red-150 text-[11px] px-3.5 py-2.5 rounded-xl font-medium flex items-center space-x-2 animate-fade-in">
-                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <div className="bg-red-50 text-red-700 border border-red-200 text-[11px] px-3.5 py-2.5 rounded-xl font-medium flex items-center space-x-2 animate-fade-in shadow-2xs">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-600" />
                     <span>{loginError}</span>
                   </div>
                 )}
@@ -392,7 +393,7 @@ export default function LoginPage() {
                     </>
                   ) : (
                     <>
-                      <span>Ingresar al Portal</span>
+                      <span>Ingresar al portal</span>
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -407,13 +408,13 @@ export default function LoginPage() {
                   }}
                   className="text-xs font-bold text-accentWine hover:text-fillPrimary transition-colors cursor-pointer"
                 >
-                  ¿Sos un prestador y no tenés cuenta? Registrate aquí
+                  ¿Es un prestador y no tiene cuenta? Regístrese aquí
                 </button>
               </div>
 
               {/* Developer Quick Links */}
-              <div className="bg-bgPrimary/60 border border-black/5 rounded-2xl p-4 text-[10px] text-textDark/60 space-y-2 mt-4">
-                <p className="font-bold text-accentWine">Acceso Rápido de Prueba (Demo)</p>
+              <div className="bg-bgPrimary/60 border border-black/5 rounded-2xl p-4 text-[10px] text-textDark/70 space-y-2 mt-4">
+                <p className="font-bold text-accentWine">Acceso rápido de prueba (demo)</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -421,9 +422,10 @@ export default function LoginPage() {
                       setLoginEmail('admin@ando.com');
                       setLoginPassword('Admin123!');
                     }}
-                    className="py-1.5 px-2 bg-white hover:bg-black/5 rounded-lg border border-black/5 font-semibold text-center cursor-pointer transition-colors text-textDark"
+                    className="py-1.5 px-2 bg-white hover:bg-black/5 rounded-lg border border-black/5 font-semibold text-center cursor-pointer transition-colors text-textDark inline-flex items-center justify-center space-x-1.5"
                   >
-                    🔑 Admin (Sofía)
+                    <Key className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" />
+                    <span>Admin (Sofía)</span>
                   </button>
                   <button
                     type="button"
@@ -431,9 +433,10 @@ export default function LoginPage() {
                       setLoginEmail('prestador@ando.com');
                       setLoginPassword('Prestador123!');
                     }}
-                    className="py-1.5 px-2 bg-white hover:bg-black/5 rounded-lg border border-black/5 font-semibold text-center cursor-pointer transition-colors text-textDark"
+                    className="py-1.5 px-2 bg-white hover:bg-black/5 rounded-lg border border-black/5 font-semibold text-center cursor-pointer transition-colors text-textDark inline-flex items-center justify-center space-x-1.5"
                   >
-                    🍷 Prestador (Catena)
+                    <Store className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" />
+                    <span>Prestador (Catena)</span>
                   </button>
                 </div>
               </div>

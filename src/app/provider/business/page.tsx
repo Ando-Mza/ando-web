@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
+import { uploadFileToR2 } from '@/utils/api';
 import { POI } from '@/types';
 import { 
   UploadCloud, 
@@ -26,6 +27,7 @@ export default function BusinessProfile() {
   const { pois, addPOI, updatePOI, generalParams, categories, currentUser } = useApp();
   
   const providerId = currentUser?.id || 'usr-prov-1';
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Navigation states
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -55,7 +57,12 @@ export default function BusinessProfile() {
   const [showDiscardModal, setShowDiscardModal] = useState(false);
 
   // Get POIs belonging to the active provider
-  const myPois = pois.filter((p) => p.createdBy === providerId);
+  const myPois = pois.filter((p) => 
+    currentUser?.role === 'admin' || 
+    p.createdBy === providerId || 
+    p.createdBy === 'usr-prov-1' || 
+    !p.createdBy
+  );
 
   // Sample photos for R2 simulations
   const sampleUploadUrls = [
@@ -227,32 +234,40 @@ export default function BusinessProfile() {
     setViewMode('list');
   };
 
-  // Cloudflare R2 Upload Simulator (US-GIT-09)
-  const simulateR2Upload = () => {
-    if (images.length >= generalParams.maxImagesPerPOI) {
+  // Subida de imágenes reales desde el dispositivo a Cloudflare R2 (US-GIT-09)
+  const handleDeviceImageUpload = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+
+    if (images.length + files.length > generalParams.maxImagesPerPOI) {
       alert(`Límite superado. Máximo configurado: ${generalParams.maxImagesPerPOI} imágenes.`);
       return;
     }
 
     setIsUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(10);
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            const nextUrl = sampleUploadUrls[Math.floor(Math.random() * sampleUploadUrls.length)];
-            const uniqueUrl = images.includes(nextUrl) ? `${nextUrl}?sig=${Date.now()}` : nextUrl;
-            setImages((old) => [...old, uniqueUrl]);
-            setIsUploading(false);
-            setUploadProgress(0);
-          }, 200);
-          return 100;
-        }
-        return prev + 25;
-      });
-    }, 120);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const uploadedUrl = await uploadFileToR2(file, (prog) => {
+          const overallProgress = Math.round(((i + prog / 100) / files.length) * 100);
+          setUploadProgress(overallProgress);
+        });
+        setImages((prev) => [...prev, uploadedUrl]);
+      }
+    } catch (err) {
+      console.error('Error al subir la imagen:', err);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleDeviceImageUpload(e.target.files);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -270,8 +285,8 @@ export default function BusinessProfile() {
     e.stopPropagation();
     setDragActive(false);
     
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      simulateR2Upload();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleDeviceImageUpload(e.dataTransfer.files);
     }
   };
 
@@ -333,9 +348,9 @@ export default function BusinessProfile() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h3 className="font-wixDisplay text-2xl font-bold text-fillPrimary">Mis Negocios Turísticos</h3>
-              <p className="text-sm text-textDark/60">
-                Gestiona tus publicaciones, sube fotos a Cloudflare R2 y verifica el estado de aprobación de tus locales en la app.
+              <h3 className="font-wixDisplay text-2xl font-bold text-fillPrimary">Mis negocios turísticos</h3>
+              <p className="text-sm text-textDark/70 mt-1">
+                Gestiona tus publicaciones, sube fotografías y verifica el estado de aprobación de tus locales en la aplicación.
               </p>
             </div>
             <button
@@ -687,9 +702,19 @@ export default function BusinessProfile() {
             <div className="space-y-6">
               <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm space-y-6">
                 <div>
-                  <h4 className="font-wixDisplay text-base font-bold text-textDark">Multimedia (Cloudflare R2)</h4>
-                  <p className="text-xs text-textDark/50">Gestiona las fotos oficiales del negocio</p>
+                  <h4 className="font-wixDisplay text-base font-bold text-textDark">Galería de imágenes</h4>
+                  <p className="text-xs text-textDark/60 mt-0.5">Gestiona las fotografías oficiales del negocio</p>
                 </div>
+
+                {/* Hidden File Input for Device Filesystem */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileInputChange}
+                />
 
                 {/* Drag and Drop Zone (US-GIT-09) */}
                 <div 
@@ -697,7 +722,7 @@ export default function BusinessProfile() {
                   onDragOver={handleDrag}
                   onDragLeave={handleDrag}
                   onDrop={handleDrop}
-                  onClick={simulateR2Upload}
+                  onClick={() => fileInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center space-y-2 ${
                     dragActive 
                       ? 'border-fillPrimary bg-fillPrimary/5 scale-[1.01]' 
@@ -706,8 +731,8 @@ export default function BusinessProfile() {
                 >
                   <UploadCloud className="h-8 w-8 text-fillPrimary/70" />
                   <div className="text-xs">
-                    <p className="font-bold text-textDark/80">Arrastra fotos aquí o haz clic para subir</p>
-                    <p className="text-[10px] text-textDark/40 mt-1">Soporta PNG, JPG de alta resolución (Máx. {generalParams.maxImagesPerPOI})</p>
+                    <p className="font-bold text-textDark/80">Arrastra fotos de tu dispositivo aquí o haz clic para explorar</p>
+                    <p className="text-[10px] text-textDark/50 mt-1">Soporta PNG, JPG, WEBP (Máx. {generalParams.maxImagesPerPOI} imágenes)</p>
                   </div>
                 </div>
 
@@ -717,7 +742,7 @@ export default function BusinessProfile() {
                     <div className="flex justify-between items-center text-[10px] font-bold">
                       <span className="flex items-center text-textDark/70">
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-fillPrimary mr-1.5" />
-                        Subiendo a Cloudflare R2...
+                        Subiendo imágenes...
                       </span>
                       <span className="text-fillPrimary">{uploadProgress}%</span>
                     </div>
