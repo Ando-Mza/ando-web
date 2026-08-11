@@ -63,6 +63,9 @@ export const mockPOIs: POI[] = [
     updatedAt: '2026-06-20T14:30:00Z',
     email: 'contacto@catenazapata.com.ar',
     phone: '+54 261 490 0200',
+    clicksCount: 1482,
+    rating: 4.9,
+    reviewsCount: 124,
   },
   {
     id: 'poi-2',
@@ -79,6 +82,9 @@ export const mockPOIs: POI[] = [
     updatedAt: '2026-06-18T10:00:00Z',
     email: 'parques@mendoza.gov.ar',
     phone: '+54 261 449 2000',
+    clicksCount: 3290,
+    rating: 4.8,
+    reviewsCount: 310,
   },
   {
     id: 'poi-3',
@@ -95,6 +101,9 @@ export const mockPOIs: POI[] = [
     updatedAt: '2026-06-22T18:15:00Z',
     email: 'reservas@termascacheuta.com',
     phone: '+54 261 490 1520',
+    clicksCount: 840,
+    rating: 4.6,
+    reviewsCount: 56,
   },
   {
     id: 'poi-4',
@@ -111,6 +120,9 @@ export const mockPOIs: POI[] = [
     updatedAt: '2026-06-22T19:00:00Z',
     email: 'info@aconcaguatrek.com.ar',
     phone: '+54 261 422 1530',
+    clicksCount: 420,
+    rating: 4.9,
+    reviewsCount: 28,
   },
   {
     id: 'poi-5',
@@ -128,6 +140,48 @@ export const mockPOIs: POI[] = [
     updatedAt: '2026-06-19T11:45:00Z',
     email: 'museofundacional@ciudaddemendoza.gov.ar',
     phone: '+54 261 425 6927',
+    clicksCount: 195,
+    rating: 4.3,
+    reviewsCount: 14,
+  },
+];
+
+export const mockReviews: any[] = [
+  {
+    id: 'rev-1',
+    poiId: 'poi-1',
+    userName: 'Martín Benítez',
+    rating: 5,
+    comment: 'Excelente atención y degustación inolvidable. El maridaje de la bodega fue excepcional y la vista a la montaña es de otro mundo.',
+    date: '2026-06-18',
+    reply: {
+      comment: '¡Muchas gracias Martín! Nos alegra enormemente que hayas disfrutado de la experiencia en Catena Zapata. Esperamos recibirte nuevamente.',
+      date: '2026-06-19',
+    },
+  },
+  {
+    id: 'rev-2',
+    poiId: 'poi-1',
+    userName: 'Camila Rossi',
+    rating: 5,
+    comment: 'La visita guiada por la arquitectura piramidal y las cavas de barricas es súper completa. Muy recomendado reservar con anticipación.',
+    date: '2026-06-15',
+  },
+  {
+    id: 'rev-3',
+    poiId: 'poi-1',
+    userName: 'Thiago Silva',
+    rating: 4,
+    comment: 'Ótima vinícola e os vinhos de grande altura são incríveis. Vale a pena cada momento!',
+    date: '2026-06-10',
+  },
+  {
+    id: 'rev-4',
+    poiId: 'poi-3',
+    userName: 'Lucía Fernández',
+    rating: 5,
+    comment: 'Las termas son el descanso perfecto en la montaña. El almuerzo criollo tipo buffet superó nuestras expectativas.',
+    date: '2026-06-14',
   },
 ];
 

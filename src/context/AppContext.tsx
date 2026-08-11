@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { POI, Schedule, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus } from '../types';
+import { POI, Schedule, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus, Review } from '../types';
 import {
   mockPOIs,
   mockSchedules,
@@ -12,6 +12,7 @@ import {
   mockUsers,
   mockCategories,
   mockValidationStates,
+  mockReviews,
   TranslationDict
 } from '../utils/mockData';
 import { api } from '../utils/api';
@@ -29,6 +30,8 @@ interface AppContextProps {
   integrations: Integration[];
   categories: Category[];
   validationStates: ValidationState[];
+  reviews: Review[];
+  addReviewReply: (reviewId: string, comment: string) => void;
   translations: TranslationDict;
   currentLanguage: 'es' | 'en' | 'pt';
   setCurrentLanguage: (lang: 'es' | 'en' | 'pt') => void;
@@ -73,6 +76,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [integrations, setIntegrations] = useState<Integration[]>(mockIntegrations);
   const [categories, setCategories] = useState<Category[]>(mockCategories);
   const [validationStates, setValidationStates] = useState<ValidationState[]>(mockValidationStates);
+  const [reviews, setReviews] = useState<Review[]>(mockReviews);
   const [translations, setTranslations] = useState<TranslationDict>(mockTranslations);
   const [currentLanguage, setCurrentLanguage] = useState<'es' | 'en' | 'pt'>('es');
 
@@ -745,6 +749,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
+  const addReviewReply = (reviewId: string, comment: string) => {
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.id === reviewId
+          ? {
+              ...r,
+              reply: {
+                comment,
+                date: new Date().toISOString().split('T')[0],
+                authorName: currentUser?.businessName || currentUser?.name || 'Prestador',
+              },
+            }
+          : r
+      )
+    );
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -757,6 +778,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         integrations,
         categories,
         validationStates,
+        reviews,
+        addReviewReply,
         translations,
         currentLanguage,
         setCurrentLanguage,

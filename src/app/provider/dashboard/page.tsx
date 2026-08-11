@@ -15,12 +15,17 @@ import {
   Phone,
   Mail,
   Sparkles,
-  Award
+  Award,
+  Star,
+  MousePointerClick,
+  MessageSquare,
+  Send,
+  User as UserIcon
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ProviderDashboard() {
-  const { pois, schedules, generalParams, currentUser } = useApp();
+  const { pois, schedules, generalParams, currentUser, reviews, addReviewReply } = useApp();
 
   // 1. Filtrar únicamente los POIs del prestador autenticado
   const providerId = currentUser?.id || '';
@@ -32,6 +37,10 @@ export default function ProviderDashboard() {
 
   // 2. Estado para seleccionar el negocio activo
   const [selectedPoiId, setSelectedPoiId] = useState<string>('');
+  
+  // Estado para la respuesta interactiva a reseñas
+  const [replyingToReviewId, setReplyingToReviewId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<string>('');
 
   // Sincronizar el primer POI disponible al cargar
   useEffect(() => {
@@ -42,6 +51,7 @@ export default function ProviderDashboard() {
 
   const selectedPoi = providerPois.find((p) => p.id === selectedPoiId) || providerPois[0];
   const selectedSchedules = schedules.filter((s) => s.poiId === selectedPoi?.id);
+  const selectedReviews = reviews.filter((r) => r.poiId === selectedPoi?.id);
 
   // 3. Cálculo dinámico del porcentaje de completitud del perfil del negocio seleccionado
   const calculateCompleteness = () => {
@@ -59,10 +69,16 @@ export default function ProviderDashboard() {
 
   const completenessScore = calculateCompleteness();
 
+  const handleSendReply = (reviewId: string) => {
+    if (!replyText.trim()) return;
+    addReviewReply(reviewId, replyText.trim());
+    setReplyingToReviewId(null);
+    setReplyText('');
+  };
+
   if (providerPois.length === 0) {
     return (
       <div className="space-y-8">
-        {/* Welcome Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-fillPrimary to-fillSecondary p-8 text-white shadow-lg">
           <div className="relative z-10 max-w-xl space-y-2">
             <h3 className="font-wixDisplay text-2xl font-bold">
@@ -80,7 +96,7 @@ export default function ProviderDashboard() {
           </div>
           <h4 className="font-wixDisplay text-xl font-bold text-textDark">No tienes negocios registrados</h4>
           <p className="text-sm text-textDark/60 max-w-md mx-auto">
-            Registra tu primer negocio para gestionar sus horarios, fotos y ser visible para los turistas que visitan Mendoza.
+            Registra tu primer negocio para gestionar sus horarios, fotos, clics y reseñas de turistas.
           </p>
           <Link
             href="/provider/business"
@@ -215,9 +231,39 @@ export default function ProviderDashboard() {
       {/* Real Per-Business Metrics Grid */}
       {selectedPoi && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Métrica 1: Galería Multimedia */}
+          {/* Métrica 1: Clics / Interacciones */}
           <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
             <div className="p-3 bg-fillPrimary/10 text-fillPrimary rounded-xl">
+              <MousePointerClick className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Clics / Vistas</p>
+              <h4 className="text-2xl font-bold text-textDark">
+                {(selectedPoi.clicksCount || 0).toLocaleString()}{' '}
+                <span className="text-xs font-normal text-textDark/40">interacciones</span>
+              </h4>
+            </div>
+          </div>
+
+          {/* Métrica 2: Rating Promedio y Reseñas */}
+          <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
+            <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl">
+              <Star className="h-6 w-6 fill-yellow-400 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Calificación Promedio</p>
+              <h4 className="text-2xl font-bold text-textDark">
+                {selectedPoi.rating || 5.0}{' '}
+                <span className="text-xs font-normal text-textDark/40">
+                  ({selectedPoi.reviewsCount || selectedReviews.length} reseña{selectedReviews.length !== 1 ? 's' : ''})
+                </span>
+              </h4>
+            </div>
+          </div>
+
+          {/* Métrica 3: Galería Multimedia */}
+          <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
+            <div className="p-3 bg-accentWine/10 text-accentWine rounded-xl">
               <ImageIcon className="h-6 w-6" />
             </div>
             <div>
@@ -229,21 +275,7 @@ export default function ProviderDashboard() {
             </div>
           </div>
 
-          {/* Métrica 2: Reglas Horarias */}
-          <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-              <Clock className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Horarios Vigentes</p>
-              <h4 className="text-2xl font-bold text-textDark">
-                {selectedSchedules.length}{' '}
-                <span className="text-xs font-normal text-textDark/40">regla{selectedSchedules.length !== 1 ? 's' : ''}</span>
-              </h4>
-            </div>
-          </div>
-
-          {/* Métrica 3: Estado del Perfil */}
+          {/* Métrica 4: Completitud del Perfil */}
           <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
             <div className="p-3 bg-accentPurple/10 text-accentPurple rounded-xl">
               <Award className="h-6 w-6" />
@@ -253,25 +285,15 @@ export default function ProviderDashboard() {
               <h4 className="text-2xl font-bold text-textDark">{completenessScore}%</h4>
             </div>
           </div>
-
-          {/* Métrica 4: Categoría */}
-          <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
-            <div className="p-3 bg-accentWine/10 text-accentWine rounded-xl">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Categoría</p>
-              <h4 className="text-base font-bold text-textDark truncate max-w-[140px]">{selectedPoi.category}</h4>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* Content & Actions Grid for Selected Business */}
+      {/* Main Grid: Details + Reviews Section */}
       {selectedPoi && (
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          {/* Left Column: Detailed View of Selected POI */}
+          {/* Left Column: Detailed View & Reviews */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Ficha Comercial */}
             <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-xs space-y-6">
               <div className="flex items-center justify-between border-b border-black/5 pb-4">
                 <div>
@@ -279,7 +301,7 @@ export default function ProviderDashboard() {
                     Ficha Comercial: {selectedPoi.name}
                   </h4>
                   <p className="text-xs text-textDark/60">
-                    Información técnica y mapa registrado en el sistema.
+                    Información pública visible para turistas en ANDO.
                   </p>
                 </div>
                 <span className="bg-accentWine/10 text-accentWine px-3 py-1 rounded-full text-xs font-bold">
@@ -345,12 +367,12 @@ export default function ProviderDashboard() {
                 </p>
               </div>
 
-              {/* Schedules Overview for Selected Business */}
+              {/* Schedules Overview */}
               <div className="space-y-3 border-t border-black/5 pt-4">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-textDark/70 uppercase tracking-wider flex items-center space-x-1.5">
                     <Calendar className="h-4 w-4 text-fillPrimary" />
-                    <span>Horarios de Atención Configurados</span>
+                    <span>Horarios de Atención Configurados ({selectedSchedules.length})</span>
                   </span>
                   <Link
                     href="/provider/schedules"
@@ -386,11 +408,130 @@ export default function ProviderDashboard() {
                 )}
               </div>
             </div>
+
+            {/* SECCIÓN DE RESEÑAS Y OPINIONES DE TURISTAS */}
+            <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-xs space-y-6">
+              <div className="flex items-center justify-between border-b border-black/5 pb-4">
+                <div>
+                  <h4 className="font-wixDisplay text-lg font-bold text-textDark flex items-center space-x-2">
+                    <MessageSquare className="h-5 w-5 text-fillPrimary" />
+                    <span>Reseñas y Opiniones de Turistas</span>
+                  </h4>
+                  <p className="text-xs text-textDark/60 mt-0.5">
+                    Opiniones públicas dejadas por visitantes para <strong className="text-textDark font-bold">{selectedPoi.name}</strong>.
+                  </p>
+                </div>
+                <div className="flex items-center space-x-1.5 bg-yellow-50 text-yellow-800 px-3 py-1 rounded-full border border-yellow-200 text-xs font-bold">
+                  <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                  <span>{selectedPoi.rating || 5.0} / 5.0</span>
+                </div>
+              </div>
+
+              {selectedReviews.length > 0 ? (
+                <div className="space-y-4">
+                  {selectedReviews.map((rev) => (
+                    <div key={rev.id} className="p-4 bg-bgPrimary/40 rounded-xl border border-black/5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2.5">
+                          <div className="h-8 w-8 bg-fillPrimary/10 text-fillPrimary rounded-full flex items-center justify-center font-bold text-xs border border-fillPrimary/20">
+                            <UserIcon className="h-4 w-4 text-fillPrimary" />
+                          </div>
+                          <div>
+                            <h5 className="font-bold text-xs text-textDark">{rev.userName}</h5>
+                            <span className="text-[10px] text-textDark/50">{rev.date}</span>
+                          </div>
+                        </div>
+
+                        {/* Stars */}
+                        <div className="flex items-center space-x-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={`h-3.5 w-3.5 ${
+                                star <= rev.rating 
+                                  ? 'fill-yellow-400 text-yellow-400' 
+                                  : 'text-black/10'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-textDark/80 leading-relaxed pl-1">
+                        &quot;{rev.comment}&quot;
+                      </p>
+
+                      {/* Reply from Provider if exists */}
+                      {rev.reply ? (
+                        <div className="ml-4 pl-3 border-l-2 border-fillPrimary bg-white p-3 rounded-r-xl text-xs space-y-1 border border-black/5 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-fillPrimary flex items-center space-x-1">
+                              <Store className="h-3.5 w-3.5 text-fillPrimary" />
+                              <span>Respuesta de {rev.reply.authorName || selectedPoi.name}</span>
+                            </span>
+                            <span className="text-[10px] text-textDark/40">{rev.reply.date}</span>
+                          </div>
+                          <p className="text-textDark/80 italic">{rev.reply.comment}</p>
+                        </div>
+                      ) : (
+                        <div>
+                          {replyingToReviewId === rev.id ? (
+                            <div className="mt-2 space-y-2 bg-white p-3 rounded-xl border border-black/10">
+                              <textarea
+                                value={replyText}
+                                onChange={(e) => setReplyText(e.target.value)}
+                                placeholder={`Escribe tu respuesta pública como ${selectedPoi.name}...`}
+                                rows={2}
+                                className="w-full text-xs p-2.5 rounded-lg border border-black/10 focus:outline-none focus:ring-2 focus:ring-fillPrimary"
+                              />
+                              <div className="flex items-center justify-end space-x-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setReplyingToReviewId(null)}
+                                  className="px-3 py-1 text-xs text-textDark/70 hover:text-textDark font-semibold cursor-pointer"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendReply(rev.id)}
+                                  className="px-3 py-1 bg-fillPrimary text-white rounded-lg text-xs font-bold hover:bg-fillPrimary/90 inline-flex items-center space-x-1 cursor-pointer"
+                                >
+                                  <Send className="h-3 w-3" />
+                                  <span>Publicar Respuesta</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReplyingToReviewId(rev.id);
+                                setReplyText('');
+                              }}
+                              className="text-xs font-bold text-fillPrimary hover:underline inline-flex items-center space-x-1 pt-1 cursor-pointer"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5" />
+                              <span>Responder como prestador</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 bg-bgPrimary/30 rounded-xl border border-black/5 text-center space-y-2">
+                  <MessageSquare className="h-8 w-8 text-textDark/20 mx-auto" />
+                  <p className="text-xs font-bold text-textDark/60">Aún no hay reseñas registradas para este negocio</p>
+                  <p className="text-[11px] text-textDark/40">Las opiniones dejadas por turistas en la app móvil aparecerán aquí.</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Right Column: Direct Business Actions & Operations */}
+          {/* Right Column: Direct Business Actions */}
           <div className="space-y-6">
-            {/* Quick Actions Panel */}
             <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-xs space-y-4">
               <h4 className="font-wixDisplay text-xs font-bold text-textDark uppercase tracking-wider flex items-center space-x-2">
                 <Store className="h-4 w-4 text-fillPrimary" />
