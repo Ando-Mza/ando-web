@@ -46,7 +46,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex h-screen w-screen items-center justify-center bg-bgPrimary text-textDark">
         <div className="flex flex-col items-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-accentWine border-t-transparent" />
-          <p className="text-sm font-semibold">Cargando panel de administrador...</p>
+          <p className="text-sm font-semibold text-textDark/80">Cargando panel de administración...</p>
         </div>
       </div>
     );
@@ -54,22 +54,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const menuItems = [
     {
-      name: 'Métricas & Dashboard',
+      name: 'Métricas y dashboard',
       path: '/admin/dashboard',
       icon: LayoutDashboard,
       desc: 'Métricas y logs globales'
     },
     {
-      name: 'Validación de Contenido',
+      name: 'Validación de contenido',
       path: '/admin/validation',
       icon: CheckSquare,
       desc: 'Auditoría de POIs y horarios'
     },
     {
-      name: 'Gestión de Usuarios',
+      name: 'Gestión de usuarios',
       path: '/admin/users',
       icon: Users,
-      desc: 'Auditoría de cuentas GDU'
+      desc: 'Auditoría de cuentas de usuarios'
     },
     {
       name: 'Configuración CYP',
@@ -94,7 +94,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       >
         {/* Brand/Logo */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-black/5">
-          <Link href="/admin/dashboard" className="flex items-center space-x-2 overflow-hidden">
+          <Link href="/admin/dashboard" className="flex items-center space-x-2 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine focus-visible:ring-offset-2 rounded-lg">
             {isSidebarOpen ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src="/brand/logotipoColor1.svg" alt="ANDO" className="h-7 w-auto" />
@@ -103,14 +103,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <img src="/brand/iconoClaro.svg" alt="ANDO" className="h-6 w-auto invert opacity-75" />
             )}
             {isSidebarOpen && (
-              <span className="text-[10px] bg-accentPurple/10 text-accentPurple px-2 py-0.5 rounded-full font-semibold uppercase flex-shrink-0">
+              <span className="text-[10px] bg-accentWine/10 text-accentWine px-2 py-0.5 rounded-full font-semibold uppercase flex-shrink-0">
                 Admin
               </span>
             )}
           </Link>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="hidden md:flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5 text-textDark/60 cursor-pointer"
+            className="hidden md:flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5 text-textDark/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine cursor-pointer"
+            aria-label={isSidebarOpen ? "Colapsar menú lateral" : "Expandir menú lateral"}
           >
             {isSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
@@ -126,10 +127,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={item.path}
                 href={item.path}
-                className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine focus-visible:ring-offset-2 ${
                   isActive
                     ? 'bg-accentWine text-white shadow-md shadow-accentWine/10'
-                    : 'text-textDark/60 hover:text-textDark hover:bg-black/5'
+                    : 'text-textDark/70 hover:text-textDark hover:bg-black/5'
                 }`}
               >
                 <Icon className={`h-5 w-5 flex-shrink-0 transition-transform group-hover:scale-110 ${
@@ -138,7 +139,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 {isSidebarOpen && (
                   <div className="flex flex-col text-left">
                     <span>{item.name}</span>
-                    <span className={`text-[10px] font-normal ${isActive ? 'text-white/70' : 'text-textDark/40'}`}>
+                    <span className={`text-[10px] font-normal ${isActive ? 'text-white/80' : 'text-textDark/50'}`}>
                       {item.desc}
                     </span>
                   </div>
@@ -152,12 +153,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="p-4 border-t border-black/5">
           <button
             onClick={() => setShowLogoutConfirm(true)}
-            className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 transition-all duration-200 cursor-pointer ${
+            className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-semibold text-textDark/70 hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition-all duration-200 cursor-pointer ${
               !isSidebarOpen && 'px-0'
             }`}
           >
             <LogOut className="h-4 w-4" />
-            {isSidebarOpen && <span>Cerrar Sesión</span>}
+            {isSidebarOpen && <span>Cerrar sesión</span>}
           </button>
         </div>
       </aside>
@@ -172,13 +173,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <header className="flex h-16 items-center justify-between px-8 bg-white border-b border-black/5 sticky top-0 z-10">
           <div className="flex items-center">
             <h2 className="font-wixDisplay text-lg font-bold text-accentWine">
-              {menuItems.find(item => item.path === pathname)?.name || 'Panel Administrador'}
+              {menuItems.find(item => item.path === pathname)?.name || 'Panel de administración'}
             </h2>
           </div>
           
           {/* Header Actions */}
           <div className="flex items-center space-x-4">
-            <button className="relative p-2 rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer">
+            <button className="relative p-2 rounded-lg hover:bg-black/5 text-textDark/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine cursor-pointer" aria-label="Notificaciones">
               <Bell className="h-5 w-5" />
               <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-fillPrimary animate-pulse" />
             </button>
@@ -186,7 +187,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-textDark">{currentUser.name}</p>
-                <p className="text-[10px] text-textDark/50">Administrador de Sistemas</p>
+                <p className="text-[10px] text-textDark/60 font-medium">Administrador de sistemas</p>
               </div>
               <div className="h-8 w-8 rounded-full bg-accentWine text-white flex items-center justify-center font-semibold text-sm">
                 S
@@ -207,25 +208,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-black/5 animate-scale-up space-y-4">
             <div className="flex items-center space-x-2.5 text-accentWine">
               <LogOut className="h-5 w-5" />
-              <h4 className="font-wixDisplay font-bold text-textDark">Cerrar Sesión</h4>
+              <h4 className="font-wixDisplay font-bold text-textDark">Cerrar sesión</h4>
             </div>
             <p className="text-xs text-textDark/70 leading-relaxed">
-              ¿Está seguro que quiere cerrar la sesión? Si lo hace deberá iniciar sesión nuevamente para acceder a su panel de gestión.
+              ¿Está seguro de que desea cerrar la sesión? Deberá iniciar sesión nuevamente para acceder a su panel de gestión.
             </p>
             <div className="flex space-x-2 justify-end pt-2">
               <button
                 type="button"
                 onClick={() => setShowLogoutConfirm(false)}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/10 transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 cursor-pointer"
               >
-                Cerrar Sesión
+                Cerrar sesión
               </button>
             </div>
           </div>

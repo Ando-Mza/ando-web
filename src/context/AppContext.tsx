@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { POI, Schedule, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus } from '../types';
+import { POI, Schedule, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus, Review } from '../types';
 import {
   mockPOIs,
   mockSchedules,
@@ -12,9 +12,13 @@ import {
   mockUsers,
   mockCategories,
   mockValidationStates,
+  mockReviews,
   TranslationDict
 } from '../utils/mockData';
 import { api } from '../utils/api';
+import { DEFAULT_GENERAL_PARAMS } from '../config/constants';
+import { USER_ROLES } from '../constants/enums';
+import { mapBackendRoleToFrontend, mapBackendStatusToFrontend } from '../utils/roleUtils';
 
 interface AppContextProps {
   currentUser: User | null;
@@ -26,6 +30,8 @@ interface AppContextProps {
   integrations: Integration[];
   categories: Category[];
   validationStates: ValidationState[];
+  reviews: Review[];
+  addReviewReply: (reviewId: string, comment: string) => void;
   translations: TranslationDict;
   currentLanguage: 'es' | 'en' | 'pt';
   setCurrentLanguage: (lang: 'es' | 'en' | 'pt') => void;
@@ -70,6 +76,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [integrations, setIntegrations] = useState<Integration[]>(mockIntegrations);
   const [categories, setCategories] = useState<Category[]>(mockCategories);
   const [validationStates, setValidationStates] = useState<ValidationState[]>(mockValidationStates);
+  const [reviews, setReviews] = useState<Review[]>(mockReviews);
   const [translations, setTranslations] = useState<TranslationDict>(mockTranslations);
   const [currentLanguage, setCurrentLanguage] = useState<'es' | 'en' | 'pt'>('es');
 
@@ -91,8 +98,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (Array.isArray(dbUsers)) {
           const mappedUsers: User[] = dbUsers.map((u: any) => {
             const roleObj = u.usuarioRoles?.[0]?.rol;
-            const rName = roleObj?.nombre?.trim().toLowerCase();
-            const mappedRole = rName === 'administrador' ? 'admin' : (rName === 'prestador' ? 'provider' : 'tourist');
+            const mappedRole = mapBackendRoleToFrontend(roleObj?.nombre);
             return {
               id: u.id,
               name: `${u.nombre} ${u.apellido}`,
@@ -107,6 +113,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setUsers(mappedUsers);
         }
       }
+
+      if (role === 'provider' || role === 'admin') {
+        try {
+          const dbPois = await api.getMyPois();
+          if (Array.isArray(dbPois) && dbPois.length > 0) {
+            const mappedPois: POI[] = dbPois.map((p: any) => ({
+              id: p.id,
+              name: p.nombre,
+              description: p.descripcion || '',
+              category: p.categorias?.[0]?.categoria?.nombre || p.categoria || 'Enoturismo',
+              address: p.direccion || '',
+              location: {
+                lat: p.latitud ? Number(p.latitud) : -32.8894,
+                lng: p.longitud ? Number(p.longitud) : -68.8681,
+              },
+              images: Array.isArray(p.imagenes) && p.imagenes.length > 0 
+                ? p.imagenes 
+                : (p.imagenPrincipalUrl ? [p.imagenPrincipalUrl] : []),
+              status: p.estado || 'pending',
+              createdBy: p.creadoPorId || p.organizacionId || p.usuarioId || '',
+              updatedAt: p.updatedAt || new Date().toISOString(),
+              email: p.emailContacto || '',
+              phone: p.telefono || '',
+            }));
+            setPois((prev) => {
+              const map = new Map(prev.map(item => [item.id, item]));
+              mappedPois.forEach(item => map.set(item.id, item));
+              return Array.from(map.values());
+            });
+          }
+        } catch (e) {
+          console.warn('Nota de carga POIs backend:', e);
+        }
+      }
     } catch (err) {
       console.error('Error al cargar datos desde el backend:', err);
     }
@@ -119,7 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const profile = await api.getProfile();
         if (profile && profile.userId) {
-          const mappedRole = profile.role === 'administrador' ? 'admin' : (profile.role === 'prestador' ? 'provider' : 'tourist');
+          const mappedRole = mapBackendRoleToFrontend(profile.role);
           
           if (mappedRole !== 'admin' && mappedRole !== 'provider') {
             console.warn('Acceso denegado: El rol no está autorizado para acceder a este portal.');
@@ -129,11 +169,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return;
           }
           
-          let nombreCompleto = profile.email.split('@')[0];
+          let nombreCompleto = profile.nombre ? `${profile.nombre} ${profile.apellido || ''}`.trim() : profile.email.split('@')[0];
+          let businessName = '';
+          let phone = '';
           try {
-            const fullUser = await api.getUser(profile.userId);
-            if (fullUser) {
-              nombreCompleto = `${fullUser.nombre} ${fullUser.apellido}`;
+            if (mappedRole === 'provider') {
+              const provProf = await api.getPrestadorProfile();
+              if (provProf) {
+                if (provProf.nombre) nombreCompleto = `${provProf.nombre} ${provProf.apellido || ''}`.trim();
+                if (provProf.nombreEmpresa) businessName = provProf.nombreEmpresa;
+                if (provProf.telefono) phone = provProf.telefono;
+              }
+            } else {
+              const fullUser = await api.getUser(profile.userId);
+              if (fullUser && fullUser.nombre) {
+                nombreCompleto = `${fullUser.nombre} ${fullUser.apellido || ''}`.trim();
+              }
             }
           } catch (e) {
             console.error('Error fetching full user profile details:', e);
@@ -144,6 +195,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             name: nombreCompleto,
             email: profile.email,
             role: mappedRole,
+            businessName: businessName || undefined,
+            phone: phone || undefined,
             status: 'active',
           };
           setCurrentUser(loggedUser);
@@ -257,6 +310,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return prev;
     });
 
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (token) {
+      const parts = (updatedData.name || '').trim().split(' ');
+      const payload = {
+        nombre: parts[0] || undefined,
+        apellido: parts.slice(1).join(' ') || undefined,
+        telefono: updatedData.phone,
+        nombreEmpresa: updatedData.businessName,
+        cuitEmpresa: updatedData.cuit,
+      };
+      api.updatePrestadorProfile(payload).catch((err) => console.warn('Nota de actualización perfil prestador backend:', err));
+    }
+
     return { success: true };
   };
 
@@ -301,10 +367,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { success: true };
   };
 
-  const approvePOI = (id: string, adminName: string) => {
+  const approvePOI = async (id: string, adminName: string) => {
     setPois((prev) =>
       prev.map((poi) => (poi.id === id ? { ...poi, status: 'approved', feedback: undefined } : poi))
     );
+
+    try {
+      await api.updatePoiStatus(id, 'aprobado');
+    } catch (err) {
+      console.warn('Error al actualizar estado POI en backend:', err);
+    }
 
     const target = pois.find((p) => p.id === id);
     if (target) {
@@ -321,10 +393,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const rejectPOI = (id: string, adminName: string, feedback: string) => {
+  const rejectPOI = async (id: string, adminName: string, feedback: string) => {
     setPois((prev) =>
       prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected', feedback } : poi))
     );
+
+    try {
+      await api.updatePoiStatus(id, 'rechazado');
+    } catch (err) {
+      console.warn('Error al rechazar POI en backend:', err);
+    }
 
     const target = pois.find((p) => p.id === id);
     if (target) {
@@ -341,10 +419,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const requestCorrectionPOI = (id: string, adminName: string, feedback: string) => {
+  const requestCorrectionPOI = async (id: string, adminName: string, feedback: string) => {
     setPois((prev) =>
       prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction', feedback } : poi))
     );
+
+    try {
+      await api.updatePoiStatus(id, 'pendiente');
+    } catch (err) {
+      console.warn('Error al enviar corrección de POI en backend:', err);
+    }
 
     const target = pois.find((p) => p.id === id);
     if (target) {
@@ -396,7 +480,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'param_change',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Modificados límites globales (Imágenes: ${params.maxImagesPerPOI}, Franjas: ${params.maxTimeRangesPerDay}, Gracia: ${params.validationGracePeriodDays} días).`,
       timestamp: new Date().toISOString(),
     };
@@ -404,19 +488,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetGeneralParams = () => {
-    const defaultParams: GeneralParams = {
-      maxImagesPerPOI: 8,
-      maxTimeRangesPerDay: 3,
-      validationGracePeriodDays: 5,
-      requireReviewForEdits: true,
-    };
-    setGeneralParams(defaultParams);
+    setGeneralParams({ ...DEFAULT_GENERAL_PARAMS });
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'param_reset',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: 'Restablecidos parámetros generales a valores por defecto.',
       timestamp: new Date().toISOString(),
     };
@@ -446,7 +524,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           poiId: 'system',
           poiName: target?.name || 'Integración API',
           action: 'test_connection',
-          adminName: currentUser?.name || 'Sofía Romero',
+          adminName: currentUser?.name || 'Administrador',
           comment: `Prueba de conexión: ${success ? 'Exitosa (Conectado)' : 'Fallida (Error de credenciales)'}`,
           timestamp: new Date().toISOString(),
         };
@@ -466,28 +544,85 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  const addPOI = (poiData: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => {
+  const addPOI = async (poiData: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => {
     const newPOI: POI = {
       ...poiData,
       id: `poi-${Date.now()}`,
       status: 'pending',
-      createdBy: currentUser?.id || 'usr-prov-1',
+      createdBy: currentUser?.id || '',
       updatedAt: new Date().toISOString(),
     };
     setPois((prev) => [...prev, newPOI]);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (token) {
+      try {
+        const payload = {
+          nombre: poiData.name,
+          descripcion: poiData.description,
+          direccion: poiData.address,
+          latitud: poiData.location.lat,
+          longitud: poiData.location.lng,
+          telefono: poiData.phone,
+          emailContacto: poiData.email,
+          imagenes: poiData.images,
+          imagenPrincipalUrl: poiData.images?.[0] || '',
+        };
+        await api.createPoi(payload);
+      } catch (err) {
+        console.warn('Nota de sincronización backend POI:', err);
+      }
+    }
   };
 
-  const updatePOI = (updatedPoi: POI) => {
+  const updatePOI = async (updatedPoi: POI) => {
     setPois((prev) =>
       prev.map((p) => (p.id === updatedPoi.id ? { ...updatedPoi, updatedAt: new Date().toISOString() } : p))
     );
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (token && !updatedPoi.id.startsWith('poi-')) {
+      try {
+        const payload = {
+          nombre: updatedPoi.name,
+          descripcion: updatedPoi.description,
+          direccion: updatedPoi.address,
+          latitud: updatedPoi.location.lat,
+          longitud: updatedPoi.location.lng,
+          telefono: updatedPoi.phone,
+          emailContacto: updatedPoi.email,
+          imagenes: updatedPoi.images,
+          imagenPrincipalUrl: updatedPoi.images?.[0] || '',
+        };
+        await api.updatePoi(updatedPoi.id, payload);
+      } catch (err) {
+        console.warn('Nota de sincronización backend POI update:', err);
+      }
+    }
   };
 
-  const saveSchedules = (poiId: string, newSchedules: Schedule[]) => {
+  const saveSchedules = async (poiId: string, newSchedules: Schedule[]) => {
     setSchedules((prev) => {
       const filtered = prev.filter((s) => s.poiId !== poiId);
       return [...filtered, ...newSchedules];
     });
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (token && !poiId.startsWith('poi-')) {
+      try {
+        const batchHorarios = newSchedules.map((s) => ({
+          diasSemana: s.daysOfWeek,
+          horaApertura: s.timeRanges[0]?.start || '09:00',
+          horaCierre: s.timeRanges[0]?.end || '18:00',
+          temporada: s.season,
+          esFeriado: s.isHoliday || false,
+          descripcion: s.description || '',
+        }));
+        await api.createMultipleHorarios(poiId, batchHorarios);
+      } catch (err) {
+        console.warn('Nota de guardado backend horarios:', err);
+      }
+    }
   };
 
   // CRUD Categorías (US-CYP-03)
@@ -506,7 +641,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         poiId: 'system',
         poiName: 'Configuración CYP',
         action: 'category_create',
-        adminName: currentUser?.name || 'Sofía Romero',
+        adminName: currentUser?.name || 'Administrador',
         comment: `Creada categoría turística: "${newCat.name}"`,
         timestamp: new Date().toISOString(),
       };
@@ -516,16 +651,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateCategory = (updatedCat: Category) => {
+  const updateCategory = async (updatedCat: Category) => {
     setCategories((prev) =>
       prev.map((c) => (c.id === updatedCat.id ? updatedCat : c))
     );
+    try {
+      if (updatedCat.name) {
+        await api.updateCategory(updatedCat.id, updatedCat.name);
+      }
+      await api.toggleCategoryActiva(updatedCat.id, updatedCat.enabled);
+    } catch (err) {
+      console.warn('Nota de actualización categoría backend:', err);
+    }
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'category_toggle',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Modificada categoría turística: "${updatedCat.name}" (${updatedCat.enabled ? 'Activa' : 'Inactiva'})`,
       timestamp: new Date().toISOString(),
     };
@@ -540,13 +683,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const isUsed = pois.some((p) => p.category.toLowerCase() === target.name.toLowerCase());
     if (isUsed) return false;
 
+    api.deleteCategory(id).catch((err) => console.warn('Nota de eliminación categoría backend:', err));
+
     setCategories((prev) => prev.filter((c) => c.id !== id));
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'category_delete',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Eliminada categoría turística: "${target.name}"`,
       timestamp: new Date().toISOString(),
     };
@@ -566,7 +711,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'state_create',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Creado estado de validación: "${newState.name}"`,
       timestamp: new Date().toISOString(),
     };
@@ -582,7 +727,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'state_toggle',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Modificado estado de validación: "${updatedState.name}" (${updatedState.enabled ? 'Activa' : 'Inactiva'})`,
       timestamp: new Date().toISOString(),
     };
@@ -609,12 +754,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'state_delete',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Eliminado estado de validación: "${target.name}"`,
       timestamp: new Date().toISOString(),
     };
     setLogs((prev) => [newLog, ...prev]);
     return true;
+  };
+
+  const addReviewReply = (reviewId: string, comment: string) => {
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.id === reviewId
+          ? {
+              ...r,
+              reply: {
+                comment,
+                date: new Date().toISOString().split('T')[0],
+                authorName: currentUser?.businessName || currentUser?.name || 'Prestador',
+              },
+            }
+          : r
+      )
+    );
   };
 
   return (
@@ -629,6 +791,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         integrations,
         categories,
         validationStates,
+        reviews,
+        addReviewReply,
         translations,
         currentLanguage,
         setCurrentLanguage,

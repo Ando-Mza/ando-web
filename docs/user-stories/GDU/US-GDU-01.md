@@ -30,6 +30,7 @@ Email
 Preferencias 
 Ciudad de Origen
 Foto de Perfil (avatarUrl)
+Contraseña
 -
 El Turista modifique su información válidamente
 Que el sistema actualice su perfil correctamente
@@ -58,6 +59,4 @@ Espero que se muestre el mensaje “Los cambios se descartarán si confirma esta
 El Turista seleccione “Confirmar” 
 Espero que se redireccione el Usuario a la página principal
 -
-El Turista decida cambiar su contraseña
-Que el sistema le solicite ingresar la contraseña actual, una nueva contraseña y la confirmación de la misma, validando que coincidan y cumplan las políticas de seguridad
--
+

@@ -16,13 +16,14 @@ import {
   Shield, 
   Store,
   User as UserIcon,
-  Eye
+  Eye,
+  Compass
 } from 'lucide-react';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
 export default function UserManagementPage() {
-  const { users, adminCreateUser, updateProviderProfile, adminDeleteUser } = useApp();
+  const { users, adminCreateUser, updateProviderProfile, adminDeleteUser, currentUser } = useApp();
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -424,7 +425,7 @@ export default function UserManagementPage() {
                           >
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
-                          {user.id !== 'usr-admin-1' && (
+                          {user.id !== currentUser?.id && (
                             <button
                               onClick={() => askDeleteUser(user)}
                               className="p-1 rounded-md border bg-red-50 hover:bg-red-100 border-red-200 text-red-600 transition-colors cursor-pointer"
@@ -776,11 +777,13 @@ export default function UserManagementPage() {
                 <div>
                   <span className="block text-[9px] font-bold uppercase tracking-wider text-textDark/50">Rol en la Plataforma</span>
                   <span className="text-xs font-semibold text-textDark block mt-0.5">
-                    {selectedUser.role === 'admin' 
-                      ? '🔒 Administrador de Sistemas' 
-                      : selectedUser.role === 'provider' 
-                      ? '🍷 Prestador de Servicios' 
-                      : '🗺️ Turista Común'}
+                    {selectedUser.role === 'admin' ? (
+                      <span className="inline-flex items-center space-x-1.5"><Shield className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" /><span>Administrador de sistemas</span></span>
+                    ) : selectedUser.role === 'provider' ? (
+                      <span className="inline-flex items-center space-x-1.5"><Store className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" /><span>Prestador de servicios</span></span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1.5"><Compass className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" /><span>Turista registrado</span></span>
+                    )}
                   </span>
                 </div>
 

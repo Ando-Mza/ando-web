@@ -46,7 +46,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       <div className="flex h-screen w-screen items-center justify-center bg-bgPrimary text-textDark">
         <div className="flex flex-col items-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-fillPrimary border-t-transparent" />
-          <p className="text-sm font-semibold">Cargando portal de prestador...</p>
+          <p className="text-sm font-semibold text-textDark/80">Cargando portal del prestador...</p>
         </div>
       </div>
     );
@@ -54,25 +54,25 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
 
   const menuItems = [
     {
-      name: 'Métricas del Negocio',
+      name: 'Métricas del negocio',
       path: '/provider/dashboard',
       icon: LayoutDashboard,
       desc: 'Visualizaciones de tu POI'
     },
     {
-      name: 'Mis Negocios',
+      name: 'Mis negocios',
       path: '/provider/business',
       icon: Store,
-      desc: 'Información y registro R2'
+      desc: 'Información del local y fotos'
     },
     {
-      name: 'Gestión de Horarios',
+      name: 'Gestión de horarios',
       path: '/provider/schedules',
       icon: CalendarRange,
       desc: 'Horarios de atención'
     },
     {
-      name: 'Mi Cuenta',
+      name: 'Mi cuenta',
       path: '/provider/profile',
       icon: User,
       desc: 'Ajustes del perfil'
@@ -94,7 +94,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       >
         {/* Brand/Logo */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-black/5">
-          <Link href="/provider/dashboard" className="flex items-center space-x-2 overflow-hidden">
+          <Link href="/provider/dashboard" className="flex items-center space-x-2 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 rounded-lg">
             {isSidebarOpen ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src="/brand/logotipoColor1.svg" alt="ANDO" className="h-7 w-auto" />
@@ -110,7 +110,8 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           </Link>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="hidden md:flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5 text-textDark/60 cursor-pointer"
+            className="hidden md:flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5 text-textDark/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary cursor-pointer"
+            aria-label={isSidebarOpen ? "Colapsar menú lateral" : "Expandir menú lateral"}
           >
             {isSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
@@ -126,10 +127,10 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
               <Link
                 key={item.path}
                 href={item.path}
-                className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 ${
                   isActive
                     ? 'bg-fillPrimary text-white shadow-md shadow-fillPrimary/10'
-                    : 'text-textDark/60 hover:text-textDark hover:bg-black/5'
+                    : 'text-textDark/70 hover:text-textDark hover:bg-black/5'
                 }`}
               >
                 <Icon className={`h-5 w-5 flex-shrink-0 transition-transform group-hover:scale-110 ${
@@ -138,7 +139,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
                 {isSidebarOpen && (
                   <div className="flex flex-col text-left">
                     <span>{item.name}</span>
-                    <span className={`text-[10px] font-normal ${isActive ? 'text-white/70' : 'text-textDark/40'}`}>
+                    <span className={`text-[10px] font-normal ${isActive ? 'text-white/80' : 'text-textDark/50'}`}>
                       {item.desc}
                     </span>
                   </div>
@@ -152,12 +153,12 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
         <div className="p-4 border-t border-black/5">
           <button
             onClick={() => setShowLogoutConfirm(true)}
-            className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 transition-all duration-200 cursor-pointer ${
+            className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-semibold text-textDark/70 hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 transition-all duration-200 cursor-pointer ${
               !isSidebarOpen && 'px-0'
             }`}
           >
             <LogOut className="h-4 w-4" />
-            {isSidebarOpen && <span>Cerrar Sesión</span>}
+            {isSidebarOpen && <span>Cerrar sesión</span>}
           </button>
         </div>
       </aside>
@@ -172,7 +173,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
         <header className="flex h-16 items-center justify-between px-8 bg-white border-b border-black/5 sticky top-0 z-10">
           <div className="flex items-center">
             <h2 className="font-wixDisplay text-lg font-bold text-fillPrimary">
-              {menuItems.find(item => item.path === pathname)?.name || 'Portal del Prestador'}
+              {menuItems.find(item => item.path === pathname)?.name || 'Portal del prestador'}
             </h2>
           </div>
           
@@ -184,14 +185,14 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
                 <span>{currentUser.businessName}</span>
               </div>
             )}
-            <button className="relative p-2 rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer">
+            <button className="relative p-2 rounded-lg hover:bg-black/5 text-textDark/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary cursor-pointer" aria-label="Notificaciones">
               <Bell className="h-5 w-5" />
             </button>
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-textDark">{currentUser.name}</p>
-                <p className="text-[10px] text-textDark/50">Prestador Asociado</p>
+                <p className="text-[10px] text-textDark/60 font-medium">Prestador asociado</p>
               </div>
               <div className="h-8 w-8 rounded-full bg-fillPrimary text-white flex items-center justify-center font-semibold text-sm">
                 S
@@ -212,25 +213,25 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-black/5 animate-scale-up space-y-4">
             <div className="flex items-center space-x-2.5 text-fillPrimary">
               <LogOut className="h-5 w-5" />
-              <h4 className="font-wixDisplay font-bold text-textDark">Cerrar Sesión</h4>
+              <h4 className="font-wixDisplay font-bold text-textDark">Cerrar sesión</h4>
             </div>
             <p className="text-xs text-textDark/70 leading-relaxed">
-              ¿Está seguro que quiere cerrar la sesión? Si lo hace deberá iniciar sesión nuevamente para acceder a su panel de gestión.
+              ¿Está seguro de que desea cerrar la sesión? Deberá iniciar sesión nuevamente para acceder a su panel de gestión.
             </p>
             <div className="flex space-x-2 justify-end pt-2">
               <button
                 type="button"
                 onClick={() => setShowLogoutConfirm(false)}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/10 transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 cursor-pointer"
               >
-                Cerrar Sesión
+                Cerrar sesión
               </button>
             </div>
           </div>

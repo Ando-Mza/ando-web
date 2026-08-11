@@ -31,6 +31,27 @@ export interface POI {
   updatedAt: string;
   email?: string;
   phone?: string;
+  clicksCount?: number;  // Cantidad de clics / vistas del negocio en la app
+  rating?: number;       // Calificación promedio (1 a 5)
+  reviewsCount?: number; // Total de valoraciones recibidas
+}
+
+export interface ReviewReply {
+  comment: string;
+  date: string;
+  authorName?: string;
+}
+
+export interface Review {
+  id: string;
+  poiId: string;
+  userName: string;
+  userAvatar?: string;
+  rating: number; // 1 a 5
+  comment: string;
+  date: string;
+  images?: string[];
+  reply?: ReviewReply;
 }
 
 export interface TimeRange {
