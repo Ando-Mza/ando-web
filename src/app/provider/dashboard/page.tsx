@@ -277,12 +277,16 @@ export default function ProviderDashboard() {
             </div>
             <div>
               <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Calificación Promedio</p>
-              <h4 className="text-2xl font-bold text-textDark">
-                {selectedPoi.rating || 5.0}{' '}
-                <span className="text-xs font-normal text-textDark/40">
-                  ({selectedPoi.reviewsCount || selectedReviews.length} reseña{selectedReviews.length !== 1 ? 's' : ''})
-                </span>
-              </h4>
+              {selectedReviews.length > 0 ? (
+                <h4 className="text-2xl font-bold text-textDark">
+                  {(selectedReviews.reduce((acc, r) => acc + r.rating, 0) / selectedReviews.length).toFixed(1)}{' '}
+                  <span className="text-xs font-normal text-textDark/40">
+                    ({selectedReviews.length} reseña{selectedReviews.length !== 1 ? 's' : ''})
+                  </span>
+                </h4>
+              ) : (
+                <h4 className="text-sm font-bold text-textDark/50 mt-1">Sin reseñas</h4>
+              )}
             </div>
           </div>
 
@@ -448,7 +452,11 @@ export default function ProviderDashboard() {
                 </div>
                 <div className="flex items-center space-x-1.5 bg-yellow-50 text-yellow-800 px-3 py-1 rounded-full border border-yellow-200 text-xs font-bold">
                   <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                  <span>{selectedPoi.rating || 5.0} / 5.0</span>
+                  <span>
+                    {selectedReviews.length > 0
+                      ? `${(selectedReviews.reduce((acc, r) => acc + r.rating, 0) / selectedReviews.length).toFixed(1)} / 5.0`
+                      : 'Sin reseñas'}
+                  </span>
                 </div>
               </div>
 
