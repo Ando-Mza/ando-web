@@ -425,7 +425,7 @@ export default function LoginPage() {
                     className="py-1.5 px-2 bg-white hover:bg-black/5 rounded-lg border border-black/5 font-semibold text-center cursor-pointer transition-colors text-textDark inline-flex items-center justify-center space-x-1.5"
                   >
                     <Key className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" />
-                    <span>Admin (Sofía)</span>
+                    <span>Admin Demo</span>
                   </button>
                   <button
                     type="button"
@@ -436,7 +436,7 @@ export default function LoginPage() {
                     className="py-1.5 px-2 bg-white hover:bg-black/5 rounded-lg border border-black/5 font-semibold text-center cursor-pointer transition-colors text-textDark inline-flex items-center justify-center space-x-1.5"
                   >
                     <Store className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" />
-                    <span>Prestador (Catena)</span>
+                    <span>Prestador Demo</span>
                   </button>
                 </div>
               </div>

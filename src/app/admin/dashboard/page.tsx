@@ -15,7 +15,7 @@ import {
 import Link from 'next/link';
 
 export default function AdminDashboard() {
-  const { pois, logs, integrations } = useApp();
+  const { pois, logs, integrations, currentUser } = useApp();
 
   // Calcular métricas rápidas
   const totalPois = pois.length;
@@ -35,7 +35,9 @@ export default function AdminDashboard() {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-accentWine to-accentPurple p-8 text-white shadow-lg">
         <div className="absolute right-0 top-0 -mr-16 -mt-16 h-48 w-48 rounded-full bg-white/10 blur-xl" />
         <div className="relative z-10 max-w-xl space-y-2">
-          <h3 className="font-wixDisplay text-2xl font-bold">¡Hola de nuevo, Sofía!</h3>
+          <h3 className="font-wixDisplay text-2xl font-bold">
+            ¡Hola de nuevo, {currentUser?.name ? currentUser.name.split(' ')[0] : 'Administrador'}!
+          </h3>
           <p className="text-white/90 text-sm leading-relaxed">
             Bienvenida al centro de control de ANDO. Aquí puedes auditar los nuevos atractivos turísticos del Gran Mendoza y ajustar los parámetros del motor de traducción y mapas.
           </p>
@@ -217,7 +219,7 @@ export default function AdminDashboard() {
               <div className="bg-white/90 border border-accentPurple/15 rounded-xl p-3.5 space-y-2 shadow-2xs">
                 <span className="text-[10px] font-bold text-accentPurple uppercase tracking-wider block">Sugerencia de optimización</span>
                 <p className="text-xs text-textDark/80 font-medium leading-relaxed">
-                  &quot;El prestador Santiago Catena modificó horarios de la Bodega Catena Zapata para temporada alta. Te recomendamos revisar el solapamiento con eventos locales registrados en la agenda de Luján de Cuyo.&quot;
+                  &quot;Se registraron modificaciones de horarios en los atractivos de la provincia. Te recomendamos auditar los solapamientos con la agenda turística regional.&quot;
                 </p>
               </div>
 
