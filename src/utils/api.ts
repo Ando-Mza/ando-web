@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { ENV } from '../config/env';
 
 async function request<T>(
   path: string,
@@ -17,7 +17,7 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${ENV.API_BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -110,7 +110,7 @@ export async function uploadFileToR2(
     const resData = await api.getPresignedUrl(file.name, file.type);
     const uploadUrl = resData.uploadUrl;
     const key = resData.key;
-    const publicUrl = (resData as any).publicUrl || `https://pub-e2f6233ffa5c42d499c619bcb2607d32.r2.dev/${key}`;
+    const publicUrl = (resData as any).publicUrl || `${ENV.R2_PUBLIC_URL}/${key}`;
     
     if (onProgress) onProgress(45);
 

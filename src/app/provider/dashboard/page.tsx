@@ -14,10 +14,10 @@ import {
 import Link from 'next/link';
 
 export default function ProviderDashboard() {
-  const { pois, schedules } = useApp();
+  const { pois, schedules, currentUser } = useApp();
 
-  // Encontrar el POI del prestador (Bodega Catena Zapata es el predeterminado)
-  const myPoi = pois.find(p => p.createdBy === 'usr-prov-1') || pois[0];
+  // Encontrar el POI del prestador autenticado
+  const myPoi = pois.find(p => p.createdBy === currentUser?.id || !p.createdBy) || pois[0];
   const mySchedules = schedules.filter(s => s.poiId === myPoi?.id);
 
   return (
@@ -26,7 +26,9 @@ export default function ProviderDashboard() {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-fillPrimary to-fillSecondary p-8 text-white shadow-lg">
         <div className="absolute right-0 top-0 -mr-16 -mt-16 h-48 w-48 rounded-full bg-white/10 blur-xl" />
         <div className="relative z-10 max-w-xl space-y-2">
-          <h3 className="font-wixDisplay text-2xl font-bold">¡Bienvenido, Santiago!</h3>
+          <h3 className="font-wixDisplay text-2xl font-bold">
+            ¡Bienvenido, {currentUser?.name ? currentUser.name.split(' ')[0] : 'Prestador'}!
+          </h3>
           <p className="text-white/80 text-sm">
             Gestiona la información de <strong>{myPoi?.name || 'tu negocio'}</strong>. Mantén tus horarios y fotos actualizadas para atraer más turistas mendocinos y extranjeros.
           </p>

@@ -23,17 +23,7 @@ import {
   Sparkles
 } from 'lucide-react';
 
-const REJECT_PRESETS = [
-  'Imágenes de baja resolución o no representativas',
-  'Información del establecimiento no verificable',
-  'Ubicación física o coordenadas GPS imprecisas'
-];
-
-const CORRECTION_PRESETS = [
-  'Falta adjuntar más fotografías del interior del establecimiento',
-  'Revisar y ajustar el horario de atención para feriados',
-  'Completar la descripción detallada del servicio turístico'
-];
+import { ADMIN_REJECT_PRESETS, ADMIN_CORRECTION_PRESETS } from '@/config/constants';
 
 export default function ContentValidation() {
   const { 
@@ -80,7 +70,7 @@ export default function ContentValidation() {
 
   // 2. POI CONTENT HANDLERS
   const handleApprovePOI = (id: string, name: string) => {
-    const adminName = currentUser?.name || 'Sofía Romero';
+    const adminName = currentUser?.name || 'Administrador';
     approvePOI(id, adminName);
     triggerToast(`"${name}" ha sido aprobado exitosamente.`);
     if (selectedPoi?.id === id) {
@@ -103,7 +93,7 @@ export default function ContentValidation() {
     }
 
     if (selectedPoi) {
-      const adminName = currentUser?.name || 'Sofía Romero';
+      const adminName = currentUser?.name || 'Administrador';
       rejectPOI(selectedPoi.id, adminName, feedbackText.trim());
       setShowRejectModal(false);
       triggerToast(`Se rechazó "${selectedPoi.name}" y se envió la justificación.`);
@@ -126,7 +116,7 @@ export default function ContentValidation() {
     }
 
     if (selectedPoi) {
-      const adminName = currentUser?.name || 'Sofía Romero';
+      const adminName = currentUser?.name || 'Administrador';
       requestCorrectionPOI(selectedPoi.id, adminName, feedbackText.trim());
       setShowCorrectionModal(false);
       triggerToast(`Se solicitaron correcciones para "${selectedPoi.name}".`);
@@ -143,7 +133,7 @@ export default function ContentValidation() {
   const handleDeleteImage = (imageUrl: string) => {
     if (selectedPoi) {
       if (confirm('¿Está seguro de que desea eliminar permanentemente esta imagen del POI?')) {
-        const adminName = currentUser?.name || 'Sofía Romero';
+        const adminName = currentUser?.name || 'Administrador';
         deletePOIImage(selectedPoi.id, imageUrl, adminName);
         triggerToast('Imagen eliminada exitosamente');
 
@@ -683,7 +673,7 @@ export default function ContentValidation() {
                 <div className="space-y-1.5 mb-3">
                   <span className="text-[10px] font-bold text-textDark/60 uppercase tracking-wider block">Sugerencias rápidas:</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {REJECT_PRESETS.map((preset, idx) => (
+                    {ADMIN_REJECT_PRESETS.map((preset, idx) => (
                       <button
                         key={idx}
                         type="button"
@@ -770,7 +760,7 @@ export default function ContentValidation() {
                 <div className="space-y-1.5 mb-3">
                   <span className="text-[10px] font-bold text-textDark/60 uppercase tracking-wider block">Sugerencias rápidas:</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {CORRECTION_PRESETS.map((preset, idx) => (
+                    {ADMIN_CORRECTION_PRESETS.map((preset, idx) => (
                       <button
                         key={idx}
                         type="button"

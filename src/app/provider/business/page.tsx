@@ -26,7 +26,7 @@ type ViewMode = 'list' | 'create' | 'edit';
 export default function BusinessProfile() {
   const { pois, addPOI, updatePOI, generalParams, categories, currentUser } = useApp();
   
-  const providerId = currentUser?.id || 'usr-prov-1';
+  const providerId = currentUser?.id || '';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Navigation states
@@ -59,17 +59,9 @@ export default function BusinessProfile() {
   // Get POIs belonging to the active provider
   const myPois = pois.filter((p) => 
     currentUser?.role === 'admin' || 
-    p.createdBy === providerId || 
-    p.createdBy === 'usr-prov-1' || 
+    (providerId && p.createdBy === providerId) || 
     !p.createdBy
   );
-
-  // Sample photos for R2 simulations
-  const sampleUploadUrls = [
-    'https://images.unsplash.com/photo-1528821128474-27f963b062bf?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1470158943483-e1c7a66e5590?auto=format&fit=crop&w=800&q=80',
-  ];
 
   // Derived validation states (calculated during render to prevent set-state-in-effect cascading renders)
   const validationErrors: string[] = [];

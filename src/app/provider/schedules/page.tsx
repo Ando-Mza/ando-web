@@ -22,23 +22,7 @@ import {
   Moon
 } from 'lucide-react';
 
-const DAYS_OF_WEEK = [
-  { value: 1, label: 'Lun', name: 'Lunes' },
-  { value: 2, label: 'Mar', name: 'Martes' },
-  { value: 3, label: 'Mié', name: 'Miércoles' },
-  { value: 4, label: 'Jue', name: 'Jueves' },
-  { value: 5, label: 'Vie', name: 'Viernes' },
-  { value: 6, label: 'Sáb', name: 'Sábado' },
-  { value: 0, label: 'Dom', name: 'Domingo' },
-];
-
-// Presets estándar de la Provincia de Mendoza (US-GIT-01) con iconos vectoriales SVG de Lucide
-const MENDOZA_PRESETS = [
-  { name: 'Mañana', start: '09:00', end: '13:30', Icon: Sunrise },
-  { name: 'Tarde', start: '16:00', end: '20:00', Icon: Sun },
-  { name: 'Noche', start: '20:00', end: '00:00', Icon: Moon },
-  { name: 'Corrido', start: '09:00', end: '18:00', Icon: Clock },
-];
+import { DAYS_OF_WEEK, MENDOZA_SCHEDULE_PRESETS } from '@/config/constants';
 
 const generateScheduleId = () => `sch-${Date.now()}`;
 
@@ -46,7 +30,7 @@ export default function BusinessSchedules() {
   const { pois, schedules, saveSchedules, generalParams, currentUser } = useApp();
   
   // 1. Filtrar los POIs pertenecientes al Prestador (US-GIT-01 / US-GIT-02 por POI)
-  const providerPois = pois.filter(p => currentUser?.role === 'admin' || p.createdBy === currentUser?.id || p.createdBy === 'usr-prov-1');
+  const providerPois = pois.filter(p => currentUser?.role === 'admin' || p.createdBy === currentUser?.id || !p.createdBy);
   const [selectedPoiId, setSelectedPoiId] = useState<string>(providerPois[0]?.id || pois[0]?.id || '');
 
   const selectedPoi = pois.find(p => p.id === selectedPoiId) || providerPois[0] || pois[0];
@@ -439,7 +423,7 @@ export default function BusinessSchedules() {
                   <span>Acceso rápido: franjas estándar de Mendoza</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {MENDOZA_PRESETS.map((preset) => {
+                  {MENDOZA_SCHEDULE_PRESETS.map((preset) => {
                     const PresetIcon = preset.Icon;
                     return (
                       <button

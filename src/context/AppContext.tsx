@@ -15,6 +15,9 @@ import {
   TranslationDict
 } from '../utils/mockData';
 import { api } from '../utils/api';
+import { DEFAULT_GENERAL_PARAMS } from '../config/constants';
+import { USER_ROLES } from '../constants/enums';
+import { mapBackendRoleToFrontend, mapBackendStatusToFrontend } from '../utils/roleUtils';
 
 interface AppContextProps {
   currentUser: User | null;
@@ -91,8 +94,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (Array.isArray(dbUsers)) {
           const mappedUsers: User[] = dbUsers.map((u: any) => {
             const roleObj = u.usuarioRoles?.[0]?.rol;
-            const rName = roleObj?.nombre?.trim().toLowerCase();
-            const mappedRole = rName === 'administrador' ? 'admin' : (rName === 'prestador' ? 'provider' : 'tourist');
+            const mappedRole = mapBackendRoleToFrontend(roleObj?.nombre);
             return {
               id: u.id,
               name: `${u.nombre} ${u.apellido}`,
@@ -126,7 +128,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 ? p.imagenes 
                 : (p.imagenPrincipalUrl ? [p.imagenPrincipalUrl] : []),
               status: p.estado || 'pending',
-              createdBy: p.creadoPorId || p.organizacionId || 'usr-prov-1',
+              createdBy: p.creadoPorId || p.organizacionId || p.usuarioId || '',
               updatedAt: p.updatedAt || new Date().toISOString(),
               email: p.emailContacto || '',
               phone: p.telefono || '',
@@ -153,7 +155,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const profile = await api.getProfile();
         if (profile && profile.userId) {
-          const mappedRole = profile.role === 'administrador' ? 'admin' : (profile.role === 'prestador' ? 'provider' : 'tourist');
+          const mappedRole = mapBackendRoleToFrontend(profile.role);
           
           if (mappedRole !== 'admin' && mappedRole !== 'provider') {
             console.warn('Acceso denegado: El rol no está autorizado para acceder a este portal.');
@@ -461,7 +463,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'param_change',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Modificados límites globales (Imágenes: ${params.maxImagesPerPOI}, Franjas: ${params.maxTimeRangesPerDay}, Gracia: ${params.validationGracePeriodDays} días).`,
       timestamp: new Date().toISOString(),
     };
@@ -469,19 +471,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetGeneralParams = () => {
-    const defaultParams: GeneralParams = {
-      maxImagesPerPOI: 8,
-      maxTimeRangesPerDay: 3,
-      validationGracePeriodDays: 5,
-      requireReviewForEdits: true,
-    };
-    setGeneralParams(defaultParams);
+    setGeneralParams({ ...DEFAULT_GENERAL_PARAMS });
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'param_reset',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: 'Restablecidos parámetros generales a valores por defecto.',
       timestamp: new Date().toISOString(),
     };
@@ -511,7 +507,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           poiId: 'system',
           poiName: target?.name || 'Integración API',
           action: 'test_connection',
-          adminName: currentUser?.name || 'Sofía Romero',
+          adminName: currentUser?.name || 'Administrador',
           comment: `Prueba de conexión: ${success ? 'Exitosa (Conectado)' : 'Fallida (Error de credenciales)'}`,
           timestamp: new Date().toISOString(),
         };
@@ -536,7 +532,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...poiData,
       id: `poi-${Date.now()}`,
       status: 'pending',
-      createdBy: currentUser?.id || 'usr-prov-1',
+      createdBy: currentUser?.id || '',
       updatedAt: new Date().toISOString(),
     };
     setPois((prev) => [...prev, newPOI]);
@@ -628,7 +624,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         poiId: 'system',
         poiName: 'Configuración CYP',
         action: 'category_create',
-        adminName: currentUser?.name || 'Sofía Romero',
+        adminName: currentUser?.name || 'Administrador',
         comment: `Creada categoría turística: "${newCat.name}"`,
         timestamp: new Date().toISOString(),
       };
@@ -655,7 +651,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'category_toggle',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Modificada categoría turística: "${updatedCat.name}" (${updatedCat.enabled ? 'Activa' : 'Inactiva'})`,
       timestamp: new Date().toISOString(),
     };
@@ -678,7 +674,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'category_delete',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Eliminada categoría turística: "${target.name}"`,
       timestamp: new Date().toISOString(),
     };
@@ -698,7 +694,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'state_create',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Creado estado de validación: "${newState.name}"`,
       timestamp: new Date().toISOString(),
     };
@@ -714,7 +710,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'state_toggle',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Modificado estado de validación: "${updatedState.name}" (${updatedState.enabled ? 'Activa' : 'Inactiva'})`,
       timestamp: new Date().toISOString(),
     };
@@ -741,7 +737,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       poiId: 'system',
       poiName: 'Configuración CYP',
       action: 'state_delete',
-      adminName: currentUser?.name || 'Sofía Romero',
+      adminName: currentUser?.name || 'Administrador',
       comment: `Eliminado estado de validación: "${target.name}"`,
       timestamp: new Date().toISOString(),
     };

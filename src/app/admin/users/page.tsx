@@ -23,7 +23,7 @@ import {
 type ViewMode = 'list' | 'create' | 'edit';
 
 export default function UserManagementPage() {
-  const { users, adminCreateUser, updateProviderProfile, adminDeleteUser } = useApp();
+  const { users, adminCreateUser, updateProviderProfile, adminDeleteUser, currentUser } = useApp();
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -425,7 +425,7 @@ export default function UserManagementPage() {
                           >
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
-                          {user.id !== 'usr-admin-1' && (
+                          {user.id !== currentUser?.id && (
                             <button
                               onClick={() => askDeleteUser(user)}
                               className="p-1 rounded-md border bg-red-50 hover:bg-red-100 border-red-200 text-red-600 transition-colors cursor-pointer"
