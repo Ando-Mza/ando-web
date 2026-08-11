@@ -11,7 +11,7 @@ import {
   ChevronLeft, 
   ChevronRight,
   Bell,
-  Sparkles
+  User
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -22,17 +22,23 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Asegurar que el usuario esté autenticado para facilitar pruebas
   useEffect(() => {
-    setMounted(true);
-    if (!currentUser) {
-      // Auto-login de prestador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
-      const logged = login('provider');
-      if (!logged) {
+    const timer = setTimeout(() => {
+      setMounted(true);
+      if (!currentUser) {
+        // Auto-login de prestador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
+        const logged = login('provider');
+        if (!logged) {
+          router.push('/');
+        }
+      } else if (currentUser.role !== 'provider') {
         router.push('/');
       }
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [currentUser, login, router]);
 
   if (!mounted || !currentUser) {
@@ -54,16 +60,22 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       desc: 'Visualizaciones de tu POI'
     },
     {
-      name: 'Datos del Local',
+      name: 'Mis Negocios',
       path: '/provider/business',
       icon: Store,
-      desc: 'Información y multimedia R2'
+      desc: 'Información y registro R2'
     },
     {
       name: 'Gestión de Horarios',
       path: '/provider/schedules',
       icon: CalendarRange,
       desc: 'Horarios de atención'
+    },
+    {
+      name: 'Mi Cuenta',
+      path: '/provider/profile',
+      icon: User,
+      desc: 'Ajustes del perfil'
     }
   ];
 
@@ -82,12 +94,16 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       >
         {/* Brand/Logo */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-black/5">
-          <Link href="/provider/dashboard" className="flex items-center space-x-2">
-            <span className="font-unbounded text-xl font-bold tracking-tight text-accentWine">
-              ANDO{isSidebarOpen && <span className="text-fillPrimary">.</span>}
-            </span>
+          <Link href="/provider/dashboard" className="flex items-center space-x-2 overflow-hidden">
+            {isSidebarOpen ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/brand/logotipoColor1.svg" alt="ANDO" className="h-7 w-auto" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/brand/iconoClaro.svg" alt="ANDO" className="h-6 w-auto invert opacity-75" />
+            )}
             {isSidebarOpen && (
-              <span className="text-[10px] bg-fillPrimary/10 text-fillPrimary px-2 py-0.5 rounded-full font-semibold uppercase">
+              <span className="text-[10px] bg-fillPrimary/10 text-fillPrimary px-2 py-0.5 rounded-full font-semibold uppercase flex-shrink-0">
                 Socio
               </span>
             )}
@@ -134,28 +150,8 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
 
         {/* User Info / Logout */}
         <div className="p-4 border-t border-black/5">
-          {isSidebarOpen ? (
-            <div className="bg-bgPrimary/80 rounded-xl p-3 border border-black/5 mb-3">
-              <div className="flex items-center space-x-3">
-                <div className="h-9 w-9 rounded-full bg-fillPrimary/10 text-fillPrimary flex items-center justify-center font-bold">
-                  SC
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-textDark truncate">{currentUser.name}</p>
-                  <p className="text-[10px] text-textDark/50 truncate font-semibold">{currentUser.businessName}</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-center mb-3">
-              <div className="h-9 w-9 rounded-full bg-fillPrimary/10 text-fillPrimary flex items-center justify-center font-bold">
-                SC
-              </div>
-            </div>
-          )}
-          
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 transition-all duration-200 cursor-pointer ${
               !isSidebarOpen && 'px-0'
             }`}
@@ -209,6 +205,37 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           {children}
         </main>
       </div>
+
+      {/* Logout Confirmation Modal (US-ACC-05) */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-black/5 animate-scale-up space-y-4">
+            <div className="flex items-center space-x-2.5 text-fillPrimary">
+              <LogOut className="h-5 w-5" />
+              <h4 className="font-wixDisplay font-bold text-textDark">Cerrar Sesión</h4>
+            </div>
+            <p className="text-xs text-textDark/70 leading-relaxed">
+              ¿Está seguro que quiere cerrar la sesión? Si lo hace deberá iniciar sesión nuevamente para acceder a su panel de gestión.
+            </p>
+            <div className="flex space-x-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/10 transition-colors cursor-pointer"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

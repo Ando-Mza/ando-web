@@ -10,8 +10,6 @@ import {
   Check, 
   AlertTriangle,
   Clock,
-  Sparkles,
-  Save,
   Tag
 } from 'lucide-react';
 
@@ -24,6 +22,8 @@ const DAYS_OF_WEEK = [
   { value: 6, label: 'Sáb' },
   { value: 0, label: 'Dom' },
 ];
+
+const generateScheduleId = () => `sch-${Date.now()}`;
 
 export default function BusinessSchedules() {
   const { pois, schedules, saveSchedules, generalParams } = useApp();
@@ -138,7 +138,7 @@ export default function BusinessSchedules() {
     }
 
     const newRule: Schedule = {
-      id: `sch-${Date.now()}`,
+      id: generateScheduleId(),
       poiId: myPoi.id,
       daysOfWeek: selectedDays,
       timeRanges,
