@@ -107,7 +107,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               phone: u.telefono || '',
               businessName: u.usuarioOrganizaciones?.[0]?.organizacion?.nombre || '',
               cuit: '',
-              status: u.fechaBaja ? 'inactive' : 'active',
+              status: u.fechaBaja ? 'inactive' : (u.estado === 'pendiente' || u.status === 'pending' ? 'pending' : 'active'),
             };
           });
           setUsers(mappedUsers);
@@ -131,7 +131,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               images: Array.isArray(p.imagenes) && p.imagenes.length > 0 
                 ? p.imagenes 
                 : (p.imagenPrincipalUrl ? [p.imagenPrincipalUrl] : []),
-              status: p.estado || 'pending',
+              status: mapBackendStatusToFrontend(p.estado),
               createdBy: p.creadoPorId || p.organizacionId || p.usuarioId || '',
               updatedAt: p.updatedAt || new Date().toISOString(),
               email: p.emailContacto || '',
