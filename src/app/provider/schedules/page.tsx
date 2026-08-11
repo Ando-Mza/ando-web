@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Schedule, TimeRange, SeasonType } from '@/types';
 import { 
@@ -29,11 +29,37 @@ const generateScheduleId = () => `sch-${Date.now()}`;
 export default function BusinessSchedules() {
   const { pois, schedules, saveSchedules, generalParams, currentUser } = useApp();
   
-  // 1. Filtrar los POIs pertenecientes al Prestador (US-GIT-01 / US-GIT-02 por POI)
-  const providerPois = pois.filter(p => currentUser?.role === 'admin' || p.createdBy === currentUser?.id || !p.createdBy);
-  const [selectedPoiId, setSelectedPoiId] = useState<string>(providerPois[0]?.id || pois[0]?.id || '');
+  // 1. Memoizar POIs pertenecientes al Prestador
+  const providerPois = React.useMemo(() => {
+    const providerId = currentUser?.id || '';
+    return pois.filter(p => currentUser?.role === 'admin' || (providerId && p.createdBy === providerId) || !p.createdBy);
+  }, [pois, currentUser]);
 
-  const selectedPoi = pois.find(p => p.id === selectedPoiId) || providerPois[0] || pois[0];
+  const [selectedPoiId, setSelectedPoiId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedProviderPoiId') || '';
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    if (providerPois.length > 0) {
+      const savedId = typeof window !== 'undefined' ? localStorage.getItem('selectedProviderPoiId') : null;
+      if (savedId && providerPois.some((p) => p.id === savedId)) {
+        if (selectedPoiId !== savedId) {
+          setSelectedPoiId(savedId);
+        }
+      } else if (!selectedPoiId || !providerPois.some((p) => p.id === selectedPoiId)) {
+        const defaultId = providerPois[0].id;
+        setSelectedPoiId(defaultId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('selectedProviderPoiId', defaultId);
+        }
+      }
+    }
+  }, [providerPois]);
+
+  const selectedPoi = providerPois.find(p => p.id === selectedPoiId) || providerPois[0] || pois[0];
   const mySchedules = schedules.filter(s => s.poiId === selectedPoi?.id);
 
   // Estados del editor (nueva regla o edición)
@@ -63,6 +89,9 @@ export default function BusinessSchedules() {
       }
     }
     setSelectedPoiId(poiId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedProviderPoiId', poiId);
+    }
     resetForm();
   };
 

@@ -219,7 +219,7 @@ export default function AdminDashboard() {
               <div className="bg-white/90 border border-accentPurple/15 rounded-xl p-3.5 space-y-2 shadow-2xs">
                 <span className="text-[10px] font-bold text-accentPurple uppercase tracking-wider block">Sugerencia de optimización</span>
                 <p className="text-xs text-textDark/80 font-medium leading-relaxed">
-                  &quot;El prestador Santiago Catena modificó horarios de la Bodega Catena Zapata para temporada alta. Te recomendamos revisar el solapamiento con eventos locales registrados en la agenda de Luján de Cuyo.&quot;
+                  &quot;Se registraron modificaciones de horarios en los atractivos de la provincia. Te recomendamos auditar los solapamientos con la agenda turística regional.&quot;
                 </p>
               </div>
 

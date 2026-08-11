@@ -169,11 +169,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return;
           }
           
-          let nombreCompleto = profile.email.split('@')[0];
+          let nombreCompleto = profile.nombre ? `${profile.nombre} ${profile.apellido || ''}`.trim() : profile.email.split('@')[0];
+          let businessName = '';
+          let phone = '';
           try {
-            const fullUser = await api.getUser(profile.userId);
-            if (fullUser) {
-              nombreCompleto = `${fullUser.nombre} ${fullUser.apellido}`;
+            if (mappedRole === 'provider') {
+              const provProf = await api.getPrestadorProfile();
+              if (provProf) {
+                if (provProf.nombre) nombreCompleto = `${provProf.nombre} ${provProf.apellido || ''}`.trim();
+                if (provProf.nombreEmpresa) businessName = provProf.nombreEmpresa;
+                if (provProf.telefono) phone = provProf.telefono;
+              }
+            } else {
+              const fullUser = await api.getUser(profile.userId);
+              if (fullUser && fullUser.nombre) {
+                nombreCompleto = `${fullUser.nombre} ${fullUser.apellido || ''}`.trim();
+              }
             }
           } catch (e) {
             console.error('Error fetching full user profile details:', e);
@@ -184,6 +195,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             name: nombreCompleto,
             email: profile.email,
             role: mappedRole,
+            businessName: businessName || undefined,
+            phone: phone || undefined,
             status: 'active',
           };
           setCurrentUser(loggedUser);

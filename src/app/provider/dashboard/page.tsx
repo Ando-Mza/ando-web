@@ -27,27 +27,52 @@ import Link from 'next/link';
 export default function ProviderDashboard() {
   const { pois, schedules, generalParams, currentUser, reviews, addReviewReply } = useApp();
 
-  // 1. Filtrar únicamente los POIs del prestador autenticado
-  const providerId = currentUser?.id || '';
-  const providerPois = pois.filter((p) => 
-    currentUser?.role === 'admin' || 
-    (providerId && p.createdBy === providerId) || 
-    !p.createdBy
-  );
+  // 1. Memoizar POIs del prestador autenticado
+  const providerPois = React.useMemo(() => {
+    const providerId = currentUser?.id || '';
+    return pois.filter((p) => 
+      currentUser?.role === 'admin' || 
+      (providerId && p.createdBy === providerId) || 
+      !p.createdBy
+    );
+  }, [pois, currentUser]);
 
-  // 2. Estado para seleccionar el negocio activo
-  const [selectedPoiId, setSelectedPoiId] = useState<string>('');
+  // 2. Estado para seleccionar el negocio activo con persistencia en localStorage
+  const [selectedPoiId, setSelectedPoiId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedProviderPoiId') || '';
+    }
+    return '';
+  });
   
   // Estado para la respuesta interactiva a reseñas
   const [replyingToReviewId, setReplyingToReviewId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState<string>('');
 
-  // Sincronizar el primer POI disponible al cargar
+  // Sincronizar selección inicial o recuperarla de localStorage
   useEffect(() => {
-    if (providerPois.length > 0 && (!selectedPoiId || !providerPois.some((p) => p.id === selectedPoiId))) {
-      setSelectedPoiId(providerPois[0].id);
+    if (providerPois.length > 0) {
+      const savedId = typeof window !== 'undefined' ? localStorage.getItem('selectedProviderPoiId') : null;
+      if (savedId && providerPois.some((p) => p.id === savedId)) {
+        if (selectedPoiId !== savedId) {
+          setSelectedPoiId(savedId);
+        }
+      } else if (!selectedPoiId || !providerPois.some((p) => p.id === selectedPoiId)) {
+        const defaultId = providerPois[0].id;
+        setSelectedPoiId(defaultId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('selectedProviderPoiId', defaultId);
+        }
+      }
     }
-  }, [providerPois, selectedPoiId]);
+  }, [providerPois]);
+
+  const handleSelectBusiness = (newId: string) => {
+    setSelectedPoiId(newId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedProviderPoiId', newId);
+    }
+  };
 
   const selectedPoi = providerPois.find((p) => p.id === selectedPoiId) || providerPois[0];
   const selectedSchedules = schedules.filter((s) => s.poiId === selectedPoi?.id);
@@ -141,7 +166,7 @@ export default function ProviderDashboard() {
             <select
               id="dashboard-business-select"
               value={selectedPoiId}
-              onChange={(e) => setSelectedPoiId(e.target.value)}
+              onChange={(e) => handleSelectBusiness(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg border border-white/30 bg-white text-fillPrimary focus:outline-none focus:ring-2 focus:ring-accentYellow font-bold text-sm cursor-pointer shadow-sm"
             >
               {providerPois.map((p) => (
