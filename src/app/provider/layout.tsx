@@ -9,37 +9,36 @@ import {
   CalendarRange, 
   LogOut, 
   ChevronLeft, 
-  ChevronRight,
-  Bell,
-  User
+  ChevronRight, 
+  User,
+  Layers,
+  MessageSquare,
+  HelpCircle
 } from 'lucide-react';
 import Link from 'next/link';
+import NotificationCenter from '@/components/NotificationCenter';
 
 export default function ProviderLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, logout, login } = useApp();
+  const { currentUser, logout } = useApp();
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Asegurar que el usuario esté autenticado para facilitar pruebas
+  // Verificar autenticación real — sin auto-login mock
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
       if (!currentUser) {
-        // Auto-login de prestador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
-        const logged = login('provider');
-        if (!logged) {
-          router.push('/');
-        }
+        router.push('/');
       } else if (currentUser.role !== 'provider') {
         router.push('/');
       }
-    }, 0);
+    }, 150);
     return () => clearTimeout(timer);
-  }, [currentUser, login, router]);
+  }, [currentUser, router]);
 
   if (!mounted || !currentUser) {
     return (
@@ -72,10 +71,28 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       desc: 'Horarios de atención'
     },
     {
+      name: 'Gestión de servicios',
+      path: '/provider/services',
+      icon: Layers,
+      desc: 'Experiencias y actividades'
+    },
+    {
+      name: 'Reseñas y opiniones',
+      path: '/provider/reviews',
+      icon: MessageSquare,
+      desc: 'Respuestas a turistas'
+    },
+    {
       name: 'Mi cuenta',
       path: '/provider/profile',
       icon: User,
       desc: 'Ajustes del perfil'
+    },
+    {
+      name: 'Centro de ayuda',
+      path: '/provider/help',
+      icon: HelpCircle,
+      desc: 'Guías y soporte'
     }
   ];
 
@@ -185,17 +202,15 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
                 <span>{currentUser.businessName}</span>
               </div>
             )}
-            <button className="relative p-2 rounded-lg hover:bg-black/5 text-textDark/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary cursor-pointer" aria-label="Notificaciones">
-              <Bell className="h-5 w-5" />
-            </button>
+            <NotificationCenter />
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-textDark">{currentUser.name}</p>
                 <p className="text-[10px] text-textDark/60 font-medium">Prestador asociado</p>
               </div>
-              <div className="h-8 w-8 rounded-full bg-fillPrimary text-white flex items-center justify-center font-semibold text-sm">
-                S
+              <div className="h-8 w-8 rounded-full bg-fillPrimary text-white flex items-center justify-center font-semibold text-sm uppercase">
+                {currentUser.name ? currentUser.name.slice(0, 2) : 'PR'}
               </div>
             </div>
           </div>

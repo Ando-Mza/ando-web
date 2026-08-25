@@ -1,41 +1,39 @@
-# US-GIT-07: Validación de Contenido
+# US-GIT-07: Gestión de Multimedia como Prestador
 
 ## Información General
-*   **Identificador:** US-GIT-07
-*   **Actor:** Administrador
-*   **Puntos de Historia:** 5
-*   **Precondiciones:**
-    *   El Administrador debe estar autenticado con rol de Administrador.
-*   **Historias de Usuario Relacionadas:** US-GIT-01, US-CYN-02, US-RYV-07
+- **Identificador:** US-GIT-07
+- **Actor:** Prestador
+- **Puntos de Historia:** 8
+- **Precondiciones:**
+  - El Prestador debe estar autenticado.
+  - Debe tener al menos un POI dado de alta en el sistema.
+- **Historias de Usuario Relacionadas:** US-ACC-02, US-ACC-03, US-CYN-01, US-CYN-02
 
 ---
 
 ## Descripción General
-Como Administrador del sistema,
-quiero revisar, aprobar o rechazar los puntos de interés y contenidos cargados por usuarios o prestadores turísticos,
-para garantizar la calidad, veracidad y consistencia de la información publicada en la plataforma.
+**Como** Prestador  
+**Quiero** subir imágenes propias de mi POI  
+**Para** que los Turistas puedan ver fotos reales y actualizadas de mi establecimiento dentro de la plataforma.
 
 ---
 
 ## Descripción Funcional
-Cuando un usuario o prestador registra un nuevo Punto de Interés (POI) o modifica información existente, el contenido no será publicado inmediatamente. El sistema lo almacenará en estado *Pendiente de Validación* y quedará disponible para revisión desde el panel administrativo.
-
-El administrador podrá consultar el detalle del contenido enviado, visualizar la información asociada y decidir entre:
-1.  **Aprobar** el contenido (lo publica en el catálogo público).
-2.  **Rechazar** el contenido (solicita el motivo del rechazo y notifica al creador).
-3.  **Solicitar Correcciones** (indica observaciones y permite al creador editarlo).
-
-Una vez aprobado, el contenido pasará a formar parte del catálogo público y podrá ser utilizado por los motores de búsqueda, recomendación e itinerarios. Toda acción debe ser auditada por el sistema.
+El Prestador accede al detalle de su POI y selecciona la opción "Gestión de imágenes". El sistema genera una URL prefirmada mediante el backend y el cliente sube la imagen directamente al bucket de Cloudflare R2. Antes de almacenarse, la imagen es procesada en background por Sharp (redimensionado a resoluciones thumbnail, medium y full, y compresión con pérdida aceptable). Una vez procesada, el sistema almacena la URL pública resultante en la entidad ImagenPOI asociada al POI. El Prestador puede subir, visualizar, reemplazar y eliminar las imágenes de su POI.
 
 ---
 
 ## Criterios de Aceptación
 | Cuando | Espero | Pantalla |
 | :--- | :--- | :--- |
-| El Administrador accede al módulo de validación | Visualizar una lista de contenidos pendientes de validación con: nombre de POI, categoría, usuario o prestador que realizó la carga, fecha de creación y estado actual | Panel de Validación de Contenidos |
-| El Administrador solicita ver el detalle de un contenido pendiente | El sistema muestra: nombre, descripción, categoría, ubicación, imágenes, contacto y observaciones automáticas, junto a los botones “Aceptar”, “Rechazar” y “Solicitar Corrección” | Detalle de Validación |
-| El Administrador selecciona “Aprobar” | Que se cambie el estado del POI a “Aprobado”, se publique en el catálogo y se registre la fecha y el administrador que realizó la validación | Detalle de Validación |
-| El Administrador selecciona “Rechazar” | Que se solicite el motivo del rechazo, se guarde como “Rechazado”, se registre la observación en el historial y se notifique al responsable | Modal de Motivo de Rechazo |
-| El Administrador selecciona “Solicitar corrección” | Que el sistema permita ingresar observaciones, cambie el estado del POI a “Corrección Solicitada” y notifique al responsable para que actualice la información | Modal de Observaciones |
-| El POI se encuentra en estado “Pendiente de Validación”, “Rechazado” o “Corrección Solicitada” | Que el sistema excluya el contenido de las búsquedas, mapa, recomendaciones e itinerarios generados por la IA | Toda la Aplicación |
-| El Administrador aprueba, rechace o realice una solicitud de corrección | Que el sistema audite detalladamente la acción en los logs del panel de administración | Logs de Auditoría |
+| El Prestador sube una imagen en formato válido (JPG, PNG o WEBP) | El sistema genera la URL prefirmada, sube la imagen a Cloudflare R2, la procesa en background y almacena la URL pública en ImagenPOI | - |
+| El Prestador sube una imagen en formato no soportado | El sistema muestra "El archivo debe ser una imagen en formato JPG, PNG o WEBP" y bloquea el botón “guardar” | - |
+| El Prestador sube una imagen que supera el tamaño máximo permitido | El sistema muestra "La imagen no puede superar los 30 MB" y bloquea el botón “guardar” | - |
+| El Prestador presiona el botón “eliminar imagen” de su POI | El sistema elimina la URL de ImagenPOI y el archivo del bucket de Cloudflare R2. Muestra un mensaje “Su imagen fue eliminada” | - |
+| La imagen fue subida pero el procesamiento en background aún no finalizó | El sistema muestra un mensaje de "Procesando imagen..." y la imagen se visualiza una vez que el proceso finaliza | - |
+| El Prestador presiona el botón de “Subir Fotos” y adjunta la misma pero el servicio de Cloudflare R2 no está disponible | El sistema muestra por pantalla el mensaje "No fue posible subir la imagen en este momento. Intentá más tarde." y no almacena ningún dato parcial. | - |
+| El Prestador presiona el botón “Subir Fotos”, selecciona la misma pero pierde la conexión durante la subida | La operación se cancela y el sistema no almacena ningún registro parcial en ImagenPOI. | - |
+| El Prestador presiona el botón “Subir Fotos” , selecciona la misma pero el procesamiento de la imagen falla en background | El sistema muestra por pantalla el mensaje “ La imagen no pudo procesarse correctamente, intente subirla nuevamente". | - |
+| El Prestador intenta eliminar la única imagen de su POI presionando el ícono del botón “eliminar imagen” | El sistema le advierte "Tu POI quedará sin imágenes. ¿Confirmás la eliminación?" y procede sólo si el Prestador presiona el botón “confirmar” . | - |
+| El Prestador selecciona más de una imagen y presiona “Eliminar” | El sistema elimine todas las imágenes seleccionadas del POI en simultáneo | - |
+| El Prestador quiere trabajar sobre más de una imagen | El sistema permita la selección de más de una para aplicar acciones indicándose con un check las que se encuentran seleccionadas | - |

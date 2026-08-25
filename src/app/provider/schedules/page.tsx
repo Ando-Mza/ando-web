@@ -27,10 +27,11 @@ import { DAYS_OF_WEEK, MENDOZA_SCHEDULE_PRESETS } from '@/config/constants';
 const generateScheduleId = () => `sch-${Date.now()}`;
 
 export default function BusinessSchedules() {
-  const { pois, schedules, saveSchedules, generalParams, currentUser } = useApp();
+  const { pois, schedules, saveSchedules, loadSchedulesForPoi, generalParams, currentUser } = useApp();
   
   // 1. Memoizar POIs pertenecientes al Prestador
   const providerPois = React.useMemo(() => {
+    if (currentUser?.role === 'provider') return pois;
     const providerId = currentUser?.id || '';
     return pois.filter(p => currentUser?.role === 'admin' || (providerId && p.createdBy === providerId) || !p.createdBy);
   }, [pois, currentUser]);
@@ -59,6 +60,13 @@ export default function BusinessSchedules() {
     }
   }, [providerPois]);
 
+  // Cargar horarios reales desde el backend cuando cambia el POI seleccionado
+  useEffect(() => {
+    if (selectedPoiId) {
+      loadSchedulesForPoi(selectedPoiId);
+    }
+  }, [selectedPoiId]);
+
   const selectedPoi = providerPois.find(p => p.id === selectedPoiId) || providerPois[0] || pois[0];
   const mySchedules = schedules.filter(s => s.poiId === selectedPoi?.id);
 
@@ -74,20 +82,17 @@ export default function BusinessSchedules() {
   const [validationError, setValidationError] = useState('');
   const [shake, setShake] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const [toastMessage, setToastMessage] = useState('Horarios actualizados exitosamente');
   const [touristAlert, setTouristAlert] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Verificar si hay cambios sin guardar en el formulario
   const hasUnsavedChanges = selectedDays.length > 0 || description !== '' || editingScheduleId !== null;
 
-  // Cambiar POI seleccionado con confirmación de cambios sin guardar
+  // Cambiar POI seleccionado
   const handleSelectPoi = (poiId: string) => {
     if (poiId === selectedPoiId) return;
-    if (hasUnsavedChanges) {
-      if (!confirm('¿Está seguro de que desea salir sin guardar los cambios?')) {
-        return;
-      }
-    }
     setSelectedPoiId(poiId);
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedProviderPoiId', poiId);
@@ -239,16 +244,11 @@ export default function BusinessSchedules() {
   };
 
   const handleCancelForm = () => {
-    if (hasUnsavedChanges) {
-      if (!confirm('¿Está seguro de que desea salir sin guardar los cambios?')) {
-        return;
-      }
-    }
     resetForm();
   };
 
   // Guardar o modificar horario (US-GIT-01 / US-GIT-02)
-  const handleAddOrUpdateRule = (e: React.FormEvent) => {
+  const handleAddOrUpdateRule = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError('');
     setTouristAlert(null);
@@ -259,9 +259,13 @@ export default function BusinessSchedules() {
       return;
     }
 
+    setIsSaving(true);
+    let updatedSchedules: Schedule[] = [];
+    const isEditing = !!editingScheduleId;
+
     if (editingScheduleId) {
       // US-GIT-02: Modificación de día y horario
-      const updatedSchedules = mySchedules.map(sch => 
+      updatedSchedules = mySchedules.map(sch => 
         sch.id === editingScheduleId
           ? {
               ...sch,
@@ -273,9 +277,6 @@ export default function BusinessSchedules() {
             }
           : sch
       );
-      saveSchedules(selectedPoi.id, updatedSchedules);
-      setToastMessage('Cambios guardados exitosamente');
-      setTouristAlert(`Se notificó a los turistas con itinerarios activos que incluyan "${selectedPoi.name}" para revisar su plan.`);
     } else {
       // US-GIT-01: Carga inicial de día y horario
       const newRule: Schedule = {
@@ -287,8 +288,24 @@ export default function BusinessSchedules() {
         isHoliday,
         description: description || 'Horario cargado por prestador',
       };
-      saveSchedules(selectedPoi.id, [...mySchedules, newRule]);
-      setToastMessage('Horario guardado exitosamente');
+      updatedSchedules = [...mySchedules, newRule];
+    }
+
+    const res = await saveSchedules(selectedPoi.id, updatedSchedules);
+    setIsSaving(false);
+
+    if (res && !res.success) {
+      setToastType('error');
+      setToastMessage(res.error || 'Error al guardar horarios en el servidor');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+      return;
+    }
+
+    setToastType('success');
+    setToastMessage(isEditing ? 'Cambios guardados exitosamente' : 'Horario guardado exitosamente');
+    if (isEditing) {
+      setTouristAlert(`Se notificó a los turistas con itinerarios activos que incluyan "${selectedPoi.name}" para revisar su plan.`);
     }
 
     resetForm();
@@ -308,25 +325,35 @@ export default function BusinessSchedules() {
   };
 
   // Eliminación de una regla (US-GIT-03)
-  const handleDeleteRule = (id: string) => {
-    if (confirm('¿Está seguro de que desea eliminar este rango de días y horarios?')) {
-      if (editingScheduleId === id) {
-        resetForm();
-      }
-      const filtered = mySchedules.filter(s => s.id !== id);
-      saveSchedules(selectedPoi.id, filtered);
-      setToastMessage('Horario eliminado exitosamente');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+  const handleDeleteRule = async (id: string) => {
+    if (editingScheduleId === id) {
+      resetForm();
     }
+    const filtered = mySchedules.filter(s => s.id !== id);
+    const res = await saveSchedules(selectedPoi.id, filtered);
+
+    if (res && !res.success) {
+      setToastType('error');
+      setToastMessage(res.error || 'Error al eliminar el horario del servidor');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+      return;
+    }
+
+    setToastType('success');
+    setToastMessage('Horario eliminado exitosamente');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
   };
 
   return (
     <div className="space-y-8 relative">
       {/* Toast Notification de Popup de guardado (Criterio de Aceptación US-GIT-01 y US-GIT-02) */}
       {showToast && (
-        <div className="fixed bottom-8 right-8 z-50 flex items-center space-x-3 bg-fillPrimary text-white px-6 py-4 rounded-xl shadow-2xl border border-white/10 animate-slide-in">
-          <Check className="h-5 w-5 text-white flex-shrink-0" />
+        <div className={`fixed bottom-8 right-8 z-50 flex items-center space-x-3 text-white px-6 py-4 rounded-xl shadow-2xl border border-white/10 animate-slide-in ${
+          toastType === 'error' ? 'bg-red-600' : 'bg-fillPrimary'
+        }`}>
+          {toastType === 'error' ? <AlertTriangle className="h-5 w-5 text-white flex-shrink-0" /> : <Check className="h-5 w-5 text-white flex-shrink-0" />}
           <span className="text-sm font-bold">{toastMessage}</span>
         </div>
       )}

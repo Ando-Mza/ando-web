@@ -106,6 +106,73 @@ export interface Category {
   enabled: boolean;
 }
 
+export interface Etiqueta {
+  id: string;
+  nombre: string;
+  activa: boolean;
+  fechaCreacion?: string;
+}
+
+export interface ServiceItem {
+  id: string;
+  poiId: string;
+  name: string;
+  description: string;
+  category?: string;
+  price: number;
+  durationMinutes: number;
+  maxCapacity?: number;
+  isAvailable: boolean;
+  terms?: string;
+}
+
+export interface ReviewItem {
+  id: string;
+  poiId: string;
+  poiName?: string;
+  userName: string;
+  userAvatar?: string;
+  rating: number; // 1 a 5
+  comment: string;
+  date: string;
+  status: 'pendiente de respuesta' | 'respondida' | 'publicada';
+  images?: string[];
+  response?: {
+    id?: string;
+    comentario: string;
+    fechaCreacion: string;
+    authorName?: string;
+  };
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error' | 'validation' | 'review';
+  isRead: boolean;
+  createdAt: string;
+  actionUrl?: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  entity: string;
+  entityId?: string;
+  adminName: string;
+  ip?: string;
+  detail?: string;
+}
+
+export interface FAQItem {
+  id: string;
+  question: string;
+  answer: string;
+  category: 'pois' | 'schedules' | 'account' | 'validation' | 'general';
+}
+
 export interface ValidationState {
   id: string;
   name: string;
@@ -113,4 +180,5 @@ export interface ValidationState {
   enabled: boolean;
   allowedTransitions: string[]; // IDs de estados destinos válidos
 }
+
 
