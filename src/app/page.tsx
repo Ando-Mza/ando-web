@@ -23,9 +23,11 @@ import {
 
 type SubView = 'login' | 'register' | 'forgot_password' | 'recovery_sent' | 'reset_password' | 'registration_pending';
 
+import { api } from '@/utils/api';
+
 export default function LoginPage() {
   const router = useRouter();
-  const { loginWithCredentials, registerProvider, users, updateProviderProfile } = useApp();
+  const { loginWithCredentials, registerProvider } = useApp();
   
   // Navigation & Subview
   const [subView, setSubView] = useState<SubView>('login');
@@ -193,8 +195,8 @@ export default function LoginPage() {
     }
   };
 
-  // 3. RECOVERY HANDLER
-  const handleRecoverySubmit = (e: React.FormEvent) => {
+  // 3. RECOVERY HANDLER — llama al backend real
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRecoveryError('');
 
@@ -206,23 +208,25 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      await api.requestPasswordRecovery(recoveryEmail.trim());
+      setRecoveryUserEmail(recoveryEmail.trim());
       setIsLoading(false);
-      const userExists = users.some(u => u.email.toLowerCase() === recoveryEmail.trim().toLowerCase());
-      if (userExists) {
-        setRecoveryUserEmail(recoveryEmail.trim());
-        changeView('recovery_sent');
-        setCooldown(30);
-      } else {
-        setRecoveryError('Correo no registrado en el sistema.');
-        setShake(true);
-        setTimeout(() => setShake(false), 500);
-      }
-    }, 1000);
+      changeView('recovery_sent');
+      setCooldown(30);
+    } catch (err: any) {
+      setIsLoading(false);
+      // Por seguridad el backend siempre responde 200 aunque el email no exista,
+      // así que mostramos el mensaje de enviado igual
+      setRecoveryUserEmail(recoveryEmail.trim());
+      changeView('recovery_sent');
+      setCooldown(30);
+    }
   };
 
-  // 4. RESET PASSWORD HANDLER
-  const handleResetSubmit = (e: React.FormEvent) => {
+  // 4. RESET PASSWORD — el reset real se hace a través del enlace en el email del backend.
+  // Esta función queda como placeholder para cuando se implemente la página de /reset-password.
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: string[] = [];
 
@@ -240,45 +244,28 @@ export default function LoginPage() {
       return;
     }
 
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      const targetUser = users.find(u => u.email.toLowerCase() === recoveryUserEmail.toLowerCase());
-      if (targetUser) {
-        const res = updateProviderProfile(targetUser.id, { password: resetPasswordVal });
-        if (res.success) {
-          // Success reset
-          alert('Contraseña actualizada con éxito. Ya puedes iniciar sesión.');
-          changeView('login');
-          setLoginEmail(recoveryUserEmail);
-          setLoginPassword(resetPasswordVal);
-          setResetPasswordVal('');
-          setResetConfirmPasswordVal('');
-          setResetErrors([]);
-        } else {
-          setResetErrors([res.error || 'Ocurrió un error al restablecer la contraseña.']);
-        }
-      } else {
-        setResetErrors(['No se encontró el usuario en la sesión actual.']);
-      }
-    }, 1200);
+    // En el flujo real, el usuario llega aquí a través de un enlace con token.
+    // La pantalla de reset en el flujo del frontend web necesita recibir el token por query param.
+    // Por ahora mostramos un mensaje informativo.
+    setResetErrors(['Para restablecer tu contraseña, hacé clic en el enlace que enviamos a tu correo.']);
   };
 
-  // Developer quick-approve for testing registration
-  const handleSimulatedApproval = () => {
-    const targetUser = users.find(u => u.email.toLowerCase() === newlyRegisteredEmail.toLowerCase());
-    if (targetUser) {
-      targetUser.status = 'active';
-      loginWithCredentials(targetUser.email, targetUser.password || '');
-      router.push('/provider/dashboard');
+  // Resend recovery email — llama al backend real
+  const handleResendRecoveryEmail = async () => {
+    if (cooldown > 0) return;
+    setCooldown(30);
+    try {
+      await api.requestPasswordRecovery(recoveryUserEmail);
+    } catch (err) {
+      // Silencioso — el backend responde 200 siempre por seguridad
     }
   };
 
-  // Resend recovery email
-  const handleResendRecoveryEmail = () => {
-    if (cooldown > 0) return;
-    setCooldown(30);
-    alert(`Enlace de recuperación reenviado a ${recoveryUserEmail}`);
+  // Developer quick-approve for testing registration (solo se muestra en development)
+  const handleSimulatedApproval = () => {
+    // En producción, el administrador aprueba manualmente el registro del prestador
+    changeView('login');
+    setLoginEmail(newlyRegisteredEmail);
   };
 
   // Real-time checks for register password

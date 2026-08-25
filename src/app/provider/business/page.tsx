@@ -57,7 +57,7 @@ export default function BusinessProfile() {
   const [showDiscardModal, setShowDiscardModal] = useState(false);
 
   // Get POIs belonging to the active provider
-  const myPois = pois.filter((p) => 
+  const myPois = currentUser?.role === 'provider' ? pois : pois.filter((p) => 
     currentUser?.role === 'admin' || 
     (providerId && p.createdBy === providerId) || 
     !p.createdBy

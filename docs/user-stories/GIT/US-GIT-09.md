@@ -1,40 +1,33 @@
-# US-GIT-09: Gestión de Multimedia como Prestador
+# US-GIT-09: Eliminación de imágenes de un POI por el Administrador
 
 ## Información General
-*   **Identificador:** US-GIT-09
-*   **Actor:** Prestador turístico
-*   **Puntos de Historia:** 5
-*   **Precondiciones:**
-    *   El Prestador debe estar autenticado.
-    *   Debe tener al menos un POI dado de alta en el sistema.
-*   **Historias de Usuario Relacionadas:** US-GIT-01, US-GIT-07
+- **Identificador:** US-GIT-09
+- **Actor:** Administrador
+- **Puntos de Historia:** 2
+- **Precondiciones:**
+  - El Administrador debe estar autenticado con rol de Administrador.
+  - El POI debe tener al menos una imagen cargada.
+- **Historias de Usuario Relacionadas:** US-ACC-03, US-PAD-03, US-PAD-04
 
 ---
 
 ## Descripción General
-Como prestador turístico,
-quiero subir imágenes propias de mi POI,
-para que los turistas puedan ver fotos reales y actualizadas de mi establecimiento dentro de la plataforma.
+**Como** Administrador  
+**Quiero** poder eliminar cualquier imagen de un POI  
+**Para** retirar contenido inapropiado, desactualizado o que no cumpla con las políticas de la plataforma.
 
 ---
 
 ## Descripción Funcional
-El Prestador accede al detalle de su POI y selecciona la opción "Gestión de imágenes". El sistema genera una URL prefirmada mediante el backend y el cliente sube la imagen directamente al bucket de Cloudflare R2.
-
-Antes de almacenarse, la imagen es procesada en background por *Sharp* (redimensionado a resoluciones thumbnail, medium y full, y compresión con pérdida aceptable). Una vez procesada, el sistema almacena la URL pública resultante en la entidad ImagenPOI asociada al POI. El prestador puede subir, visualizar, reemplazar y eliminar las imágenes de su POI.
+El Administrador accede al detalle de cualquier POI y puede visualizar todas las imágenes asociadas al mismo, independientemente de si fueron cargadas por el equipo en la carga inicial o por un Prestador. Puede seleccionar una o varias imágenes para eliminar. El sistema solicita confirmación antes de ejecutar la eliminación. Al confirmar, el sistema elimina la URL de ImagenPOI y el archivo correspondiente del bucket de Cloudflare R2. Cualquier eliminación queda registrada en el log del sistema con fecha, hora y Administrador responsable.
 
 ---
 
 ## Criterios de Aceptación
 | Cuando | Espero | Pantalla |
 | :--- | :--- | :--- |
-| El prestador sube una imagen en formato válido (JPG, PNG o WEBP) | El sistema genera la URL prefirmada, sube a Cloudflare R2, la procesa en background y almacena la URL pública en ImagenPOI | Pantalla de Gestión de Imágenes |
-| El prestador sube una imagen en formato no soportado | El sistema muestra "El archivo debe ser una imagen en formato JPG, PNG o WEBP" y bloquea el botón “guardar” | Pantalla de Gestión de Imágenes |
-| El prestador sube una imagen que supera el tamaño máximo permitido | El sistema muestra "La imagen no puede superar los 100 GB" y bloquea el botón “guardar” | Pantalla de Gestión de Imágenes |
-| El prestador presiona el botón “eliminar imagen” de su POI | El sistema elimina la URL de ImagenPOI y el archivo del bucket de Cloudflare R2, mostrando el mensaje “Su imagen fue eliminada” | Pantalla de Gestión de Imágenes |
-| El prestador reemplaza una imagen existente presionando “reemplazar esta imagen por una nueva” | El sistema elimina la imagen anterior del bucket y almacena la nueva URL procesada, mostrando el mensaje “ha actualizado una de las imágenes de su POI” | Pantalla de Gestión de Imágenes |
-| La imagen fue subida pero el procesamiento en background aún no finalizó | El sistema muestra un mensaje de "Procesando imagen..." en la vista previa del POI y la renderiza completamente una vez que el proceso finaliza | Perfil Público del POI / Gestión |
-| El prestador presiona “subir imagen” pero Cloudflare R2 no está disponible | El sistema muestra por pantalla el mensaje "No fue posible subir la imagen en este momento. Intentá más tarde." y no almacena ningún dato parcial | Pantalla de Gestión de Imágenes |
-| El prestador presiona “subir imagen” pero pierde la conexión durante la subida | La operación se cancela y el sistema no almacena ningún registro parcial en ImagenPOI ni en el bucket | Pantalla de Gestión de Imágenes |
-| El prestador presiona “subir imagen” pero el procesamiento de la imagen falla en background | El sistema muestra por pantalla el mensaje “la imagen no pudo procesarse correctamente, intente subirla nuevamente” | Pantalla de Gestión de Imágenes |
-| El prestador intenta eliminar la única imagen de su POI presionando “eliminar imagen” | El sistema le advierte "Tu POI quedará sin imágenes. ¿Confirmás la eliminación?" y procede sólo si el prestador presiona el botón “confirmar” | Diálogo de Confirmación |
+| El Administrador presiona el botón “eliminar imagen” | El sistema elimina la URL de ImagenPOI, borra el archivo de Cloudflare R2 y registra la acción en el log | - |
+| El Administrador intenta eliminar la única imagen de un POI presionando el botón “eliminar imagen” | El sistema le advierte "El POI quedará sin imágenes. ¿Confirmás la eliminación?" y procede sólo si el Turista presiona el botón “confirmar”. | - |
+| El Administrador presiona el botón “cancelar” la eliminación de la única imagen | El sistema conserva la imagen sin cambios | - |
+| La eliminación del archivo en Cloudflare R2 falla | El sistema muestra por pantalla "No fue posible eliminar la imagen en este momento. Intentá más tarde." y no elimina la URL de ImagenPOI para mantener consistencia | - |
+| Si el Administrador presiona el botón “eliminar imagen” que ya no existe en el bucket de Cloudflare R2 (por ejemplo por una eliminación previa inconsistente) | El sistema elimina igualmente la URL de ImagenPOI para limpiar el registro huérfano. | - |

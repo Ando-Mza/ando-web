@@ -151,7 +151,7 @@ export default function UserManagementPage() {
   const isFormValid = isNameFilled && isEmailValid && isCuitValid && isPasswordFilledForCreate && isBusinessNameFilled;
 
   // 5. SAVE HANDLER
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) return;
 
@@ -167,7 +167,7 @@ export default function UserManagementPage() {
         status: formStatus
       };
 
-      const res = adminCreateUser(payload);
+      const res = await adminCreateUser(payload);
       if (res.success) {
         triggerToast(`Usuario "${formName}" creado exitosamente.`);
         setViewMode('list');
@@ -198,6 +198,7 @@ export default function UserManagementPage() {
       }
     }
   };
+
 
   // 6. DELETE HANDLER
   const askDeleteUser = (user: User) => {

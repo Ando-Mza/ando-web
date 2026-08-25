@@ -21,7 +21,7 @@ import {
 
 export default function ProviderProfilePage() {
   const router = useRouter();
-  const { currentUser, updateProviderProfile, deleteProviderAccount } = useApp();
+  const { currentUser, updateProviderProfile, changePassword, deleteProviderAccount } = useApp();
 
   // Redirect if not loaded or not provider (safety)
   useEffect(() => {
@@ -45,6 +45,14 @@ export default function ProviderProfilePage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Delete Modal States
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteMotivo, setDeleteMotivo] = useState('NO_ENCONTRE_LO_QUE_BUSCABA');
+  const [deleteDetalle, setDeleteDetalle] = useState('');
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Modals & Notifications
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -165,7 +173,7 @@ export default function ProviderProfilePage() {
     }
   };
 
-  const confirmSaveProfile = () => {
+  const confirmSaveProfile = async () => {
     setShowSaveModal(false);
     
     const payload: Partial<typeof currentUser> = {
@@ -176,38 +184,66 @@ export default function ProviderProfilePage() {
       businessName: businessName.trim(),
     };
 
-    if (newPassword) {
-      payload.password = newPassword;
+    const res = updateProviderProfile(currentUser.id, payload);
+    if (!res.success) {
+      showToast(res.error || 'Error al guardar los datos del perfil.', 'error');
+      return;
     }
 
-    const res = updateProviderProfile(currentUser.id, payload);
-    if (res.success) {
-      showToast('Perfil actualizado correctamente', 'success');
-      // Reset password fields
+    // Si se completaron campos de contraseña, invocar cambio de contraseña en backend
+    if (newPassword && currentPassword) {
+      const pwdRes = await changePassword(currentPassword, newPassword);
+      if (!pwdRes.success) {
+        showToast(pwdRes.error || 'Perfil guardado, pero falló el cambio de contraseña.', 'error');
+        return;
+      }
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } else {
-      showToast(res.error || 'Error al guardar los cambios.', 'error');
     }
+
+    showToast('Perfil actualizado correctamente', 'success');
   };
 
-  // Handle Account Deletion
+  // Handle Account Deletion (US-GDU-04)
   const handleDeleteAccountClick = () => {
+    setDeletePassword('');
+    setDeleteMotivo('NO_ENCONTRE_LO_QUE_BUSCABA');
+    setDeleteDetalle('');
+    setDeleteError('');
     setShowDeleteModal(true);
   };
 
-  const confirmDeleteAccount = () => {
-    setShowDeleteModal(false);
-    deleteProviderAccount(currentUser.id);
-    
-    // Create temporary confirmation overlay before page redirect
-    alert('La cuenta fue eliminada correctamente');
-    router.push('/');
+  const confirmDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      setDeleteError('Debes ingresar tu contraseña actual para confirmar la baja.');
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError('');
+
+    const res = await deleteProviderAccount(currentUser.id, {
+      passwordActual: deletePassword,
+      motivo: deleteMotivo,
+      detalle: deleteDetalle.trim() || undefined,
+    });
+
+    setIsDeleting(false);
+
+    if (res.success) {
+      setShowDeleteModal(false);
+      alert('Tu cuenta fue dada de baja correctamente.');
+      router.push('/');
+    } else {
+      setDeleteError(res.error || 'No se pudo eliminar la cuenta. Verifica tu contraseña.');
+    }
   };
 
   const cancelDeleteAccount = () => {
     setShowDeleteModal(false);
+    setDeletePassword('');
+    setDeleteError('');
     showToast('Operación cancelada', 'warning');
   };
 
@@ -294,36 +330,111 @@ export default function ProviderProfilePage() {
         </div>
       )}
 
-      {/* Delete Account Danger Modal */}
+      {/* Delete Account Danger Modal (US-GDU-04) */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100 animate-scale-up space-y-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100 animate-scale-up space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center space-x-2.5 text-red-600">
               <Trash2 className="h-5.5 w-5.5" />
               <h4 className="font-wixDisplay font-bold text-lg text-textDark">Eliminar Cuenta de Socio</h4>
             </div>
+            
             <div className="space-y-2 text-xs text-textDark/70 leading-relaxed">
               <p className="font-semibold text-red-700 bg-red-50 p-3 rounded-xl border border-red-100 flex items-center space-x-2">
                 <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
                 <span>Advertencia crítica de baja:</span>
               </p>
               <p>Al confirmar esta acción, tu cuenta quedará desactivada de forma permanente y ya no podrás acceder con tus credenciales.</p>
-              <p>Además, todos los establecimientos y puntos de interés (POIs) vinculados a tu cuenta (<strong>{currentUser.businessName}</strong>) dejarán de estar visibles en el catálogo y mapas de la aplicación móvil.</p>
+              <p>Además, todos los establecimientos y puntos de interés vinculados a tu cuenta (<strong>{currentUser.businessName || currentUser.name}</strong>) dejarán de estar visibles en la aplicación móvil.</p>
             </div>
+
+            {/* Motivo de la baja */}
+            <div className="space-y-1.5 pt-1">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-textDark/70">
+                Motivo de la baja <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={deleteMotivo}
+                onChange={(e) => setDeleteMotivo(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-black/10 bg-bgPrimary/30 focus:border-red-500 focus:bg-white focus:outline-none transition-all text-xs cursor-pointer font-medium"
+              >
+                <option value="NO_ENCONTRE_LO_QUE_BUSCABA">No encontré lo que buscaba</option>
+                <option value="PROBLEMAS_TECNICOS">Problemas técnicos con la plataforma</option>
+                <option value="ENCONTRE_OTRA_APLICACION">Encontré otra alternativa</option>
+                <option value="PRIVACIDAD">Motivos de privacidad</option>
+                <option value="POCO_USO">Poco uso de la plataforma</option>
+                <option value="OTRO">Otro motivo</option>
+              </select>
+            </div>
+
+            {/* Detalle opcional */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-textDark/70">
+                Detalle adicional (opcional)
+              </label>
+              <textarea
+                value={deleteDetalle}
+                onChange={(e) => setDeleteDetalle(e.target.value)}
+                rows={2}
+                placeholder="Cuéntanos más para ayudarnos a mejorar..."
+                className="w-full px-3 py-2 rounded-xl border border-black/10 bg-bgPrimary/30 focus:border-red-500 focus:bg-white focus:outline-none transition-all text-xs"
+              />
+            </div>
+
+            {/* Confirmar con contraseña */}
+            <div className="space-y-1.5 pt-1 border-t border-black/5">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-red-700">
+                Ingresa tu contraseña actual para confirmar <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-textDark/40" />
+                <input
+                  type={showDeletePassword ? "text" : "password"}
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Tu contraseña actual"
+                  className="w-full pl-9 pr-8 py-2 rounded-xl border border-red-200 bg-red-50/20 focus:border-red-500 focus:bg-white focus:outline-none transition-all text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowDeletePassword(!showDeletePassword)}
+                  className="absolute right-2.5 top-2.5 text-textDark/40 hover:text-textDark cursor-pointer"
+                >
+                  {showDeletePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-xl font-medium flex items-center space-x-1.5">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
             <div className="flex space-x-2 justify-end pt-3 border-t border-black/5">
               <button
                 type="button"
                 onClick={cancelDeleteAccount}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer"
+                disabled={isDeleting}
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={confirmDeleteAccount}
-                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/10 transition-colors cursor-pointer"
+                disabled={isDeleting || !deletePassword.trim()}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white shadow-md shadow-red-600/10 transition-colors cursor-pointer flex items-center space-x-1.5"
               >
-                Confirmar Eliminación
+                {isDeleting ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent inline-block" />
+                    <span>Eliminando...</span>
+                  </>
+                ) : (
+                  <span>Confirmar Eliminación</span>
+                )}
               </button>
             </div>
           </div>

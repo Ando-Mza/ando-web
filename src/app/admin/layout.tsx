@@ -8,38 +8,37 @@ import {
   CheckSquare, 
   Settings, 
   LogOut, 
-  Bell,
-  ChevronLeft,
-  ChevronRight,
-  Users
+  ChevronLeft, 
+  ChevronRight, 
+  Users,
+  BarChart3,
+  FileText,
+  HelpCircle
 } from 'lucide-react';
 import Link from 'next/link';
+import NotificationCenter from '@/components/NotificationCenter';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, logout, login } = useApp();
+  const { currentUser, logout } = useApp();
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Asegurar que el usuario esté autenticado para facilitar pruebas
+  // Verificar autenticación real — sin auto-login mock
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
       if (!currentUser) {
-        // Auto-login de administrador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
-        const logged = login('admin');
-        if (!logged) {
-          router.push('/');
-        }
+        router.push('/');
       } else if (currentUser.role !== 'admin') {
         router.push('/');
       }
-    }, 0);
+    }, 150);
     return () => clearTimeout(timer);
-  }, [currentUser, login, router]);
+  }, [currentUser, router]);
 
   if (!mounted || !currentUser) {
     return (
@@ -57,25 +56,43 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       name: 'Métricas y dashboard',
       path: '/admin/dashboard',
       icon: LayoutDashboard,
-      desc: 'Métricas y logs globales'
+      desc: 'Métricas generales'
     },
     {
       name: 'Validación de contenido',
       path: '/admin/validation',
       icon: CheckSquare,
-      desc: 'Auditoría de POIs y horarios'
+      desc: 'Auditoría de POIs y cuentas'
     },
     {
       name: 'Gestión de usuarios',
       path: '/admin/users',
       icon: Users,
-      desc: 'Auditoría de cuentas de usuarios'
+      desc: 'Administración de cuentas'
+    },
+    {
+      name: 'Reportes e informes',
+      path: '/admin/reports',
+      icon: BarChart3,
+      desc: 'Estadísticas y exportación'
+    },
+    {
+      name: 'Auditoría y LOGs',
+      path: '/admin/logs',
+      icon: FileText,
+      desc: 'Trazabilidad de eventos'
     },
     {
       name: 'Configuración CYP',
       path: '/admin/settings',
       icon: Settings,
-      desc: 'Parámetros, traducción e integraciones'
+      desc: 'Categorías, etiquetas y APIs'
+    },
+    {
+      name: 'Ayuda y soporte',
+      path: '/admin/help',
+      icon: HelpCircle,
+      desc: 'Manuales y documentación'
     }
   ];
 
@@ -179,18 +196,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           
           {/* Header Actions */}
           <div className="flex items-center space-x-4">
-            <button className="relative p-2 rounded-lg hover:bg-black/5 text-textDark/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine cursor-pointer" aria-label="Notificaciones">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-fillPrimary animate-pulse" />
-            </button>
+            <NotificationCenter />
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-textDark">{currentUser.name}</p>
                 <p className="text-[10px] text-textDark/60 font-medium">Administrador de sistemas</p>
               </div>
-              <div className="h-8 w-8 rounded-full bg-accentWine text-white flex items-center justify-center font-semibold text-sm">
-                S
+              <div className="h-8 w-8 rounded-full bg-accentWine text-white flex items-center justify-center font-semibold text-sm uppercase">
+                {currentUser.name ? currentUser.name.slice(0, 2) : 'AD'}
               </div>
             </div>
           </div>

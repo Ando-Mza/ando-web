@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Category, ValidationState, Integration } from '@/types';
+import { Category, ValidationState, Integration, Etiqueta } from '@/types';
 import {
   Save,
   Settings2,
@@ -19,7 +19,8 @@ import {
   RefreshCw,
   AlertTriangle,
   Play,
-  RotateCcw
+  RotateCcw,
+  Tag
 } from 'lucide-react';
 
 export default function AdminSettings() {
@@ -34,6 +35,12 @@ export default function AdminSettings() {
     addCategory,
     updateCategory,
     deleteCategory,
+    etiquetas,
+    loadEtiquetas,
+    addEtiqueta,
+    updateEtiqueta,
+    toggleEtiquetaActiva,
+    deleteEtiqueta,
     validationStates,
     addValidationState,
     updateValidationState,
@@ -49,7 +56,7 @@ export default function AdminSettings() {
   const [requireReview, setRequireReview] = useState(generalParams.requireReviewForEdits);
   const [paramError, setParamError] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'params' | 'languages' | 'categories' | 'states' | 'integrations'>('params');
+  const [activeTab, setActiveTab] = useState<'params' | 'languages' | 'categories' | 'tags' | 'states' | 'integrations'>('params');
   const [selectedLang, setSelectedLang] = useState<'es' | 'en' | 'pt'>('es');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -61,6 +68,16 @@ export default function AdminSettings() {
   const [catDesc, setCatDesc] = useState('');
   const [catEnabled, setCatEnabled] = useState(true);
   const [categoryError, setCategoryError] = useState('');
+
+  // Estados locales para Etiquetas (US-GIT-05)
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [editingTag, setEditingTag] = useState<Etiqueta | null>(null);
+  const [tagName, setTagName] = useState('');
+  const [tagError, setTagError] = useState('');
+
+  useEffect(() => {
+    loadEtiquetas();
+  }, []);
 
   // Estados locales para Estados de Validación
   const [isAddingState, setIsAddingState] = useState(false);
@@ -199,6 +216,64 @@ export default function AdminSettings() {
         triggerToast('Categoría eliminada con éxito');
       } else {
         triggerToast('No se puede eliminar la categoría porque está asociada a puntos de interés activos.', 'warning');
+      }
+    }
+  };
+
+  // CRUD Etiquetas (US-GIT-05)
+  const handleSaveTag = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTagError('');
+
+    if (!tagName.trim()) {
+      setTagError('El nombre de la etiqueta es obligatorio.');
+      return;
+    }
+
+    const nameExists = etiquetas.some(
+      (et) => et.nombre.toLowerCase() === tagName.trim().toLowerCase() && et.id !== editingTag?.id
+    );
+    if (nameExists) {
+      setTagError('Ya existe una etiqueta registrada con este nombre.');
+      return;
+    }
+
+    if (editingTag) {
+      const res = await updateEtiqueta(editingTag.id, tagName.trim());
+      if (res.success) {
+        triggerToast(`Etiqueta "${tagName}" modificada con éxito`);
+      } else {
+        setTagError(res.error || 'Error al actualizar la etiqueta');
+        return;
+      }
+    } else {
+      const res = await addEtiqueta(tagName.trim());
+      if (res.success) {
+        triggerToast(`Etiqueta "${tagName}" agregada con éxito`);
+      } else {
+        setTagError(res.error || 'Error al crear la etiqueta');
+        return;
+      }
+    }
+
+    setIsAddingTag(false);
+    setEditingTag(null);
+    setTagName('');
+  };
+
+  const handleEditTag = (tag: Etiqueta) => {
+    setEditingTag(tag);
+    setTagName(tag.nombre);
+    setIsAddingTag(true);
+  };
+
+  const handleDeleteTag = async (id: string) => {
+    if (confirm('¿Está seguro de que desea eliminar esta etiqueta?')) {
+      const res = await deleteEtiqueta(id);
+      if (res.success) {
+        triggerToast('Etiqueta eliminada con éxito');
+      } else {
+        triggerToast(res.error || 'No se pudo eliminar la etiqueta.', 'warning');
       }
     }
   };
@@ -375,6 +450,17 @@ export default function AdminSettings() {
         >
           <FolderHeart className="h-4 w-4" />
           <span>Categorías</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('tags')}
+          className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
+            activeTab === 'tags'
+              ? 'border-accentWine text-accentWine'
+              : 'border-transparent text-textDark/60 hover:text-textDark'
+          }`}
+        >
+          <Tag className="h-4 w-4" />
+          <span>Etiquetas turísticas</span>
         </button>
         <button
           onClick={() => setActiveTab('states')}
@@ -731,6 +817,137 @@ export default function AdminSettings() {
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 3.5: Tags Tab (US-GIT-05) */}
+        {activeTab === 'tags' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/5 pb-4">
+              <div>
+                <h4 className="font-wixDisplay text-lg font-bold text-textDark">Etiquetas Turísticas</h4>
+                <p className="text-xs text-textDark/50">Palabras clave para optimizar la búsqueda y recomendación de POIs</p>
+              </div>
+
+              {!isAddingTag && (
+                <button
+                  onClick={() => {
+                    setEditingTag(null);
+                    setTagName('');
+                    setTagError('');
+                    setIsAddingTag(true);
+                  }}
+                  className="inline-flex items-center space-x-2 px-3.5 py-2 bg-fillPrimary hover:bg-fillPrimary/95 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm shadow-fillPrimary/10"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Nueva Etiqueta</span>
+                </button>
+              )}
+            </div>
+
+            {isAddingTag ? (
+              <form onSubmit={handleSaveTag} className="bg-bgPrimary/30 rounded-xl p-5 border border-black/5 space-y-4 max-w-xl">
+                <h5 className="font-bold text-sm text-textDark">
+                  {editingTag ? 'Editar Etiqueta' : 'Crear Nueva Etiqueta Turística'}
+                </h5>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70">
+                    Nombre de la Etiqueta *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={tagName}
+                    onChange={(e) => setTagName(e.target.value)}
+                    placeholder="Ej: Pet Friendly, Accesible, Degustación, WiFi..."
+                    className="w-full px-3 py-2 rounded-lg border border-black/10 bg-white focus:outline-none focus:border-fillPrimary text-sm font-semibold"
+                  />
+                </div>
+
+                {tagError && (
+                  <div className="p-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold flex items-center space-x-2 border border-red-200">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>{tagError}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-3.5 pt-3 border-t border-black/5">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingTag(false)}
+                    className="px-4 py-2 border border-black/10 text-textDark/70 hover:bg-black/5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-fillPrimary hover:bg-fillPrimary/95 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm shadow-fillPrimary/10"
+                  >
+                    {editingTag ? 'Guardar Cambios' : 'Registrar Etiqueta'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-black/5 text-textDark/60 text-xs font-bold uppercase tracking-wider">
+                      <th className="py-2.5">Nombre</th>
+                      <th className="py-2.5">Estado</th>
+                      <th className="py-2.5 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/5">
+                    {etiquetas.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="py-8 text-center text-xs text-textDark/50">
+                          No hay etiquetas turísticas registradas.
+                        </td>
+                      </tr>
+                    ) : (
+                      etiquetas.map((tag) => (
+                        <tr key={tag.id} className="hover:bg-bgPrimary/20">
+                          <td className="py-3 font-semibold text-textDark">
+                            <span className="bg-bgPrimary px-2.5 py-1 rounded-md text-xs font-mono font-bold text-textDark">
+                              #{tag.nombre}
+                            </span>
+                          </td>
+                          <td className="py-3">
+                            <button
+                              onClick={() => toggleEtiquetaActiva(tag.id, !tag.activa)}
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors cursor-pointer ${
+                                tag.activa
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : 'bg-red-50 text-red-700 border-red-200'
+                              }`}
+                            >
+                              {tag.activa ? 'Activa' : 'Inactiva'}
+                            </button>
+                          </td>
+                          <td className="py-3 text-right space-x-2">
+                            <button
+                              onClick={() => handleEditTag(tag)}
+                              className="inline-flex p-1.5 text-textDark/50 hover:text-accentWine hover:bg-black/5 rounded-md transition-colors cursor-pointer"
+                              title="Editar"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTag(tag.id)}
+                              className="inline-flex p-1.5 text-textDark/50 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

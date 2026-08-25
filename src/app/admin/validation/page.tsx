@@ -54,9 +54,9 @@ export default function ContentValidation() {
   const [toastMessage, setToastMessage] = useState('');
 
   // 1. DATA FILTERING
-  // POI content validation data
-  const pendingPois = pois.filter((poi) => poi.status === 'pending');
-  const auditedPois = pois.filter((poi) => poi.status !== 'pending');
+  // POI content validation data (pendientes y con corrección solicitada)
+  const pendingPois = pois.filter((poi) => poi.status === 'pending' || poi.status === 'correction');
+  const auditedPois = pois.filter((poi) => poi.status === 'approved' || poi.status === 'rejected');
 
   // GDU provider registration validation data
   const pendingUsers = users.filter((u) => u.role === 'provider' && u.status === 'pending');
@@ -279,8 +279,12 @@ export default function ContentValidation() {
                           <span className="text-xs font-bold bg-accentWine/10 text-accentWine px-2.5 py-0.5 rounded-md">
                             {poi.category}
                           </span>
-                          <span className="text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full">
-                            Pendiente
+                          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                            poi.status === 'correction'
+                              ? 'bg-orange-50 text-orange-800 border-orange-200'
+                              : 'bg-amber-100 text-amber-900 border-amber-300'
+                          }`}>
+                            {poi.status === 'correction' ? 'Corrección solicitada' : 'Pendiente'}
                           </span>
                         </div>
                         

@@ -5,65 +5,42 @@
 - **Actor:** Turista
 - **Puntos de Historia:** 8
 - **Precondiciones:**
-  - El usuario debe encontrarse en la pantalla de acceso o bienvenida de la aplicación.
+  - El Usuario debe encontrarse en la pantalla de acceso o bienvenida de la aplicación.
   - El sistema debe encontrarse disponible.
   - El correo electrónico utilizado no debe estar asociado previamente a otra cuenta.
   - Debe existir configurado el rol de Usuario "Turista".
-- **Historia de Usuario Relacionada:** -
+- **Historias de Usuario Relacionadas:** -
 
 ---
 
 ## Descripción General
-Como Turista quiero registrarme en Ando para acceder a las funcionalidades del sistema, planificar mis viajes en Mendoza y recibir recomendaciones adaptadas a mis intereses.
+**Como** Turista  
+**Quiero** registrarme en Ando  
+**Para** acceder a las funcionalidades del sistema, planificar mis viajes en Mendoza y recibir recomendaciones adaptadas a mis intereses.
 
 ---
 
 ## Descripción Funcional
-El sistema debe permitir que un viajero cree una cuenta mediante un proceso de registro, proporcionando la información necesaria para generar su perfil dentro de la plataforma.
-
-El formulario de registro debe solicitar los datos básicos obligatorios del usuario y validar:
-- que el correo electrónico no esté asociado a otra cuenta.
-- que la contraseña cumpla con la política de seguridad.
-- que los campos obligatorios estén completos.
-
-El registro debe crear automáticamente un usuario con rol Turista, inicializar su perfil y permitir el acceso a la pantalla principal. En caso de cancelación o error, el sistema debe conservar la información ingresada sólo durante la sesión actual y permitir volver al inicio de sesión.
-
----
-
-## Atributos del Registro
-El registro debe incluir obligatoriamente los siguientes atributos:
-- `id` uuid [pk]
-- `nombre` varchar
-- `apellido` varchar
-- `email` varchar
-- `passwordHash` varchar
-- `telefono` varchar
-- `fechaNacimiento` date
-- `avatarUrl` varchar
-- `idioma` varchar
+El sistema debe permitir que un Turista pueda crear una cuenta mediante un proceso de registro, proporcionando la información necesaria para generar su perfil dentro de la plataforma.
+El formulario de registro deberá solicitar datos básicos del Usuario como nombre, apellido, correo electrónico, contraseña y aceptación de términos y condiciones. Además, podrá incluir información opcional que permita personalizar la experiencia del Usuario, como idioma preferido, intereses turísticos o preferencias iniciales de viaje.
+Durante el proceso de creación de cuenta, el sistema deberá validar que el correo electrónico ingresado no se encuentre asociado previamente a otro Usuario, verificar que la contraseña cumpla con las políticas de seguridad definidas y controlar que los campos obligatorios hayan sido completados correctamente.
+Una vez finalizado el registro exitosamente, el sistema deberá crear automáticamente un Usuario con rol Turista, inicializar su perfil y permitirle acceder a la pantalla principal de la plataforma. En caso de cancelación o error durante el proceso, el sistema deberá conservar la información ingresada únicamente durante la sesión actual y permitir volver al inicio de sesión.
 
 ---
 
 ## Criterios de Aceptación
 | Cuando | Espero | Pantalla |
 | :--- | :--- | :--- |
-| El turista ingresa a la plataforma | Visualizar un botón de "Registrarse" | Pantalla de inicio |
-| El turista selecciona la opción "Registrarse" | Mostrar el formulario de creación de cuenta | Registro |
-| El turista completa el formulario de registro | Visualizar los campos obligatorios y opcionales disponibles | Registro |
-| El email ya existe en el sistema | Mostrar el mensaje "El correo ya se encuentra registrado" | Registro |
-| La contraseña no cumple con los requisitos | Indicar las condiciones faltantes | Registro |
-| El turista completa los campos correctamente | Crear la cuenta exitosamente | Registro |
-| El turista deja campos vacíos | El botón de "Registrarse" se encuentra deshabilitado | Registro |
-| El registro es exitoso | Redirigir al panel principal del turista (homepage) | Homepage |
-| El usuario decide no registrarse | Redirigir al usuario a la página de login | Login |
-
----
-
-## Notas de Implementación
-- El formulario debe ser claro, con validación en tiempo real de email y contraseña.
-- El `passwordHash` debe generarse en backend; el cliente sólo envía la contraseña.
-- El campo `idioma` debe guardar el idioma preferido del usuario.
-- El `avatarUrl` puede ser opcional en el formulario, pero debe existir en el registro final.
-
-
-
+| El Turista ingresa a la plataforma | Visualizar un botón de “¿No tienes cuenta? Registrate” | - |
+| El Turista selecciona la opción “Registrarse” | Visualizar el formulario de creación de cuenta | - |
+| El Turista completa el formulario de registro | Visualizar los campos obligatorios y opcionales disponibles | - |
+| El Turista ingrese al formulario de registro de Usuario tipo “Turista” | Visualizar un formulario con los siguientes campos: nombre, apellido, email, contraseña, repetir contraseña, teléfono, fechaNacimiento, avatarUrl o foto de perfil, idioma, selector de intereses turísticos | - |
+| El Turista desee regresar a la página anterior | Visualizar un botón que lo regrese al login | - |
+| El Turista ingrese al formulario | Visualizar al final del mismo un seleccionable que le permita leer los términos y condiciones de uso de la aplicación | - |
+| El email ya existe en el sistema | Espero que se muestre el mensaje “El correo ya se encuentra registrado” | - |
+| La contraseña no cumple con los requisitos | Que el sistema indique las condiciones faltantes (Longitud entre 8 y 12 caracteres, al menos 1 caracter especial, al menos 1 mayúscula, al menos 1 número) | - |
+| El Turista completa los campos correctamente | Que el sistema cree la cuenta exitosamente | - |
+| El Turista deja campos vacíos | Que el botón de “Registrarse” se encuentre deshabilitado | - |
+| El registro es exitoso | Que el sistema redireccione al panel principal del Turista (homepage) | - |
+| El registro no se quiere llevar a cabo | Que el sistema redireccione al Usuario a la página de login | - |
+| El Turista seleccione “Registrate” | Visualizar un selector de roles que le permita elegir la opción de “Turista” y lo redireccione al formulario de registro | - |
