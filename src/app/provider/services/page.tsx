@@ -190,7 +190,7 @@ export default function ProviderServicesPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center space-x-2 bg-fillPrimary/10 border border-fillPrimary/20 px-3 py-1 rounded-full text-xs font-bold text-fillPrimary">
               <Layers className="h-3.5 w-3.5" />
-              <span>Oferta Turística y Experiencias (US-CYN-03)</span>
+              <span>Oferta Turística y Experiencias</span>
             </div>
             <h2 className="font-wixDisplay text-2xl sm:text-3xl font-extrabold text-textDark">
               Servicios y actividades de tu negocio

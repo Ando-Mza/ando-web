@@ -53,46 +53,46 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
 
   const menuItems = [
     {
-      name: 'Métricas del negocio',
+      name: 'Dashboard',
       path: '/provider/dashboard',
       icon: LayoutDashboard,
-      desc: 'Visualizaciones de tu POI'
+      desc: 'Resumen e interacciones'
     },
     {
-      name: 'Mis negocios',
+      name: 'Mi Establecimiento',
       path: '/provider/business',
       icon: Store,
-      desc: 'Información del local y fotos'
+      desc: 'Información y fotos del local'
     },
     {
-      name: 'Gestión de horarios',
+      name: 'Días y Horarios',
       path: '/provider/schedules',
       icon: CalendarRange,
-      desc: 'Horarios de atención'
+      desc: 'Franjas de atención'
     },
     {
-      name: 'Gestión de servicios',
+      name: 'Servicios y Ofertas',
       path: '/provider/services',
       icon: Layers,
-      desc: 'Experiencias y actividades'
+      desc: 'Comodidades y actividades'
     },
     {
-      name: 'Reseñas y opiniones',
+      name: 'Reseñas de Turistas',
       path: '/provider/reviews',
       icon: MessageSquare,
-      desc: 'Respuestas a turistas'
+      desc: 'Opiniones y respuestas'
     },
     {
-      name: 'Mi cuenta',
+      name: 'Mi Perfil y Cuenta',
       path: '/provider/profile',
       icon: User,
-      desc: 'Ajustes del perfil'
+      desc: 'Datos comerciales y seguridad'
     },
     {
-      name: 'Centro de ayuda',
+      name: 'Centro de Ayuda',
       path: '/provider/help',
       icon: HelpCircle,
-      desc: 'Guías y soporte'
+      desc: 'Preguntas y soporte'
     }
   ];
 

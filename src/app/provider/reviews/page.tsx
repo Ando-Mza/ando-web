@@ -112,7 +112,7 @@ export default function ProviderReviewsPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center space-x-2 bg-fillPrimary/10 border border-fillPrimary/20 px-3 py-1 rounded-full text-xs font-bold text-fillPrimary">
               <MessageSquare className="h-3.5 w-3.5" />
-              <span>Gestión de Experiencias y Opiniones (US-CYN-07)</span>
+              <span>Gestión de Experiencias y Opiniones</span>
             </div>
             <h2 className="font-wixDisplay text-2xl sm:text-3xl font-extrabold text-textDark">
               Reseñas y valoraciones de tu negocio

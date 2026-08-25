@@ -87,8 +87,9 @@ export const api = {
     request<any>(`/poi/${id}/estado?estado=${encodeURIComponent(estado)}`, 'PATCH'),
 
   // Admin POI Revision (US-CYN-05, US-GIT-07)
-  getAdminRevisionPois: (params?: { estado?: string; fuente?: string; search?: string; page?: number; limit?: number }) => {
+  getAdminRevisionPois: (params?: { estado?: string; estadoId?: string; fuente?: string; search?: string; page?: number; limit?: number }) => {
     const qs = new URLSearchParams();
+    if (params?.estadoId) qs.set('estadoId', params.estadoId);
     if (params?.estado) qs.set('estado', params.estado);
     if (params?.fuente) qs.set('fuente', params.fuente);
     if (params?.search) qs.set('search', params.search);

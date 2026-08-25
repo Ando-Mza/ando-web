@@ -409,7 +409,7 @@ export default function AdminSettings() {
       {/* Overview Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="font-wixDisplay text-2xl font-bold text-accentWine">Configuración del sistema (CYP)</h3>
+          <h3 className="font-wixDisplay text-2xl font-bold text-accentWine">Configuración del sistema</h3>
           <p className="text-sm text-textDark/70 mt-1">
             Administra los límites de negocio, diccionarios multiidioma, categorías, flujos de revisión e integraciones de ANDO.
           </p>

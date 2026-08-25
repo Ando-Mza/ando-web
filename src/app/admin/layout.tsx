@@ -53,46 +53,46 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const menuItems = [
     {
-      name: 'Métricas y dashboard',
+      name: 'Dashboard',
       path: '/admin/dashboard',
       icon: LayoutDashboard,
-      desc: 'Métricas generales'
+      desc: 'Resumen y métricas generales'
     },
     {
-      name: 'Validación de contenido',
+      name: 'Catálogo y Validación',
       path: '/admin/validation',
       icon: CheckSquare,
-      desc: 'Auditoría de POIs y cuentas'
+      desc: 'Atractivos y moderación'
     },
     {
-      name: 'Gestión de usuarios',
+      name: 'Gestión de Usuarios',
       path: '/admin/users',
       icon: Users,
-      desc: 'Administración de cuentas'
+      desc: 'Prestadores y administradores'
     },
     {
-      name: 'Reportes e informes',
+      name: 'Reportes y Estadísticas',
       path: '/admin/reports',
       icon: BarChart3,
-      desc: 'Estadísticas y exportación'
+      desc: 'Métricas de la plataforma'
     },
     {
-      name: 'Auditoría y LOGs',
+      name: 'Auditoría y Logs',
       path: '/admin/logs',
       icon: FileText,
-      desc: 'Trazabilidad de eventos'
+      desc: 'Historial de actividades'
     },
     {
-      name: 'Configuración CYP',
+      name: 'Configuración del Sistema',
       path: '/admin/settings',
       icon: Settings,
-      desc: 'Categorías, etiquetas y APIs'
+      desc: 'Categorías, etiquetas y parámetros'
     },
     {
-      name: 'Ayuda y soporte',
+      name: 'Centro de Ayuda',
       path: '/admin/help',
       icon: HelpCircle,
-      desc: 'Manuales y documentación'
+      desc: 'Guías y documentación'
     }
   ];
 

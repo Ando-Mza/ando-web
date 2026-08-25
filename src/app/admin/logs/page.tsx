@@ -80,7 +80,7 @@ export default function AdminLogsPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center space-x-2 bg-accentWine/10 border border-accentWine/20 px-3 py-1 rounded-full text-xs font-bold text-accentWine">
               <FileText className="h-3.5 w-3.5" />
-              <span>Auditoría y Trazabilidad (US-AYT-01)</span>
+              <span>Auditoría y Trazabilidad</span>
             </div>
             <h2 className="font-wixDisplay text-2xl sm:text-3xl font-extrabold text-textDark">
               Registro de Actividad y Logs del Sistema

@@ -20,24 +20,24 @@ export default function AdminHelpPage() {
 
   const adminFaqs = [
     {
-      q: '¿Cómo funciona el flujo formal de auditoría de POIs (US-CYN-05)?',
-      a: 'En "Validación de Contenido", el administrador revisa los datos completos del POI (descripción, coordenadas, fotos y horarios). Puede aprobar directamente, solicitar corrección indicando observaciones detalladas o rechazar fundando el motivo. Cada acción genera un registro inmutable en el log de auditoría.',
+      q: '¿Cómo funciona el flujo formal de auditoría de POIs?',
+      a: 'En "Validación de POIs", el administrador revisa los datos completos del POI (descripción, coordenadas, fotos y horarios). Puede aprobar directamente, solicitar corrección indicando observaciones detalladas o rechazar fundando el motivo. Cada acción genera un registro inmutable en el log de auditoría.',
     },
     {
-      q: '¿Cómo se gestionan las categorías y etiquetas turísticas (US-GIT-05)?',
-      a: 'Desde "Configuración CYP", el administrador puede crear, editar, activar o desactivar categorías y etiquetas. Si una categoría ya está asignada a uno o más POIs activos, el sistema impide su eliminación directa para proteger la integridad referencial.',
+      q: '¿Cómo se gestionan las categorías y etiquetas turísticas?',
+      a: 'Desde "Configuración del Sistema", el administrador puede crear, editar, activar o desactivar categorías y etiquetas. Si una categoría ya está asignada a uno o más POIs activos, el sistema impide su eliminación directa para proteger la integridad referencial.',
     },
     {
-      q: '¿Cómo se maneja la baja lógica de prestadores y usuarios (US-GDU-03 / 04)?',
+      q: '¿Cómo se maneja la baja de prestadores y usuarios?',
       a: 'Al dar de baja una cuenta de prestador desde "Gestión de Usuarios", se aplica una baja lógica asignando la fecha de baja en el backend. Los POIs dependientes pasan a estado rechazado/inactivo y no se eliminan físicamente de la base de datos.',
     },
     {
-      q: '¿Dónde se consultan y descargan los reportes consolidados (US-RYI-01 a 06)?',
-      a: 'En "Reportes e Informes", el administrador puede filtrar por período (7d, 30d, 90d, histórico) y categoría turística para visualizar métricas agregadas y descargar los datos tabulares en formato CSV estándar.',
+      q: '¿Dónde se consultan y descargan los reportes consolidados?',
+      a: 'En "Reportes y Estadísticas", el administrador puede filtrar por período (7d, 30d, 90d, histórico) y categoría turística para visualizar métricas agregadas y descargar los datos tabulares en formato CSV estándar.',
     },
     {
-      q: '¿Cómo se garantiza la trazabilidad y auditoría de eventos (US-AYT-01)?',
-      a: 'En la sección "Auditoría y LOGs", el sistema registra automáticamente el timestamp, IP, administrador actor y detalle de cada decisión crítica. Los registros son de solo lectura y pueden exportarse para auditorías externas.',
+      q: '¿Cómo se garantiza la trazabilidad y auditoría de eventos?',
+      a: 'En la sección "Auditoría y Logs", el sistema registra automáticamente el timestamp, IP, administrador actor y detalle de cada decisión crítica. Los registros son de solo lectura y pueden exportarse para auditorías externas.',
     },
   ];
 
@@ -48,7 +48,7 @@ export default function AdminHelpPage() {
         <div className="space-y-2">
           <div className="inline-flex items-center space-x-2 bg-accentWine/10 border border-accentWine/20 px-3 py-1 rounded-full text-xs font-bold text-accentWine">
             <HelpCircle className="h-3.5 w-3.5" />
-            <span>Manual del Administrador y Guías Operativas (US-AYS-01)</span>
+            <span>Manual del Administrador y Guías Operativas</span>
           </div>
           <h2 className="font-wixDisplay text-2xl sm:text-3xl font-extrabold text-textDark">
             Manual de Usuario y Soporte Administrativo

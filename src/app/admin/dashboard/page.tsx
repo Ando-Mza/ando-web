@@ -281,7 +281,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center space-x-2">
                 <Activity className="h-5 w-5 text-accentWine" />
-                <h4 className="font-wixDisplay text-lg font-bold text-textDark">Historial de decisiones (GIT)</h4>
+                <h4 className="font-wixDisplay text-lg font-bold text-textDark">Historial de decisiones de moderación</h4>
               </div>
               <Link href="/admin/logs" className="text-xs font-bold text-accentWine hover:underline">
                 Ver todos los registros →

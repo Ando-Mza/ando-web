@@ -240,7 +240,7 @@ export default function UserManagementPage() {
       {/* Overview Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h3 className="font-wixDisplay text-2xl font-bold text-accentWine">Gestión de Usuarios (GDU)</h3>
+          <h3 className="font-wixDisplay text-2xl font-bold text-accentWine">Gestión de Usuarios</h3>
           <p className="text-sm text-textDark/60">
             Administra los roles, credenciales y estados de las cuentas de prestadores y administradores del ecosistema.
           </p>

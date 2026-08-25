@@ -93,7 +93,7 @@ export default function ProviderHelpPage() {
         <div className="space-y-2">
           <div className="inline-flex items-center space-x-2 bg-fillPrimary/10 border border-fillPrimary/20 px-3 py-1 rounded-full text-xs font-bold text-fillPrimary">
             <HelpCircle className="h-3.5 w-3.5" />
-            <span>Centro de Ayuda y Soporte al Prestador (US-AYS-01 a 05)</span>
+            <span>Centro de Ayuda y Soporte al Prestador</span>
           </div>
           <h2 className="font-wixDisplay text-2xl sm:text-3xl font-extrabold text-textDark">
             ¿En qué podemos ayudarte hoy?

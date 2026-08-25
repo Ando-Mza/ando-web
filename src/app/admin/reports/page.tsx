@@ -81,7 +81,7 @@ export default function AdminReportsPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center space-x-2 bg-accentWine/10 border border-accentWine/20 px-3 py-1 rounded-full text-xs font-bold text-accentWine">
               <BarChart3 className="h-3.5 w-3.5" />
-              <span>Reportes Estadísticos y Analíticas (US-RYI-01 a 06)</span>
+              <span>Reportes Estadísticos y Analíticas</span>
             </div>
             <h2 className="font-wixDisplay text-2xl sm:text-3xl font-extrabold text-textDark">
               Centro de Informes y Estadísticas
@@ -112,7 +112,7 @@ export default function AdminReportsPage() {
           }`}
         >
           <Store className="h-4 w-4" />
-          <span>Atractivos y POIs Populares (US-RYI-01)</span>
+          <span>Atractivos y POIs Populares</span>
         </button>
 
         <button
@@ -124,7 +124,7 @@ export default function AdminReportsPage() {
           }`}
         >
           <Users className="h-4 w-4" />
-          <span>Actividad de Usuarios (US-RYI-02)</span>
+          <span>Actividad de Usuarios</span>
         </button>
 
         <button
@@ -136,7 +136,7 @@ export default function AdminReportsPage() {
           }`}
         >
           <PieChart className="h-4 w-4" />
-          <span>Distribución de Negocios (US-RYI-03)</span>
+          <span>Distribución de Negocios</span>
         </button>
 
         <button
@@ -148,7 +148,7 @@ export default function AdminReportsPage() {
           }`}
         >
           <Bot className="h-4 w-4" />
-          <span>Uso de Asistente IA (US-RYI-04)</span>
+          <span>Uso de Asistente IA</span>
         </button>
       </div>
 

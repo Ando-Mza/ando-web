@@ -246,14 +246,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           console.warn('No se pudieron cargar usuarios:', e);
         }
 
-        // Cargar POIs para revisión y moderación admin
+        // Cargar POIs para revisión y catálogo admin
         try {
           const allAdminPois: POI[] = [];
           const seenIds = new Set<string>();
 
-          // 1. POIs en revisión formal
+          // 1. POIs en revisión formal y estados del backend
           try {
-            const revisionData = await api.getAdminRevisionPois();
+            const revisionData = await api.getAdminRevisionPois({ limit: 500 });
             const poisArray = Array.isArray(revisionData)
               ? revisionData
               : (revisionData?.data || revisionData?.items || []);
@@ -287,9 +287,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             console.warn('Nota al cargar POIs comunitarios:', eCom);
           }
 
-          if (allAdminPois.length > 0) {
-            setPois(allAdminPois);
+          // 3. POIs del prestador/organización del usuario si existen
+          try {
+            const myPoisData: any = await api.getMyPois();
+            const myPoisArray = Array.isArray(myPoisData)
+              ? myPoisData
+              : (myPoisData?.data || myPoisData?.items || myPoisData?.pois || []);
+            if (Array.isArray(myPoisArray)) {
+              for (const p of myPoisArray) {
+                if (p?.id && !seenIds.has(p.id)) {
+                  seenIds.add(p.id);
+                  allAdminPois.push(mapBackendPoi(p));
+                }
+              }
+            }
+          } catch (eMy) {
+            // Usuario sin organización, se omite
           }
+
+          // 4. Intentar consultar POIs aprobados con el estadoId si se conoce
+          try {
+            let estadoAprobadoId: string | null = null;
+            if (typeof window !== 'undefined') {
+              estadoAprobadoId = localStorage.getItem('ando_estado_aprobado_id');
+            }
+            if (estadoAprobadoId) {
+              const approvedData = await api.getAdminRevisionPois({ estadoId: estadoAprobadoId, limit: 500 });
+              const appArray = Array.isArray(approvedData)
+                ? approvedData
+                : (approvedData?.data || approvedData?.items || []);
+              if (Array.isArray(appArray)) {
+                for (const p of appArray) {
+                  if (p?.id && !seenIds.has(p.id)) {
+                    seenIds.add(p.id);
+                    allAdminPois.push(mapBackendPoi(p));
+                  }
+                }
+              }
+            }
+          } catch (eApp) {
+            console.warn('Nota al cargar POIs aprobados con estadoId:', eApp);
+          }
+
+          // 5. Cargar POIs reales del sistema persistidos (por ejemplo, Bodega Los Andes del prestador)
+          if (typeof window !== 'undefined') {
+            try {
+              const cachedRealPois: POI[] = JSON.parse(localStorage.getItem('ando_real_pois') || '[]');
+              if (Array.isArray(cachedRealPois)) {
+                for (const p of cachedRealPois) {
+                  if (p?.id && !seenIds.has(p.id)) {
+                    seenIds.add(p.id);
+                    allAdminPois.push(p);
+                  }
+                }
+              }
+            } catch {}
+          }
+
+          // Establecer únicamente los POIs reales recuperados del backend y del sistema
+          setPois((prev) => {
+            const merged = [...allAdminPois];
+            const seen = new Set(merged.map((p) => p.id));
+            for (const p of prev) {
+              if (p?.id && !seen.has(p.id) && !p.id.startsWith('poi-')) {
+                seen.add(p.id);
+                merged.push(p);
+              }
+            }
+            return merged;
+          });
         } catch (e) {
           console.warn('No se pudieron cargar POIs admin:', e);
         }
@@ -303,6 +369,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(poisArray)) {
             const mappedPois: POI[] = poisArray.map(mapBackendPoi);
             setPois(mappedPois);
+
+            // Persistir POIs reales del prestador en el almacenamiento local para que el Admin los pueda ver
+            if (typeof window !== 'undefined') {
+              try {
+                const existing: POI[] = JSON.parse(localStorage.getItem('ando_real_pois') || '[]');
+                const combined = [...mappedPois];
+                const seenMap = new Set(combined.map((p) => p.id));
+                for (const p of existing) {
+                  if (p?.id && !seenMap.has(p.id)) {
+                    seenMap.add(p.id);
+                    combined.push(p);
+                  }
+                }
+                localStorage.setItem('ando_real_pois', JSON.stringify(combined));
+
+                // Guardar el ID de estado de cada POI para futuras consultas administrativas
+                for (const p of poisArray) {
+                  const st = p.estado?.nombre || p.estadoNombre || (typeof p.estado === 'string' ? p.estado : '');
+                  if (st.toLowerCase() === 'aprobado' && (p.estadoId || p.estado?.id)) {
+                    localStorage.setItem('ando_estado_aprobado_id', p.estadoId || p.estado?.id);
+                  }
+                }
+              } catch {}
+            }
 
             // Cargar horarios del primer POI del prestador al arrancar
             if (mappedPois.length > 0) {
