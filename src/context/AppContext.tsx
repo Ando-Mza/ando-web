@@ -279,6 +279,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         password: userData.password,
         confirmPassword: userData.password,
         telefono: userData.phone,
+        fechaNacimiento: userData.birthDate,
         aceptaTerminos: true,
         nombreEmpresa: userData.businessName || '',
         cuitEmpresa: userData.cuit || '',

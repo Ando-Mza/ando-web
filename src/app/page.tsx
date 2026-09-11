@@ -172,6 +172,7 @@ export default function LoginPage() {
         businessName: regEmpresa.trim(),
         phone: regTelefono.trim(),
         cuit: regCuit.trim(),
+        birthDate: regFechaNacimiento.trim(),
         password: regPassword,
       });
 
