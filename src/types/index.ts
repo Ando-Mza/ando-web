@@ -8,6 +8,7 @@ export interface User {
   businessName?: string; // Solo para Prestadores
   phone?: string;        // Opcional para prestadores
   cuit?: string;         // Opcional para prestadores
+  birthDate?: string;    // Fecha de nacimiento
   password?: string;     // Para simulaciones de login/reset
   status?: 'active' | 'pending' | 'inactive'; // Estado de la cuenta
 }
