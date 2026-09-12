@@ -66,8 +66,19 @@ export const api = {
   validateRecoveryToken: (token: string) => request<any>(`/auth/password-recovery/validate?token=${encodeURIComponent(token)}`, 'GET'),
   resetPassword: (body: { token: string; passwordNueva: string; confirmPassword: string }) => request<any>('/auth/password-recovery/reset', 'POST', body),
 
-  // POI Status (Admin)
+  // POI Status & Admin Revision (Admin)
   updatePoiStatus: (id: string, estado: string) => request<any>(`/poi/${id}/estado?estado=${encodeURIComponent(estado)}`, 'PATCH'),
+  getAdminRevisionPois: (params?: Record<string, any>) => {
+    const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+    return request<any>(`/poi/admin/revision${query}`, 'GET');
+  },
+  getAdminPoiRevisionDetail: (id: string) => request<any>(`/poi/admin/revision/${id}`, 'GET'),
+  aprobarPoiByAdmin: (id: string) => request<any>(`/poi/admin/revision/${id}/aprobar`, 'POST'),
+  rechazarPoiByAdmin: (id: string, motivo: string) => request<any>(`/poi/admin/revision/${id}/rechazar`, 'POST', { motivo }),
+  solicitarCorreccionPoiByAdmin: (id: string, observaciones: string) => request<any>(`/poi/admin/revision/${id}/solicitar-correccion`, 'POST', { observaciones }),
+  getAdminDashboardMetricas: () => request<any>('/poi/admin/metricas', 'GET'),
+  getAllPublicPois: () => request<any[]>('/poi', 'GET'),
+  getAllMapPois: () => request<any[]>('/poi/all-map', 'GET'),
 
   // POI Categories (Admin)
   getCategories: () => request<any[]>('/poi/categorias/all', 'GET'),

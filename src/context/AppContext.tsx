@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { POI, Schedule, TimeRange, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus, Review } from '../types';
+import { POI, Schedule, TimeRange, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus, Review, AdminDashboardMetrics } from '../types';
 import {
   mockPOIs,
   mockSchedules,
@@ -24,6 +24,8 @@ interface AppContextProps {
   currentUser: User | null;
   users: User[];
   pois: POI[];
+  adminMetrics: AdminDashboardMetrics | null;
+  refreshAdminMetrics: () => Promise<void>;
   schedules: Schedule[];
   logs: AuditLog[];
   generalParams: GeneralParams;
@@ -69,9 +71,10 @@ const AppContext = createContext<AppContextProps | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>(mockUsers);
-  const [pois, setPois] = useState<POI[]>(mockPOIs);
+  const [pois, setPois] = useState<POI[]>([]);
+  const [adminMetrics, setAdminMetrics] = useState<AdminDashboardMetrics | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>(mockSchedules);
-  const [logs, setLogs] = useState<AuditLog[]>(mockLogs);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [generalParams, setGeneralParams] = useState<GeneralParams>(mockGeneralParams);
   const [integrations, setIntegrations] = useState<Integration[]>(mockIntegrations);
   const [categories, setCategories] = useState<Category[]>(mockCategories);
@@ -79,6 +82,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>(mockReviews);
   const [translations, setTranslations] = useState<TranslationDict>(mockTranslations);
   const [currentLanguage, setCurrentLanguage] = useState<'es' | 'en' | 'pt'>('es');
+
+  const refreshAdminMetrics = async () => {
+    try {
+      const data = await api.getAdminDashboardMetricas();
+      if (data) {
+        setAdminMetrics(data);
+        if (Array.isArray(data.logs)) {
+          setLogs(data.logs);
+        }
+      }
+    } catch (err) {
+      console.warn('Nota al cargar métricas de admin:', err);
+    }
+  };
 
   const loadBackendData = async (role: string) => {
     try {
@@ -94,30 +111,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (role === 'admin') {
-        const dbUsers = await api.getUsers();
-        if (Array.isArray(dbUsers)) {
-          const mappedUsers: User[] = dbUsers.map((u: any) => {
-            const roleObj = u.usuarioRoles?.[0]?.rol;
-            const mappedRole = mapBackendRoleToFrontend(roleObj?.nombre);
-            return {
-              id: u.id,
-              name: `${u.nombre} ${u.apellido}`,
-              email: u.email,
-              role: mappedRole,
-              phone: u.telefono || '',
-              businessName: u.usuarioOrganizaciones?.[0]?.organizacion?.nombre || '',
-              cuit: '',
-              status: u.fechaBaja ? 'inactive' : 'active',
-            };
-          });
-          setUsers(mappedUsers);
+        try {
+          const dbUsers = await api.getUsers();
+          if (Array.isArray(dbUsers)) {
+            const mappedUsers: User[] = dbUsers.map((u: any) => {
+              const roleObj = u.usuarioRoles?.[0]?.rol;
+              const mappedRole = mapBackendRoleToFrontend(roleObj?.nombre);
+              return {
+                id: u.id,
+                name: `${u.nombre} ${u.apellido}`,
+                email: u.email,
+                role: mappedRole,
+                phone: u.telefono || '',
+                businessName: u.usuarioOrganizaciones?.[0]?.organizacion?.nombre || '',
+                cuit: '',
+                status: u.fechaBaja ? 'inactive' : 'active',
+              };
+            });
+            setUsers(mappedUsers);
+          }
+        } catch (uErr) {
+          console.warn('Nota al cargar usuarios admin:', uErr);
+        }
+
+        // 1. Cargar métricas consolidadas del Dashboard (US de Métricas)
+        await refreshAdminMetrics();
+
+        // 2. Cargar bandeja de revisión de POIs pendientes (US-CYN-05)
+        try {
+          const revData = await api.getAdminRevisionPois({ limit: 100 });
+          const rawList = Array.isArray(revData) ? revData : (Array.isArray(revData?.data) ? revData.data : []);
+          const mappedPois: POI[] = rawList.map((p: any) => ({
+            id: p.id,
+            name: p.nombre,
+            description: p.descripcion || '',
+            category: p.categorias?.[0]?.nombre || p.categorias?.[0]?.categoria?.nombre || p.categoria || 'Enoturismo',
+            address: p.direccion || '',
+            location: {
+              lat: p.latitud ? Number(p.latitud) : -32.8894,
+              lng: p.longitud ? Number(p.longitud) : -68.8681,
+            },
+            images: Array.isArray(p.imagenes) && p.imagenes.length > 0 
+              ? p.imagenes.map((img: any) => typeof img === 'string' ? img : (img?.url || '')).filter(Boolean)
+              : (p.imagenPrincipalUrl ? [p.imagenPrincipalUrl] : []),
+            status: mapBackendStatusToFrontend(p.estado?.nombre || p.estado || p.estadoId),
+            createdBy: p.creadoPorId || p.organizacionId || p.usuarioId || '',
+            updatedAt: p.updatedAt || new Date().toISOString(),
+            phone: p.telefono || '',
+            website: p.website || '',
+            instagram: p.instagram || '',
+            regionId: p.regionId || p.region?.id,
+            departamentoId: p.departamentoId || p.departamento?.id,
+            zonaId: p.zonaId || p.zona?.id,
+          }));
+          setPois(mappedPois);
+        } catch (e) {
+          console.warn('Nota de carga POIs de revisión admin:', e);
         }
       }
 
-      if (role === 'provider' || role === 'admin') {
+      if (role === 'provider') {
         try {
           const dbPois = await api.getMyPois();
-          if (Array.isArray(dbPois) && dbPois.length > 0) {
+          if (Array.isArray(dbPois)) {
             const mappedPois: POI[] = dbPois.map((p: any) => ({
               id: p.id,
               name: p.nombre,
@@ -131,7 +187,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               images: Array.isArray(p.imagenes) && p.imagenes.length > 0 
                 ? p.imagenes.map((img: any) => typeof img === 'string' ? img : (img?.url || '')).filter(Boolean)
                 : (p.imagenPrincipalUrl ? [p.imagenPrincipalUrl] : []),
-              status: p.estado?.nombre || p.estado || 'pending',
+              status: mapBackendStatusToFrontend(p.estado?.nombre || p.estado || p.estadoId),
               createdBy: p.creadoPorId || p.organizacionId || p.usuarioId || '',
               updatedAt: p.updatedAt || new Date().toISOString(),
               phone: p.telefono || '',
@@ -141,11 +197,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               departamentoId: p.departamentoId || p.departamento?.id,
               zonaId: p.zonaId || p.zona?.id,
             }));
-            setPois((prev) => {
-              const map = new Map(prev.map(item => [item.id, item]));
-              mappedPois.forEach(item => map.set(item.id, item));
-              return Array.from(map.values());
-            });
+            setPois(mappedPois);
 
             // Cargar horarios reales de la base de datos para cada POI
             try {
@@ -364,6 +416,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     setCurrentUser(null);
+    setPois([]);
+    setUsers([]);
+    setSchedules([]);
   };
 
   const registerProvider = async (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }): Promise<{ success: boolean; error?: string }> => {
@@ -538,9 +593,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await api.updatePoiStatus(id, 'aprobado');
+      if (!id.startsWith('poi-')) {
+        await api.aprobarPoiByAdmin(id);
+      }
     } catch (err) {
-      console.warn('Error al actualizar estado POI en backend:', err);
+      try {
+        await api.updatePoiStatus(id, 'aprobado');
+      } catch (fallbackErr) {
+        console.warn('Error al actualizar estado POI en backend:', fallbackErr);
+      }
     }
 
     const target = pois.find((p) => p.id === id);
@@ -554,8 +615,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         comment: 'POI aprobado para su publicación.',
         timestamp: new Date().toISOString(),
       };
-      setLogs((prev) => [newLog, ...prev]);
+      setLogs((prev) => [newLog, ...prev.filter((l) => l.poiId !== id)]);
     }
+
+    await refreshAdminMetrics();
   };
 
   const rejectPOI = async (id: string, adminName: string, feedback: string) => {
@@ -564,9 +627,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await api.updatePoiStatus(id, 'rechazado');
+      if (!id.startsWith('poi-')) {
+        await api.rechazarPoiByAdmin(id, feedback);
+      }
     } catch (err) {
-      console.warn('Error al rechazar POI en backend:', err);
+      try {
+        await api.updatePoiStatus(id, 'rechazado');
+      } catch (fallbackErr) {
+        console.warn('Error al rechazar POI en backend:', fallbackErr);
+      }
     }
 
     const target = pois.find((p) => p.id === id);
@@ -580,8 +649,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         comment: feedback,
         timestamp: new Date().toISOString(),
       };
-      setLogs((prev) => [newLog, ...prev]);
+      setLogs((prev) => [newLog, ...prev.filter((l) => l.poiId !== id)]);
     }
+
+    await refreshAdminMetrics();
   };
 
   const requestCorrectionPOI = async (id: string, adminName: string, feedback: string) => {
@@ -590,9 +661,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      await api.updatePoiStatus(id, 'pendiente');
+      if (!id.startsWith('poi-')) {
+        await api.solicitarCorreccionPoiByAdmin(id, feedback);
+      }
     } catch (err) {
-      console.warn('Error al enviar corrección de POI en backend:', err);
+      try {
+        await api.updatePoiStatus(id, 'Corrección solicitada');
+      } catch (fallbackErr) {
+        console.warn('Error al enviar corrección de POI en backend:', fallbackErr);
+      }
     }
 
     const target = pois.find((p) => p.id === id);
@@ -606,8 +683,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         comment: feedback,
         timestamp: new Date().toISOString(),
       };
-      setLogs((prev) => [newLog, ...prev]);
+      setLogs((prev) => [newLog, ...prev.filter((l) => l.poiId !== id)]);
     }
+
+    await refreshAdminMetrics();
   };
 
   const deletePOIImage = (poiId: string, imageUrl: string, adminName: string) => {
@@ -1019,6 +1098,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         users,
         pois,
+        adminMetrics,
+        refreshAdminMetrics,
         schedules,
         logs,
         generalParams,

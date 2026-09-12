@@ -28,6 +28,7 @@ import { ADMIN_REJECT_PRESETS, ADMIN_CORRECTION_PRESETS } from '@/config/constan
 export default function ContentValidation() {
   const { 
     pois, 
+    logs,
     approvePOI, 
     rejectPOI, 
     requestCorrectionPOI, 
@@ -343,30 +344,35 @@ export default function ContentValidation() {
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-xs">
               <h4 className="font-wixDisplay text-lg font-bold text-textDark mb-4 border-b border-black/5 pb-4">
-                Atractivos validados (Histórico)
+                Historial de moderación
               </h4>
 
-              {auditedPois.length === 0 ? (
+              {logs.length === 0 && auditedPois.length === 0 ? (
                 <p className="text-xs text-textDark/60 text-center py-6">No hay registros de POIs auditados.</p>
               ) : (
                 <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
-                  {auditedPois.map((poi) => (
-                    <div key={poi.id} className="p-3.5 bg-bgPrimary/40 border border-black/5 rounded-xl flex items-center justify-between gap-2">
+                  {logs.map((log) => (
+                    <div key={log.id} className="p-3.5 bg-bgPrimary/40 border border-black/5 rounded-xl flex items-center justify-between gap-2">
                       <div className="space-y-1 max-w-[170px]">
-                        <span className="font-bold text-xs text-textDark block truncate" title={poi.name}>
-                          {poi.name}
+                        <span className="font-bold text-xs text-textDark block truncate" title={log.poiName}>
+                          {log.poiName}
                         </span>
-                        <span className="text-[10px] font-bold text-accentWine block">
-                          {poi.category}
+                        <span className="text-[10px] text-textDark/60 block">
+                          {new Date(log.timestamp).toLocaleDateString('es-AR')} • {log.adminName}
                         </span>
+                        {log.comment && (
+                          <span className="text-[10px] text-textDark/50 block truncate" title={log.comment}>
+                            {log.comment}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        {poi.status === 'approved' ? (
+                        {log.action === 'approve' ? (
                           <span className="text-[9px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full font-bold">
                             Aprobado
                           </span>
-                        ) : poi.status === 'rejected' ? (
+                        ) : log.action === 'reject' ? (
                           <span className="text-[9px] bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-bold">
                             Rechazado
                           </span>
@@ -375,15 +381,6 @@ export default function ContentValidation() {
                             Corrección
                           </span>
                         )}
-
-                        <button
-                          onClick={() => openDetailModal(poi)}
-                          className="p-1.5 text-textDark/60 hover:text-textDark hover:bg-black/5 rounded-lg transition-colors cursor-pointer"
-                          title="Ver detalle"
-                          aria-label={`Ver detalle de ${poi.name}`}
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
                       </div>
                     </div>
                   ))}
