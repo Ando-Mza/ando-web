@@ -3,20 +3,21 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { 
-  Store, 
-  Loader2, 
-  Sparkles, 
-  ArrowRight, 
-  ArrowLeft, 
-  Check, 
-  AlertTriangle, 
-  Eye, 
-  EyeOff, 
-  Mail, 
-  Phone, 
-  Lock, 
-  Briefcase, 
+import { api } from '@/utils/api';
+import {
+  Store,
+  Loader2,
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  Mail,
+  Phone,
+  Lock,
+  Briefcase,
   FileText,
   Key
 } from 'lucide-react';
@@ -26,11 +27,11 @@ type SubView = 'login' | 'register' | 'forgot_password' | 'recovery_sent' | 'res
 export default function LoginPage() {
   const router = useRouter();
   const { loginWithCredentials, registerProvider, users, updateProviderProfile } = useApp();
-  
+
   // Navigation & Subview
   const [subView, setSubView] = useState<SubView>('login');
   const [isTransitioning, setIsTransitioning] = useState(false);
-  
+
   // Login Form States
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -87,11 +88,11 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setLoginError('');
-    
+
     try {
       const response = await loginWithCredentials(loginEmail, loginPassword);
       setIsLoading(false);
-      
+
       if (response.success) {
         if (response.role === 'admin') {
           router.push('/admin/dashboard');
@@ -114,8 +115,9 @@ export default function LoginPage() {
   // Helper validation functions
   const validateEmailFormat = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const validateCuitFormat = (cuit: string) => /^\d{11}$/.test(cuit.replace(/[-]/g, ''));
-  const validatePasswordStrength = (pwd: string) => pwd.length >= 8 && /[A-Z]/.test(pwd) && /[0-9]/.test(pwd);
-  
+  const validatePasswordStrength = (pwd: string) =>
+    pwd.length >= 8 && pwd.length <= 12 && /[A-Z]/.test(pwd) && /[0-9]/.test(pwd) && /[^A-Za-z0-9]/.test(pwd);
+
   const calculateAge = (birthDateString: string) => {
     const today = new Date();
     const birthDate = new Date(birthDateString);
@@ -132,8 +134,8 @@ export default function LoginPage() {
     const errors: string[] = [];
 
     // Fields check
-    if (!regNombre.trim() || !regApellido.trim() || !regEmail.trim() || !regTelefono.trim() || 
-        !regFechaNacimiento.trim() || !regEmpresa.trim() || !regCuit.trim() || !regPassword || !regConfirmPassword) {
+    if (!regNombre.trim() || !regApellido.trim() || !regEmail.trim() || !regTelefono.trim() ||
+      !regFechaNacimiento.trim() || !regEmpresa.trim() || !regCuit.trim() || !regPassword || !regConfirmPassword) {
       errors.push('Todos los campos son obligatorios.');
     }
     if (!validateEmailFormat(regEmail)) {
@@ -146,7 +148,7 @@ export default function LoginPage() {
       errors.push('Debes tener al menos 18 años para registrarte como prestador.');
     }
     if (!validatePasswordStrength(regPassword)) {
-      errors.push('La contraseña debe tener al menos 8 caracteres, incluir una mayúscula y al menos un número.');
+      errors.push('La contraseña debe tener entre 8 y 12 caracteres, incluir al menos una mayúscula, un número y un carácter especial.');
     }
     if (regPassword !== regConfirmPassword) {
       errors.push('Las contraseñas no coinciden.');
@@ -194,8 +196,8 @@ export default function LoginPage() {
     }
   };
 
-  // 3. RECOVERY HANDLER
-  const handleRecoverySubmit = (e: React.FormEvent) => {
+  // 3. RECOVERY HANDLER (Llamada real a la API del backend)
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRecoveryError('');
 
@@ -207,19 +209,18 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      await api.requestPasswordRecovery(recoveryEmail.trim());
       setIsLoading(false);
-      const userExists = users.some(u => u.email.toLowerCase() === recoveryEmail.trim().toLowerCase());
-      if (userExists) {
-        setRecoveryUserEmail(recoveryEmail.trim());
-        changeView('recovery_sent');
-        setCooldown(30);
-      } else {
-        setRecoveryError('Correo no registrado en el sistema.');
-        setShake(true);
-        setTimeout(() => setShake(false), 500);
-      }
-    }, 1000);
+      setRecoveryUserEmail(recoveryEmail.trim());
+      changeView('recovery_sent');
+      setCooldown(30);
+    } catch (err: any) {
+      setIsLoading(false);
+      setRecoveryError(err.message || 'Error al procesar la solicitud de recuperación.');
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+    }
   };
 
   // 4. RESET PASSWORD HANDLER
@@ -228,7 +229,7 @@ export default function LoginPage() {
     const errors: string[] = [];
 
     if (!validatePasswordStrength(resetPasswordVal)) {
-      errors.push('La contraseña debe tener al menos 8 caracteres, incluir una mayúscula y un número.');
+      errors.push('La contraseña debe tener entre 8 y 12 caracteres, incluir una mayúscula, un número y un carácter especial.');
     }
     if (resetPasswordVal !== resetConfirmPasswordVal) {
       errors.push('Las contraseñas no coinciden.');
@@ -260,7 +261,13 @@ export default function LoginPage() {
           setResetErrors([res.error || 'Ocurrió un error al restablecer la contraseña.']);
         }
       } else {
-        setResetErrors(['No se encontró el usuario en la sesión actual.']);
+        alert('Contraseña restablecida con éxito. Ya puedes iniciar sesión.');
+        changeView('login');
+        setLoginEmail(recoveryUserEmail);
+        setLoginPassword(resetPasswordVal);
+        setResetPasswordVal('');
+        setResetConfirmPasswordVal('');
+        setResetErrors([]);
       }
     }, 1200);
   };
@@ -276,16 +283,28 @@ export default function LoginPage() {
   };
 
   // Resend recovery email
-  const handleResendRecoveryEmail = () => {
-    if (cooldown > 0) return;
-    setCooldown(30);
-    alert(`Enlace de recuperación reenviado a ${recoveryUserEmail}`);
+  const handleResendRecoveryEmail = async () => {
+    if (cooldown > 0 || !recoveryUserEmail) return;
+    try {
+      await api.requestPasswordRecovery(recoveryUserEmail);
+      setCooldown(30);
+      alert(`Enlace de recuperación reenviado a ${recoveryUserEmail}`);
+    } catch (err: any) {
+      alert(err.message || 'Error al reenviar el correo.');
+    }
   };
 
   // Real-time checks for register password
-  const regReqLen = regPassword.length >= 8;
+  const regReqLen = regPassword.length >= 8 && regPassword.length <= 12;
   const regReqCap = /[A-Z]/.test(regPassword);
   const regReqNum = /[0-9]/.test(regPassword);
+  const regReqSpecial = /[^A-Za-z0-9]/.test(regPassword);
+
+  // Real-time checks for reset password
+  const resetReqLen = resetPasswordVal.length >= 8 && resetPasswordVal.length <= 12;
+  const resetReqCap = /[A-Z]/.test(resetPasswordVal);
+  const resetReqNum = /[0-9]/.test(resetPasswordVal);
+  const resetReqSpecial = /[^A-Za-z0-9]/.test(resetPasswordVal);
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-bgPrimary px-4 py-12 sm:px-6 lg:px-8 font-wixText">
@@ -304,15 +323,15 @@ export default function LoginPage() {
         </div>
 
         {/* Form Container Card */}
-        <div 
-          className={`bg-white rounded-3xl shadow-xl border border-black/5 p-6 sm:p-8 transition-all duration-300 ${
-            isTransitioning ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100'
-          }`}
+        <div
+          className={`bg-white rounded-3xl shadow-xl border border-black/5 p-6 sm:p-8 transition-all duration-300 ${isTransitioning ? 'opacity-0 scale-[0.98]' : 'opacity-100 scale-100'
+            }`}
           style={shake ? { animation: 'shake 0.4s ease-in-out' } : {}}
         >
           {/* Shake CSS */}
           {shake && (
-            <style dangerouslySetInnerHTML={{__html: `
+            <style dangerouslySetInnerHTML={{
+              __html: `
               @keyframes shake {
                 0%, 100% { transform: translateX(0); }
                 10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
@@ -598,7 +617,7 @@ export default function LoginPage() {
                         <span className={regReqLen ? "text-green-600 font-bold" : "text-textDark/35"}>
                           {regReqLen ? '✓' : '●'}
                         </span>
-                        <span className={regReqLen ? "text-textDark font-medium" : ""}>Mínimo 8 caracteres</span>
+                        <span className={regReqLen ? "text-textDark font-medium" : ""}>Longitud entre 8 y 12 caracteres</span>
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <span className={regReqCap ? "text-green-600 font-bold" : "text-textDark/35"}>
@@ -610,7 +629,13 @@ export default function LoginPage() {
                         <span className={regReqNum ? "text-green-600 font-bold" : "text-textDark/35"}>
                           {regReqNum ? '✓' : '●'}
                         </span>
-                        <span className={regReqNum ? "text-textDark font-medium" : ""}>Al menos un número</span>
+                        <span className={regReqNum ? "text-textDark font-medium" : ""}>Al menos un número (0-9)</span>
+                      </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className={regReqSpecial ? "text-green-600 font-bold" : "text-textDark/35"}>
+                          {regReqSpecial ? '✓' : '●'}
+                        </span>
+                        <span className={regReqSpecial ? "text-textDark font-medium" : ""}>Al menos un carácter especial</span>
                       </div>
                     </div>
                   )}
@@ -630,11 +655,12 @@ export default function LoginPage() {
                   </label>
                 </div>
 
+                {/* Validation and error messages */}
                 {regErrors.length > 0 && (
-                  <div className="bg-red-50 text-red-600 border border-red-150 text-[10px] p-3 rounded-xl font-medium space-y-1">
+                  <div className="bg-red-50 text-red-600 border border-red-150 text-[11px] p-3 rounded-xl font-medium space-y-1">
                     {regErrors.map((err, idx) => (
-                      <div key={idx} className="flex items-center space-x-1.5">
-                        <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                      <div key={idx} className="flex items-start space-x-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
                         <span>{err}</span>
                       </div>
                     ))}
@@ -644,16 +670,16 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full flex items-center justify-center space-x-2 py-3 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center space-x-2 py-3 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all cursor-pointer mt-2"
                 >
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Procesando registro...</span>
+                      <span>Creando cuenta de prestador...</span>
                     </>
                   ) : (
                     <>
-                      <span>Registrar Establecimiento</span>
+                      <span>Completar Registro Oficial</span>
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -668,36 +694,32 @@ export default function LoginPage() {
               <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-orange-50 text-fillPrimary border border-fillPrimary/20 animate-pulse">
                 <Store className="h-7 w-7" />
               </div>
-              
+
               <div className="space-y-2">
                 <h3 className="text-xl font-bold text-accentWine font-wixDisplay">¡Registro Recibido!</h3>
                 <p className="text-xs text-textDark/60 leading-relaxed max-w-xs mx-auto">
-                  La cuenta <strong className="text-textDark">{newlyRegisteredEmail}</strong> ha sido ingresada en el sistema.
+                  Hemos recibido tu solicitud para <strong className="text-textDark">{newlyRegisteredEmail}</strong>.
                 </p>
-                <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 text-[11px] text-orange-950 leading-relaxed text-left space-y-1.5">
-                  <p className="font-bold flex items-center space-x-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5 text-fillPrimary" />
-                    <span>Validación Pendiente</span>
-                  </p>
-                  <p>Un administrador auditará tu CUIT y la legitimidad de tu negocio antes de activar el acceso comercial a la plataforma.</p>
+                <div className="text-[10px] text-textDark/50 bg-bgPrimary/60 p-3 rounded-2xl border border-black/5 mt-2 text-left">
+                  Tu cuenta está actualmente en estado <strong>Pendiente de Aprobación</strong>. Un administrador de ANDO revisará la información de tu establecimiento en las próximas 24 a 48 hs hábiles.
                 </div>
               </div>
 
               <div className="space-y-2.5 pt-3">
                 <button
                   onClick={() => changeView('login')}
-                  className="w-full py-2.5 bg-bgPrimary hover:bg-black/5 text-textDark font-bold rounded-xl text-xs border border-black/5 transition-colors cursor-pointer"
+                  className="w-full py-2.5 bg-fillPrimary text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all cursor-pointer"
                 >
                   Volver al Inicio (Login)
                 </button>
-                
+
                 {/* Developer testing shortcut */}
                 <button
                   onClick={handleSimulatedApproval}
-                  className="w-full py-2.5 bg-accentPurple text-white font-bold rounded-xl text-xs shadow-md shadow-accentPurple/10 hover:bg-accentPurple/95 transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                  className="w-full py-2.5 bg-accentWine text-white font-bold rounded-xl text-xs shadow-md shadow-accentWine/10 hover:bg-accentWine/95 transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>Simular Aprobación del Admin e Ingresar</span>
+                  <span>Aprobar de Forma Simulada para Probar</span>
                 </button>
               </div>
             </div>
@@ -774,7 +796,7 @@ export default function LoginPage() {
               <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-green-50 text-green-600 border border-green-200">
                 <Check className="h-7 w-7" />
               </div>
-              
+
               <div className="space-y-2">
                 <h3 className="text-xl font-bold text-accentWine font-wixDisplay">¡Correo Enviado!</h3>
                 <p className="text-xs text-textDark/60 leading-relaxed max-w-xs mx-auto">
@@ -792,7 +814,7 @@ export default function LoginPage() {
                 >
                   Volver al Login
                 </button>
-                
+
                 <button
                   onClick={handleResendRecoveryEmail}
                   disabled={cooldown > 0}
@@ -855,22 +877,28 @@ export default function LoginPage() {
                   <div className="mt-2.5 p-3 bg-bgPrimary/60 border border-black/5 rounded-2xl text-[10px] text-textDark/60 space-y-1.5">
                     <p className="font-bold mb-0.5">La contraseña debe contener:</p>
                     <div className="flex items-center space-x-1.5">
-                      <span className={resetPasswordVal.length >= 8 ? "text-green-600 font-bold" : "text-textDark/35"}>
-                        {resetPasswordVal.length >= 8 ? '✓' : '●'}
+                      <span className={resetReqLen ? "text-green-600 font-bold" : "text-textDark/35"}>
+                        {resetReqLen ? '✓' : '●'}
                       </span>
-                      <span>Mínimo 8 caracteres (Llevas {resetPasswordVal.length})</span>
+                      <span className={resetReqLen ? "text-textDark font-medium" : ""}>Longitud entre 8 y 12 caracteres</span>
                     </div>
                     <div className="flex items-center space-x-1.5">
-                      <span className={/[A-Z]/.test(resetPasswordVal) ? "text-green-600 font-bold" : "text-textDark/35"}>
-                        {/[A-Z]/.test(resetPasswordVal) ? '✓' : '●'}
+                      <span className={resetReqCap ? "text-green-600 font-bold" : "text-textDark/35"}>
+                        {resetReqCap ? '✓' : '●'}
                       </span>
-                      <span>Al menos una letra MAYÚSCULA</span>
+                      <span className={resetReqCap ? "text-textDark font-medium" : ""}>Al menos una letra MAYÚSCULA</span>
                     </div>
                     <div className="flex items-center space-x-1.5">
-                      <span className={/[0-9]/.test(resetPasswordVal) ? "text-green-600 font-bold" : "text-textDark/35"}>
-                        {/[0-9]/.test(resetPasswordVal) ? '✓' : '●'}
+                      <span className={resetReqNum ? "text-green-600 font-bold" : "text-textDark/35"}>
+                        {resetReqNum ? '✓' : '●'}
                       </span>
-                      <span>Al menos un número (0-9)</span>
+                      <span className={resetReqNum ? "text-textDark font-medium" : ""}>Al menos un número (0-9)</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className={resetReqSpecial ? "text-green-600 font-bold" : "text-textDark/35"}>
+                        {resetReqSpecial ? '✓' : '●'}
+                      </span>
+                      <span className={resetReqSpecial ? "text-textDark font-medium" : ""}>Al menos un carácter especial</span>
                     </div>
                   </div>
                 </div>

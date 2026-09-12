@@ -133,8 +133,8 @@ export default function ProviderProfilePage() {
         showToast('Debes ingresar tu contraseña actual para confirmar el cambio de clave.', 'error');
         return false;
       }
-      if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-        showToast('La nueva contraseña debe tener al menos 8 caracteres, una mayúscula y un número.', 'error');
+      if (newPassword.length < 8 || newPassword.length > 12 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+        showToast('La nueva contraseña debe tener entre 8 y 12 caracteres, una mayúscula, un número y un carácter especial.', 'error');
         return false;
       }
       if (newPassword !== confirmPassword) {
@@ -249,9 +249,10 @@ export default function ProviderProfilePage() {
   };
 
   // Password requirements calculation
-  const reqLength = newPassword.length >= 8;
+  const reqLength = newPassword.length >= 8 && newPassword.length <= 12;
   const reqCapital = /[A-Z]/.test(newPassword);
   const reqNumber = /[0-9]/.test(newPassword);
+  const reqSpecial = /[^A-Za-z0-9]/.test(newPassword);
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto pb-12 relative font-wixText">
@@ -577,7 +578,7 @@ export default function ProviderProfilePage() {
                 <span className={reqLength ? "text-green-600 font-bold" : "text-textDark/35"}>
                   {reqLength ? '✓' : '●'}
                 </span>
-                <span className={reqLength ? "text-textDark" : ""}>Al menos 8 caracteres</span>
+                <span className={reqLength ? "text-textDark" : ""}>Longitud entre 8 y 12 caracteres</span>
               </div>
               <div className="flex items-center space-x-2">
                 <span className={reqCapital ? "text-green-600 font-bold" : "text-textDark/35"}>
@@ -590,6 +591,12 @@ export default function ProviderProfilePage() {
                   {reqNumber ? '✓' : '●'}
                 </span>
                 <span className={reqNumber ? "text-textDark" : ""}>Al menos un número (0-9)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className={reqSpecial ? "text-green-600 font-bold" : "text-textDark/35"}>
+                  {reqSpecial ? '✓' : '●'}
+                </span>
+                <span className={reqSpecial ? "text-textDark" : ""}>Al menos un carácter especial</span>
               </div>
             </div>
           )}

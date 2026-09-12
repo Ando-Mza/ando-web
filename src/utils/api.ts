@@ -61,6 +61,11 @@ export const api = {
   updatePrestadorProfile: (body: any) => request<any>('/user/prestador/profile', 'PATCH', body),
   changePassword: (body: any) => request<any>('/user/profile/change-password', 'POST', body),
 
+  // Password Recovery
+  requestPasswordRecovery: (email: string) => request<any>('/auth/password-recovery/request', 'POST', { email }),
+  validateRecoveryToken: (token: string) => request<any>(`/auth/password-recovery/validate?token=${encodeURIComponent(token)}`, 'GET'),
+  resetPassword: (body: { token: string; passwordNueva: string; confirmPassword: string }) => request<any>('/auth/password-recovery/reset', 'POST', body),
+
   // POI Status (Admin)
   updatePoiStatus: (id: string, estado: string) => request<any>(`/poi/${id}/estado?estado=${encodeURIComponent(estado)}`, 'PATCH'),
 
@@ -77,6 +82,11 @@ export const api = {
   updateEtiqueta: (id: string, nombre: string) => request<any>(`/poi/etiquetas/${id}`, 'PATCH', { nombre }),
   toggleEtiquetaActiva: (id: string, activa: boolean) => request<any>(`/poi/etiquetas/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteEtiqueta: (id: string) => request<any>(`/poi/etiquetas/${id}`, 'DELETE'),
+
+  // Ubicaciones (Regiones, Departamentos, Zonas)
+  getRegiones: (includeAll?: boolean) => request<any[]>(`/ubicaciones/regiones${includeAll ? '?includeAll=true' : ''}`, 'GET'),
+  getDepartamentos: (regionId?: string) => request<any[]>(`/ubicaciones/departamentos${regionId ? `?regionId=${encodeURIComponent(regionId)}` : ''}`, 'GET'),
+  getZonas: (departamentoId?: string) => request<any[]>(`/ubicaciones/zonas${departamentoId ? `?departamentoId=${encodeURIComponent(departamentoId)}` : ''}`, 'GET'),
 
   // POIs (Prestador)
   getMyPois: () => request<any[]>('/poi/prestador/my-pois', 'GET'),

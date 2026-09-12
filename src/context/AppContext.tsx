@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { POI, Schedule, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus, Review } from '../types';
+import { POI, Schedule, TimeRange, AuditLog, GeneralParams, Integration, User, UserRole, Category, ValidationState, POIStatus, Review } from '../types';
 import {
   mockPOIs,
   mockSchedules,
@@ -129,19 +129,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 lng: p.longitud ? Number(p.longitud) : -68.8681,
               },
               images: Array.isArray(p.imagenes) && p.imagenes.length > 0 
-                ? p.imagenes 
+                ? p.imagenes.map((img: any) => typeof img === 'string' ? img : (img?.url || '')).filter(Boolean)
                 : (p.imagenPrincipalUrl ? [p.imagenPrincipalUrl] : []),
-              status: p.estado || 'pending',
+              status: p.estado?.nombre || p.estado || 'pending',
               createdBy: p.creadoPorId || p.organizacionId || p.usuarioId || '',
               updatedAt: p.updatedAt || new Date().toISOString(),
-              email: p.emailContacto || '',
               phone: p.telefono || '',
+              website: p.website || '',
+              instagram: p.instagram || '',
+              regionId: p.regionId || p.region?.id,
+              departamentoId: p.departamentoId || p.departamento?.id,
+              zonaId: p.zonaId || p.zona?.id,
             }));
             setPois((prev) => {
               const map = new Map(prev.map(item => [item.id, item]));
               mappedPois.forEach(item => map.set(item.id, item));
               return Array.from(map.values());
             });
+
+            // Cargar horarios reales de la base de datos para cada POI
+            try {
+              const loadedSchedules: Schedule[] = [];
+              for (const poi of mappedPois) {
+                if (!poi.id.startsWith('poi-')) {
+                  const dbHorarios = await api.getHorariosByPoi(poi.id);
+                  if (Array.isArray(dbHorarios) && dbHorarios.length > 0) {
+                    const schedulesByRange = new Map<string, { days: number[]; timeRanges: TimeRange[] }>();
+                    dbHorarios.forEach((h: any) => {
+                      const key = `${h.horaDesde}-${h.horaHasta}`;
+                      if (!schedulesByRange.has(key)) {
+                        schedulesByRange.set(key, {
+                          days: [],
+                          timeRanges: [{ start: h.horaDesde, end: h.horaHasta }],
+                        });
+                      }
+                      const entry = schedulesByRange.get(key)!;
+                      if (!entry.days.includes(h.diaSemanaDesde)) {
+                        entry.days.push(h.diaSemanaDesde);
+                      }
+                    });
+
+                    schedulesByRange.forEach((val, key) => {
+                      loadedSchedules.push({
+                        id: `sch-db-${poi.id}-${key}`,
+                        poiId: poi.id,
+                        daysOfWeek: val.days.sort((a, b) => a - b),
+                        timeRanges: val.timeRanges,
+                        season: 'all',
+                        isHoliday: false,
+                      });
+                    });
+                  }
+                }
+              }
+              if (loadedSchedules.length > 0) {
+                setSchedules((prev) => {
+                  const dbPoiIds = new Set(mappedPois.map(p => p.id));
+                  const keepSchedules = prev.filter(s => !dbPoiIds.has(s.poiId));
+                  return [...keepSchedules, ...loadedSchedules];
+                });
+              }
+            } catch (hErr) {
+              console.warn('Nota al cargar horarios desde la base de datos:', hErr);
+            }
           }
         } catch (e) {
           console.warn('Nota de carga POIs backend:', e);
@@ -660,34 +710,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addPOI = async (poiData: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => {
-    const newPOI: POI = {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+
+    // Obtener UUID de categoría coincidente o la primera activa
+    const matchedCategory = categories.find(
+      (c) => c.name.toLowerCase() === poiData.category.toLowerCase() || c.id === poiData.category
+    );
+    const categoriaIds = matchedCategory?.id
+      ? [matchedCategory.id]
+      : (categories.length > 0 ? [categories[0].id] : []);
+
+    let newPOI: POI = {
       ...poiData,
       id: `poi-${Date.now()}`,
       status: 'pending',
       createdBy: currentUser?.id || '',
       updatedAt: new Date().toISOString(),
     };
-    setPois((prev) => [...prev, newPOI]);
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (token) {
       try {
-        const payload = {
+        const payload: any = {
           nombre: poiData.name,
           descripcion: poiData.description,
           direccion: poiData.address,
-          latitud: poiData.location.lat,
-          longitud: poiData.location.lng,
-          telefono: poiData.phone,
-          emailContacto: poiData.email,
+          latitud: Number(poiData.location.lat),
+          longitud: Number(poiData.location.lng),
+          regionId: poiData.regionId,
+          departamentoId: poiData.departamentoId,
+          zonaId: poiData.zonaId || undefined,
+          telefono: poiData.phone || undefined,
+          website: poiData.website || undefined,
+          instagram: poiData.instagram || undefined,
+          categoriaIds,
           imagenes: poiData.images,
           imagenPrincipalUrl: poiData.images?.[0] || '',
         };
-        await api.createPoi(payload);
+        const saved = await api.createPoi(payload);
+        if (saved && saved.id) {
+          newPOI = {
+            id: saved.id,
+            name: saved.nombre || poiData.name,
+            description: saved.descripcion || poiData.description,
+            category: poiData.category,
+            address: saved.direccion || poiData.address,
+            location: {
+              lat: saved.latitud !== undefined ? Number(saved.latitud) : poiData.location.lat,
+              lng: saved.longitud !== undefined ? Number(saved.longitud) : poiData.location.lng,
+            },
+            regionId: saved.regionId || poiData.regionId,
+            departamentoId: saved.departamentoId || poiData.departamentoId,
+            zonaId: saved.zonaId || poiData.zonaId,
+            website: saved.website || poiData.website,
+            instagram: saved.instagram || poiData.instagram,
+            images: Array.isArray(saved.imagenes) && saved.imagenes.length > 0
+              ? saved.imagenes.map((img: any) => typeof img === 'string' ? img : img.url)
+              : poiData.images,
+            status: saved.estado?.nombre || saved.estado || 'pending',
+            createdBy: saved.creadoPorId || currentUser?.id || '',
+            updatedAt: saved.updatedAt || new Date().toISOString(),
+            phone: saved.telefono || poiData.phone,
+          };
+        }
       } catch (err) {
-        console.warn('Nota de sincronización backend POI:', err);
+        console.error('Error al sincronizar creación de POI con el backend:', err);
+        throw err;
       }
     }
+
+    setPois((prev) => [...prev, newPOI]);
   };
 
   const updatePOI = async (updatedPoi: POI) => {
@@ -698,20 +789,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (token && !updatedPoi.id.startsWith('poi-')) {
       try {
-        const payload = {
+        const matchedCategory = categories.find(
+          (c) => c.name.toLowerCase() === updatedPoi.category.toLowerCase() || c.id === updatedPoi.category
+        );
+        const categoriaIds = matchedCategory?.id
+          ? [matchedCategory.id]
+          : (categories.length > 0 ? [categories[0].id] : []);
+
+        const payload: any = {
           nombre: updatedPoi.name,
           descripcion: updatedPoi.description,
           direccion: updatedPoi.address,
-          latitud: updatedPoi.location.lat,
-          longitud: updatedPoi.location.lng,
-          telefono: updatedPoi.phone,
-          emailContacto: updatedPoi.email,
+          latitud: Number(updatedPoi.location.lat),
+          longitud: Number(updatedPoi.location.lng),
+          regionId: updatedPoi.regionId,
+          departamentoId: updatedPoi.departamentoId,
+          zonaId: updatedPoi.zonaId || undefined,
+          telefono: updatedPoi.phone || undefined,
+          website: updatedPoi.website || undefined,
+          instagram: updatedPoi.instagram || undefined,
+          categoriaIds,
           imagenes: updatedPoi.images,
           imagenPrincipalUrl: updatedPoi.images?.[0] || '',
         };
         await api.updatePoi(updatedPoi.id, payload);
       } catch (err) {
-        console.warn('Nota de sincronización backend POI update:', err);
+        console.error('Error al sincronizar actualización de POI con el backend:', err);
+        throw err;
       }
     }
   };
@@ -725,15 +829,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (token && !poiId.startsWith('poi-')) {
       try {
-        const batchHorarios = newSchedules.map((s) => ({
-          diasSemana: s.daysOfWeek,
-          horaApertura: s.timeRanges[0]?.start || '09:00',
-          horaCierre: s.timeRanges[0]?.end || '18:00',
-          temporada: s.season,
-          esFeriado: s.isHoliday || false,
-          descripcion: s.description || '',
-        }));
-        await api.createMultipleHorarios(poiId, batchHorarios);
+        // 1. Limpiar horarios anteriores en BD para este POI
+        await api.deleteAllHorarios(poiId);
+
+        // 2. Construir lista plana de DTOs válidos para la BD (diaSemanaDesde, diaSemanaHasta, horaDesde, horaHasta)
+        const batchHorarios: { diaSemanaDesde: number; diaSemanaHasta: number; horaDesde: string; horaHasta: string }[] = [];
+        for (const s of newSchedules) {
+          for (const day of s.daysOfWeek) {
+            for (const tr of s.timeRanges) {
+              if (tr.start && tr.end) {
+                batchHorarios.push({
+                  diaSemanaDesde: Number(day),
+                  diaSemanaHasta: Number(day),
+                  horaDesde: tr.start,
+                  horaHasta: tr.end,
+                });
+              }
+            }
+          }
+        }
+
+        // 3. Guardar en la base de datos PostgreSQL
+        if (batchHorarios.length > 0) {
+          await api.createMultipleHorarios(poiId, batchHorarios);
+        }
       } catch (err) {
         console.warn('Nota de guardado backend horarios:', err);
       }

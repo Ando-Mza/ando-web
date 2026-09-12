@@ -34,6 +34,11 @@ export interface POI {
   updatedAt: string;
   email?: string;
   phone?: string;
+  website?: string;
+  instagram?: string;
+  regionId?: string;
+  departamentoId?: string;
+  zonaId?: string;
   clicksCount?: number;  // Cantidad de clics / vistas del negocio en la app
   rating?: number;       // Calificación promedio (1 a 5)
   reviewsCount?: number; // Total de valoraciones recibidas

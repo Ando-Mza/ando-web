@@ -189,8 +189,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <p className="text-xs font-bold text-textDark">{currentUser.name}</p>
                 <p className="text-[10px] text-textDark/60 font-medium">Administrador de sistemas</p>
               </div>
-              <div className="h-8 w-8 rounded-full bg-accentWine text-white flex items-center justify-center font-semibold text-sm">
-                S
+              <div className="h-8 w-8 rounded-full bg-accentWine text-white flex items-center justify-center font-bold text-sm uppercase shadow-sm">
+                {(currentUser.firstName || currentUser.name || 'A').trim().charAt(0).toUpperCase()}
               </div>
             </div>
           </div>
