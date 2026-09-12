@@ -3,6 +3,8 @@ export type UserRole = 'admin' | 'provider' | 'tourist';
 export interface User {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   role: UserRole;
   businessName?: string; // Solo para Prestadores

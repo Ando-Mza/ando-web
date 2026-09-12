@@ -39,7 +39,7 @@ interface AppContextProps {
   loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; role?: string; error?: string }>;
   logout: () => void;
   registerProvider: (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }) => Promise<{ success: boolean; error?: string }>;
-  updateProviderProfile: (id: string, updatedData: Partial<User>) => { success: boolean; error?: string };
+  updateProviderProfile: (id: string, updatedData: Partial<User>) => Promise<{ success: boolean; error?: string }>;
   deleteProviderAccount: (id: string) => { success: boolean };
   adminCreateUser: (userData: Omit<User, 'id'> & { password?: string }) => { success: boolean; error?: string };
   adminDeleteUser: (id: string) => { success: boolean };
@@ -169,33 +169,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return;
           }
           
-          let nombreCompleto = profile.nombre ? `${profile.nombre} ${profile.apellido || ''}`.trim() : profile.email.split('@')[0];
+          let firstName = '';
+          let lastName = '';
+          let nombreCompleto = '';
           let businessName = '';
+          let cuit = '';
           let phone = '';
           try {
             if (mappedRole === 'provider') {
               const provProf = await api.getPrestadorProfile();
               if (provProf) {
-                if (provProf.nombre) nombreCompleto = `${provProf.nombre} ${provProf.apellido || ''}`.trim();
-                if (provProf.nombreEmpresa) businessName = provProf.nombreEmpresa;
-                if (provProf.telefono) phone = provProf.telefono;
+                const u = provProf.user || provProf;
+                const org = provProf.organizacion || {};
+                if (u.nombre) firstName = u.nombre;
+                if (u.apellido) lastName = u.apellido;
+                if (u.nombre) nombreCompleto = `${u.nombre} ${u.apellido || ''}`.trim();
+                if (org.nombre || provProf.nombreEmpresa) businessName = org.nombre || provProf.nombreEmpresa;
+                if (org.cuit || provProf.cuitEmpresa) cuit = org.cuit || provProf.cuitEmpresa;
+                if (u.telefono || provProf.telefono) phone = u.telefono || provProf.telefono;
               }
             } else {
-              const fullUser = await api.getUser(profile.userId);
+              const fullUser = await api.getUser(profile.userId || profile.sub);
               if (fullUser && fullUser.nombre) {
+                firstName = fullUser.nombre;
+                lastName = fullUser.apellido || '';
                 nombreCompleto = `${fullUser.nombre} ${fullUser.apellido || ''}`.trim();
+                if (fullUser.telefono) phone = fullUser.telefono;
               }
             }
           } catch (e) {
             console.error('Error fetching full user profile details:', e);
           }
 
+          if (!nombreCompleto) {
+            nombreCompleto = profile.nombre ? `${profile.nombre} ${profile.apellido || ''}`.trim() : profile.email.split('@')[0];
+            firstName = profile.nombre || '';
+            lastName = profile.apellido || '';
+          }
+
           const loggedUser: User = {
-            id: profile.userId,
+            id: profile.userId || profile.sub,
             name: nombreCompleto,
+            firstName: firstName || undefined,
+            lastName: lastName || undefined,
             email: profile.email,
             role: mappedRole,
             businessName: businessName || undefined,
+            cuit: cuit || undefined,
             phone: phone || undefined,
             status: 'active',
           };
@@ -237,11 +257,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
         
+        let firstName = '';
+        let lastName = '';
+        let nombreCompleto = `${data.user.nombre || ''} ${data.user.apellido || ''}`.trim();
+        let businessName = '';
+        let cuit = '';
+        let phone = '';
+
+        try {
+          if (mappedRole === 'provider') {
+            const provProf = await api.getPrestadorProfile();
+            if (provProf) {
+              const u = provProf.user || provProf;
+              const org = provProf.organizacion || {};
+              if (u.nombre) firstName = u.nombre;
+              if (u.apellido) lastName = u.apellido;
+              if (u.nombre) nombreCompleto = `${u.nombre} ${u.apellido || ''}`.trim();
+              if (org.nombre || provProf.nombreEmpresa) businessName = org.nombre || provProf.nombreEmpresa;
+              if (org.cuit || provProf.cuitEmpresa) cuit = org.cuit || provProf.cuitEmpresa;
+              if (u.telefono || provProf.telefono) phone = u.telefono || provProf.telefono;
+            }
+          }
+        } catch (e) {
+          console.warn('Nota al cargar perfil detallado en login:', e);
+        }
+
         const loggedUser: User = {
           id: data.user.id,
-          name: `${data.user.nombre} ${data.user.apellido}`,
+          name: nombreCompleto || data.user.email.split('@')[0],
+          firstName: firstName || data.user.nombre || undefined,
+          lastName: lastName || data.user.apellido || undefined,
           email: data.user.email,
           role: mappedRole,
+          businessName: businessName || undefined,
+          cuit: cuit || undefined,
+          phone: phone || undefined,
           status: 'active',
         };
         
@@ -269,8 +319,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const registerProvider = async (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }): Promise<{ success: boolean; error?: string }> => {
     try {
       const nameParts = userData.name.trim().split(' ');
-      const nombre = nameParts[0] || '';
-      const apellido = nameParts.slice(1).join(' ') || '';
+      const nombre = userData.firstName || nameParts[0] || '';
+      const apellido = userData.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
       
       const payload = {
         nombre,
@@ -292,7 +342,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateProviderProfile = (id: string, updatedData: Partial<User>): { success: boolean; error?: string } => {
+  const updateProviderProfile = async (id: string, updatedData: Partial<User>): Promise<{ success: boolean; error?: string }> => {
     if (updatedData.email) {
       const emailTaken = users.some((u) => u.id !== id && u.email.toLowerCase() === updatedData.email!.toLowerCase());
       if (emailTaken) {
@@ -303,27 +353,91 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, ...updatedData } : u))
     );
-    
-    setCurrentUser((prev) => {
-      if (prev && prev.id === id) {
-        return { ...prev, ...updatedData };
-      }
-      return prev;
-    });
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (token) {
-      const parts = (updatedData.name || '').trim().split(' ');
-      const payload = {
-        nombre: parts[0] || undefined,
-        apellido: parts.slice(1).join(' ') || undefined,
-        telefono: updatedData.phone,
-        nombreEmpresa: updatedData.businessName,
-        cuitEmpresa: updatedData.cuit,
-      };
-      api.updatePrestadorProfile(payload).catch((err) => console.warn('Nota de actualización perfil prestador backend:', err));
+      try {
+        const parts = (updatedData.name || '').trim().split(' ');
+        const nombre = updatedData.firstName || parts[0] || undefined;
+        const apellido = updatedData.lastName || (parts.length > 1 ? parts.slice(1).join(' ') : undefined);
+        const telefono = updatedData.phone || undefined;
+        const nombreOrganizacion = updatedData.businessName || undefined;
+
+        let firstName = nombre;
+        let lastName = apellido;
+        let nombreCompleto = updatedData.name;
+        let phone = updatedData.phone;
+        let businessName = updatedData.businessName;
+        let cuit = updatedData.cuit;
+
+        if (currentUser?.role === 'provider') {
+          try {
+            const updatedProfile = await api.updatePrestadorProfile({
+              nombre,
+              apellido,
+              telefono,
+              nombreOrganizacion,
+            });
+            if (updatedProfile) {
+              const u = updatedProfile.user || updatedProfile;
+              const org = updatedProfile.organizacion || {};
+              if (u.nombre) {
+                firstName = u.nombre;
+                lastName = u.apellido || '';
+                nombreCompleto = `${u.nombre} ${u.apellido || ''}`.trim();
+              }
+              if (u.telefono) phone = u.telefono;
+              if (org.nombre) businessName = org.nombre;
+              if (org.cuit) cuit = org.cuit;
+            }
+          } catch (provErr: any) {
+            console.warn('Nota de actualización perfil prestador (intentando /user/profile):', provErr);
+            // Fallback a actualizar datos personales del usuario directamente
+            const updatedUser = await api.updateProfile({
+              nombre,
+              apellido,
+              telefono,
+            });
+            if (updatedUser && updatedUser.nombre) {
+              firstName = updatedUser.nombre;
+              lastName = updatedUser.apellido || '';
+              nombreCompleto = `${updatedUser.nombre} ${updatedUser.apellido || ''}`.trim();
+              if (updatedUser.telefono) phone = updatedUser.telefono;
+            }
+          }
+        } else {
+          const updatedUser = await api.updateProfile({
+            nombre,
+            apellido,
+            telefono,
+          });
+          if (updatedUser && updatedUser.nombre) {
+            firstName = updatedUser.nombre;
+            lastName = updatedUser.apellido || '';
+            nombreCompleto = `${updatedUser.nombre} ${updatedUser.apellido || ''}`.trim();
+            if (updatedUser.telefono) phone = updatedUser.telefono;
+          }
+        }
+
+        const newUserData: Partial<User> = {
+          ...updatedData,
+          name: nombreCompleto || updatedData.name,
+          firstName: firstName || updatedData.firstName,
+          lastName: lastName || updatedData.lastName,
+          phone: phone || updatedData.phone,
+          businessName: businessName || updatedData.businessName,
+          cuit: cuit || updatedData.cuit,
+        };
+        
+        setCurrentUser((prev) => (prev && prev.id === id ? { ...prev, ...newUserData } : prev));
+        return { success: true };
+      } catch (err: any) {
+        console.error('Error al actualizar perfil en el backend:', err);
+        return { success: false, error: err.message || 'Error al actualizar el perfil en el servidor.' };
+      }
     }
 
+    setCurrentUser((prev) => (prev && prev.id === id ? { ...prev, ...updatedData } : prev));
     return { success: true };
   };
 

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
+import { api } from '@/utils/api';
 import { 
   Save, 
   X, 
@@ -31,12 +32,36 @@ export default function ProviderProfilePage() {
   }, [currentUser, router]);
 
   // Form States
-  const [nombre, setNombre] = useState(() => currentUser?.name.split(' ')[0] || '');
-  const [apellido, setApellido] = useState(() => currentUser?.name.split(' ').slice(1).join(' ') || '');
+  const [nombre, setNombre] = useState(() => {
+    if (currentUser?.firstName) return currentUser.firstName;
+    return currentUser?.name ? currentUser.name.split(' ')[0] : '';
+  });
+  const [apellido, setApellido] = useState(() => {
+    if (currentUser?.lastName) return currentUser.lastName;
+    return currentUser?.name ? currentUser.name.split(' ').slice(1).join(' ') : '';
+  });
   const [email, setEmail] = useState(() => currentUser?.email || '');
   const [phone, setPhone] = useState(() => currentUser?.phone || '');
   const [cuit, setCuit] = useState(() => currentUser?.cuit || '');
   const [businessName, setBusinessName] = useState(() => currentUser?.businessName || '');
+
+  // Sincronizar estados cuando currentUser termine de cargar desde el backend
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.firstName !== undefined || currentUser.lastName !== undefined) {
+        setNombre(currentUser.firstName || '');
+        setApellido(currentUser.lastName || '');
+      } else {
+        const parts = (currentUser.name || '').trim().split(' ');
+        setNombre(parts[0] || '');
+        setApellido(parts.slice(1).join(' ') || '');
+      }
+      setEmail(currentUser.email || '');
+      setPhone(currentUser.phone || '');
+      setCuit(currentUser.cuit || '');
+      setBusinessName(currentUser.businessName || '');
+    }
+  }, [currentUser]);
 
   // Password States
   const [currentPassword, setCurrentPassword] = useState('');
@@ -62,9 +87,8 @@ export default function ProviderProfilePage() {
 
   // Check if form has modifications (dirty check)
   const isFormDirty = () => {
-    const parts = currentUser.name.split(' ');
-    const initialNombre = parts[0] || '';
-    const initialApellido = parts.slice(1).join(' ') || '';
+    const initialNombre = currentUser.firstName !== undefined ? (currentUser.firstName || '') : (currentUser.name || '').trim().split(' ')[0] || '';
+    const initialApellido = currentUser.lastName !== undefined ? (currentUser.lastName || '') : (currentUser.name || '').trim().split(' ').slice(1).join(' ') || '';
     
     return (
       nombre !== initialNombre ||
@@ -73,9 +97,8 @@ export default function ProviderProfilePage() {
       phone !== (currentUser.phone || '') ||
       cuit !== (currentUser.cuit || '') ||
       businessName !== (currentUser.businessName || '') ||
-      currentPassword !== '' ||
-      newPassword !== '' ||
-      confirmPassword !== ''
+      newPassword.trim() !== '' ||
+      confirmPassword.trim() !== ''
     );
   };
 
@@ -104,18 +127,14 @@ export default function ProviderProfilePage() {
       return false;
     }
 
-    // Password change validations
-    if (currentPassword || newPassword || confirmPassword) {
-      if (!currentPassword) {
-        showToast('Debes ingresar tu contraseña actual para realizar el cambio.', 'error');
-        return false;
-      }
-      if (currentUser.password && currentPassword !== currentUser.password) {
-        showToast('La contraseña actual ingresada es incorrecta.', 'error');
+    // Password change validations: SOLO se activa si el usuario ingresó algo en Nueva Contraseña
+    if (newPassword.trim() || confirmPassword.trim()) {
+      if (!currentPassword.trim()) {
+        showToast('Debes ingresar tu contraseña actual para confirmar el cambio de clave.', 'error');
         return false;
       }
       if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-        showToast('La nueva contraseña debe cumplir con los requisitos mínimos de seguridad.', 'error');
+        showToast('La nueva contraseña debe tener al menos 8 caracteres, una mayúscula y un número.', 'error');
         return false;
       }
       if (newPassword !== confirmPassword) {
@@ -138,9 +157,14 @@ export default function ProviderProfilePage() {
 
   const confirmDiscardChanges = () => {
     // Reset inputs
-    const parts = currentUser.name.split(' ');
-    setNombre(parts[0] || '');
-    setApellido(parts.slice(1).join(' ') || '');
+    if (currentUser.firstName !== undefined || currentUser.lastName !== undefined) {
+      setNombre(currentUser.firstName || '');
+      setApellido(currentUser.lastName || '');
+    } else {
+      const parts = (currentUser.name || '').trim().split(' ');
+      setNombre(parts[0] || '');
+      setApellido(parts.slice(1).join(' ') || '');
+    }
     setEmail(currentUser.email || '');
     setPhone(currentUser.phone || '');
     setCuit(currentUser.cuit || '');
@@ -165,31 +189,44 @@ export default function ProviderProfilePage() {
     }
   };
 
-  const confirmSaveProfile = () => {
+  const confirmSaveProfile = async () => {
     setShowSaveModal(false);
     
     const payload: Partial<typeof currentUser> = {
-      name: `${nombre.trim()} ${apellido.trim()}`,
+      name: `${nombre.trim()} ${apellido.trim()}`.trim(),
+      firstName: nombre.trim(),
+      lastName: apellido.trim(),
       email: email.trim(),
       phone: phone.trim(),
       cuit: cuit.trim(),
       businessName: businessName.trim(),
     };
 
-    if (newPassword) {
-      payload.password = newPassword;
+    const res = await updateProviderProfile(currentUser.id, payload);
+    if (!res.success) {
+      showToast(res.error || 'Error al guardar los cambios.', 'error');
+      return;
     }
 
-    const res = updateProviderProfile(currentUser.id, payload);
-    if (res.success) {
-      showToast('Perfil actualizado correctamente', 'success');
-      // Reset password fields
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+    // Si el usuario solicitó cambio de contraseña, se procesa en el backend
+    if (newPassword.trim()) {
+      try {
+        await api.changePassword({
+          passwordActual: currentPassword,
+          passwordNueva: newPassword,
+        });
+        showToast('Perfil y contraseña actualizados correctamente', 'success');
+      } catch (err: any) {
+        showToast(`Perfil actualizado, pero falló el cambio de contraseña: ${err.message}`, 'warning');
+      }
     } else {
-      showToast(res.error || 'Error al guardar los cambios.', 'error');
+      showToast('Perfil actualizado correctamente', 'success');
     }
+
+    // Reset password fields
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
   };
 
   // Handle Account Deletion
@@ -448,10 +485,15 @@ export default function ProviderProfilePage() {
 
         {/* Section 2: Password modification */}
         <div className="bg-white rounded-2xl border border-black/5 p-6 space-y-6 shadow-xs">
-          <h4 className="font-wixDisplay text-sm font-bold text-accentWine pb-2 border-b border-black/5 flex items-center">
-            <Lock className="h-4.5 w-4.5 mr-2 text-fillPrimary" />
-            <span>Seguridad y Cambio de Contraseña</span>
-          </h4>
+          <div className="pb-2 border-b border-black/5">
+            <h4 className="font-wixDisplay text-sm font-bold text-accentWine flex items-center">
+              <Lock className="h-4.5 w-4.5 mr-2 text-fillPrimary" />
+              <span>Seguridad y Cambio de Contraseña (Opcional)</span>
+            </h4>
+            <p className="text-[11px] text-textDark/60 mt-1">
+              Deja estos campos en blanco si solo deseas modificar tus datos personales o comerciales.
+            </p>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
@@ -462,6 +504,7 @@ export default function ProviderProfilePage() {
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-textDark/40" />
                 <input
                   type={showCurrentPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/30 focus:border-fillPrimary focus:bg-white focus:outline-none transition-all text-xs"
@@ -485,6 +528,7 @@ export default function ProviderProfilePage() {
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-textDark/40" />
                 <input
                   type={showNewPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/30 focus:border-fillPrimary focus:bg-white focus:outline-none transition-all text-xs"
@@ -508,6 +552,7 @@ export default function ProviderProfilePage() {
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-textDark/40" />
                 <input
                   type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/30 focus:border-fillPrimary focus:bg-white focus:outline-none transition-all text-xs"

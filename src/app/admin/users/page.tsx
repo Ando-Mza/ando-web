@@ -151,7 +151,7 @@ export default function UserManagementPage() {
   const isFormValid = isNameFilled && isEmailValid && isCuitValid && isPasswordFilledForCreate && isBusinessNameFilled;
 
   // 5. SAVE HANDLER
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) return;
 
@@ -189,7 +189,7 @@ export default function UserManagementPage() {
         updatedData.password = formPassword;
       }
 
-      const res = updateProviderProfile(selectedUser.id, updatedData);
+      const res = await updateProviderProfile(selectedUser.id, updatedData);
       if (res.success) {
         triggerToast(`Usuario "${formName}" actualizado exitosamente.`);
         setViewMode('list');

@@ -242,11 +242,11 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsLoading(false);
       const targetUser = users.find(u => u.email.toLowerCase() === recoveryUserEmail.toLowerCase());
       if (targetUser) {
-        const res = updateProviderProfile(targetUser.id, { password: resetPasswordVal });
+        const res = await updateProviderProfile(targetUser.id, { password: resetPasswordVal });
         if (res.success) {
           // Success reset
           alert('Contraseña actualizada con éxito. Ya puedes iniciar sesión.');

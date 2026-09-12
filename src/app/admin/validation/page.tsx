@@ -149,8 +149,8 @@ export default function ContentValidation() {
   };
 
   // 3. GDU USER (PROVIDER) VALIDATION HANDLERS
-  const handleApproveUser = (id: string, name: string) => {
-    const res = updateProviderProfile(id, { status: 'active' });
+  const handleApproveUser = async (id: string, name: string) => {
+    const res = await updateProviderProfile(id, { status: 'active' });
     if (res.success) {
       triggerToast(`La cuenta de "${name}" ha sido aprobada y activada.`);
     } else {
@@ -165,14 +165,14 @@ export default function ContentValidation() {
     setFeedbackError(false);
   };
 
-  const handleConfirmUserReject = () => {
+  const handleConfirmUserReject = async () => {
     if (!feedbackText.trim()) {
       setFeedbackError(true);
       return;
     }
 
     if (selectedUser) {
-      const res = updateProviderProfile(selectedUser.id, { status: 'inactive' });
+      const res = await updateProviderProfile(selectedUser.id, { status: 'inactive' });
       if (res.success) {
         setShowUserRejectModal(false);
         triggerToast(`Se rechazó el registro de "${selectedUser.name}" (CUIT: ${selectedUser.cuit}).`);
@@ -183,9 +183,9 @@ export default function ContentValidation() {
     }
   };
 
-  const handleToggleUserStatus = (id: string, name: string, currentStatus?: 'active' | 'pending' | 'inactive') => {
+  const handleToggleUserStatus = async (id: string, name: string, currentStatus?: 'active' | 'pending' | 'inactive') => {
     const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    const res = updateProviderProfile(id, { status: nextStatus });
+    const res = await updateProviderProfile(id, { status: nextStatus });
     if (res.success) {
       triggerToast(`La cuenta de "${name}" ha sido ${nextStatus === 'active' ? 'reactivada' : 'desactivada'}.`);
     } else {
