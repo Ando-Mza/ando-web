@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
-import { uploadFileToR2 } from '@/utils/api';
+import { uploadFileToR2, api } from '@/utils/api';
 import { POI } from '@/types';
 import { 
   UploadCloud, 
@@ -15,11 +15,32 @@ import {
   Plus,
   Store,
   ArrowLeft,
-  Mail,
   Phone,
   MapPin,
-  Edit2
+  Edit2,
+  Globe,
+  Compass
 } from 'lucide-react';
+
+function InstagramIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg 
+      viewBox="0 0 24 24" 
+      width="24" 
+      height="24" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      fill="none" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className}
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -40,10 +61,18 @@ export default function BusinessProfile() {
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
-  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [hours, setHours] = useState('');
+  const [website, setWebsite] = useState('');
+  const [instagram, setInstagram] = useState('');
   const [images, setImages] = useState<string[]>([]);
+
+  // Locations states
+  const [regions, setRegions] = useState<{ id: string; nombre: string }[]>([]);
+  const [departments, setDepartments] = useState<{ id: string; nombre: string; regionId: string; latitudCentro?: number; longitudCentro?: number }[]>([]);
+  const [zones, setZones] = useState<{ id: string; nombre: string; departamentoId: string }[]>([]);
+  const [regionId, setRegionId] = useState('');
+  const [departamentoId, setDepartamentoId] = useState('');
+  const [zonaId, setZonaId] = useState('');
 
   // Simulation states
   const [isUploading, setIsUploading] = useState(false);
@@ -56,6 +85,67 @@ export default function BusinessProfile() {
   const [toastType, setToastType] = useState<'success' | 'warning'>('success');
   const [showDiscardModal, setShowDiscardModal] = useState(false);
 
+  // Cargar regiones y departamentos desde el backend al montar
+  useEffect(() => {
+    async function loadLocations() {
+      try {
+        const [regs, deps] = await Promise.all([
+          api.getRegiones(),
+          api.getDepartamentos(),
+        ]);
+        if (Array.isArray(regs)) setRegions(regs);
+        if (Array.isArray(deps)) setDepartments(deps);
+      } catch (err) {
+        console.warn('Error al cargar regiones o departamentos:', err);
+      }
+    }
+    loadLocations();
+  }, []);
+
+  // Departamentos filtrados por la región seleccionada
+  const availableDepartments = regionId
+    ? departments.filter((d) => d.regionId === regionId)
+    : departments;
+
+  const handleRegionChange = (newRegionId: string) => {
+    setRegionId(newRegionId);
+    const validDeps = departments.filter((d) => d.regionId === newRegionId);
+    if (validDeps.length > 0) {
+      setDepartamentoId(validDeps[0].id);
+      if (validDeps[0].latitudCentro && validDeps[0].longitudCentro) {
+        setLat(validDeps[0].latitudCentro.toString());
+        setLng(validDeps[0].longitudCentro.toString());
+      }
+      api.getZonas(validDeps[0].id).then((z) => {
+        if (Array.isArray(z)) setZones(z);
+      }).catch(() => setZones([]));
+    } else {
+      setDepartamentoId('');
+      setZones([]);
+    }
+    setZonaId('');
+  };
+
+  const handleDepartmentChange = async (newDepId: string) => {
+    setDepartamentoId(newDepId);
+    const dep = departments.find((d) => d.id === newDepId);
+    if (dep && dep.latitudCentro && dep.longitudCentro) {
+      setLat(dep.latitudCentro.toString());
+      setLng(dep.longitudCentro.toString());
+    }
+    setZonaId('');
+    if (newDepId) {
+      try {
+        const loadedZones = await api.getZonas(newDepId);
+        if (Array.isArray(loadedZones)) setZones(loadedZones);
+      } catch (err) {
+        setZones([]);
+      }
+    } else {
+      setZones([]);
+    }
+  };
+
   // Get POIs belonging to the active provider
   const myPois = pois.filter((p) => 
     currentUser?.role === 'admin' || 
@@ -63,7 +153,7 @@ export default function BusinessProfile() {
     !p.createdBy
   );
 
-  // Derived validation states (calculated during render to prevent set-state-in-effect cascading renders)
+  // Validation states
   const validationErrors: string[] = [];
   const formatErrors: string[] = [];
 
@@ -71,20 +161,12 @@ export default function BusinessProfile() {
     if (!name.trim()) validationErrors.push('Nombre del negocio');
     if (!category.trim()) validationErrors.push('Categoría');
     if (!description.trim()) validationErrors.push('Descripción');
+    if (!regionId) validationErrors.push('Región turística');
+    if (!departamentoId) validationErrors.push('Departamento');
     if (!address.trim()) validationErrors.push('Dirección física');
     if (!lat.trim()) validationErrors.push('Latitud');
     if (!lng.trim()) validationErrors.push('Longitud');
-    if (!email.trim()) validationErrors.push('Email de contacto');
     if (!phone.trim()) validationErrors.push('Teléfono de contacto');
-    if (!hours.trim()) validationErrors.push('Horario de atención');
-
-    // Validate Email format
-    if (email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        formatErrors.push('El formato del Email es inválido (ej. negocio@ejemplo.com)');
-      }
-    }
 
     // Validate Phone format
     if (phone.trim()) {
@@ -121,12 +203,27 @@ export default function BusinessProfile() {
     setDescription('');
     const activeCats = categories.filter(c => c.enabled);
     setCategory(activeCats.length > 0 ? activeCats[0].name : 'Enoturismo');
+    const initialRegId = regions.length > 0 ? regions[0].id : '';
+    setRegionId(initialRegId);
+    const firstRegDeps = initialRegId ? departments.filter((d) => d.regionId === initialRegId) : [];
+    if (firstRegDeps.length > 0) {
+      setDepartamentoId(firstRegDeps[0].id);
+      setLat(firstRegDeps[0].latitudCentro ? firstRegDeps[0].latitudCentro.toString() : '-32.8900');
+      setLng(firstRegDeps[0].longitudCentro ? firstRegDeps[0].longitudCentro.toString() : '-68.8400');
+      api.getZonas(firstRegDeps[0].id).then((z) => {
+        if (Array.isArray(z)) setZones(z);
+      }).catch(() => setZones([]));
+    } else {
+      setDepartamentoId('');
+      setLat('-32.8900');
+      setLng('-68.8400');
+      setZones([]);
+    }
+    setZonaId('');
     setAddress('');
-    setLat('-32.8900');
-    setLng('-68.8400');
-    setEmail('');
     setPhone('');
-    setHours('');
+    setWebsite('');
+    setInstagram('');
     setImages([]);
     setSelectedPoi(null);
     setViewMode('create');
@@ -137,14 +234,26 @@ export default function BusinessProfile() {
     setName(poi.name);
     setDescription(poi.description);
     setCategory(poi.category);
+    setRegionId(poi.regionId || (regions[0]?.id || ''));
+    setDepartamentoId(poi.departamentoId || (departments[0]?.id || ''));
+    setZonaId(poi.zonaId || '');
     setAddress(poi.address);
     setLat(poi.location.lat.toString());
     setLng(poi.location.lng.toString());
-    setEmail(poi.email || '');
     setPhone(poi.phone || '');
-    // Horario: prefilled with mock hours or default placeholder
-    setHours(poi.address.includes('Cobos') ? 'Lunes a Sábado 09:00 a 19:30, Dom 10:00 a 14:00' : 'Lunes a Domingos 09:00 a 18:00');
-    setImages(poi.images);
+    setWebsite(poi.website || '');
+    setInstagram(poi.instagram || '');
+    const normalizedImages = Array.isArray(poi.images)
+      ? poi.images.map((img: any) => (typeof img === 'string' ? img : img?.url || '')).filter(Boolean)
+      : [];
+    setImages(normalizedImages);
+    if (poi.departamentoId) {
+      api.getZonas(poi.departamentoId).then((z) => {
+        if (Array.isArray(z)) setZones(z);
+      }).catch(() => setZones([]));
+    } else {
+      setZones([]);
+    }
     setViewMode('edit');
   };
 
@@ -154,9 +263,12 @@ export default function BusinessProfile() {
         name.trim() !== '' ||
         description.trim() !== '' ||
         address.trim() !== '' ||
-        email.trim() !== '' ||
+        regionId !== '' ||
+        departamentoId !== '' ||
+        zonaId !== '' ||
         phone.trim() !== '' ||
-        hours.trim() !== '' ||
+        website.trim() !== '' ||
+        instagram.trim() !== '' ||
         images.length > 0
       );
     } else if (viewMode === 'edit' && selectedPoi) {
@@ -164,11 +276,15 @@ export default function BusinessProfile() {
         name !== selectedPoi.name ||
         description !== selectedPoi.description ||
         category !== selectedPoi.category ||
+        regionId !== (selectedPoi.regionId || '') ||
+        departamentoId !== (selectedPoi.departamentoId || '') ||
+        zonaId !== (selectedPoi.zonaId || '') ||
         address !== selectedPoi.address ||
         lat !== selectedPoi.location.lat.toString() ||
         lng !== selectedPoi.location.lng.toString() ||
-        email !== (selectedPoi.email || '') ||
         phone !== (selectedPoi.phone || '') ||
+        website !== (selectedPoi.website || '') ||
+        instagram !== (selectedPoi.instagram || '') ||
         images !== selectedPoi.images
       );
     }
@@ -188,7 +304,7 @@ export default function BusinessProfile() {
     setViewMode('list');
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validationErrors.length > 0 || formatErrors.length > 0) {
       triggerToast('Por favor resuelva los errores del formulario antes de guardar.', 'warning');
@@ -199,34 +315,41 @@ export default function BusinessProfile() {
       name,
       description,
       category,
+      regionId,
+      departamentoId,
+      zonaId: zonaId || undefined,
       address,
       location: {
         lat: parseFloat(lat),
         lng: parseFloat(lng),
       },
       images,
-      email,
       phone,
+      website: website.trim() || undefined,
+      instagram: instagram.trim() || undefined,
     };
 
-    if (viewMode === 'create') {
-      addPOI(poiPayload);
-      triggerToast('¡Establecimiento registrado con éxito! Enviado a revisión por el administrador.');
-    } else if (viewMode === 'edit' && selectedPoi) {
-      const updatedPoi: POI = {
-        ...selectedPoi,
-        ...poiPayload,
-        status: 'pending', // Regla de negocio: pasa a revisión tras edición
-        updatedAt: new Date().toISOString(),
-      };
-      updatePOI(updatedPoi);
-      triggerToast('Establecimiento actualizado con éxito. Se ha enviado a revisión.');
+    try {
+      if (viewMode === 'create') {
+        await addPOI(poiPayload);
+        triggerToast('¡Establecimiento registrado con éxito! Enviado a revisión.');
+      } else if (viewMode === 'edit' && selectedPoi) {
+        const updatedPoi: POI = {
+          ...selectedPoi,
+          ...poiPayload,
+          status: 'pending', // Regla de negocio: pasa a revisión tras edición
+          updatedAt: new Date().toISOString(),
+        };
+        await updatePOI(updatedPoi);
+        triggerToast('Establecimiento actualizado con éxito. Se ha enviado a revisión.');
+      }
+      setViewMode('list');
+    } catch (err: any) {
+      triggerToast(err?.message || 'Error al guardar el negocio en el servidor.', 'warning');
     }
-
-    setViewMode('list');
   };
 
-  // Subida de imágenes reales desde el dispositivo a Cloudflare R2 (US-GIT-09)
+  // Subida de imágenes a Cloudflare R2
   const handleDeviceImageUpload = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
     if (files.length === 0) return;
@@ -244,15 +367,20 @@ export default function BusinessProfile() {
         const file = files[i];
         const uploadedUrl = await uploadFileToR2(file, (prog) => {
           const overallProgress = Math.round(((i + prog / 100) / files.length) * 100);
-          setUploadProgress(overallProgress);
+          setUploadProgress(Math.max(10, overallProgress));
         });
-        setImages((prev) => [...prev, uploadedUrl]);
+        if (uploadedUrl) {
+          setImages((prev) => [...prev, uploadedUrl]);
+        }
       }
-    } catch (err) {
-      console.error('Error al subir la imagen:', err);
+    } catch (err: any) {
+      alert(err.message || 'Error al subir la imagen');
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -265,9 +393,9 @@ export default function BusinessProfile() {
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+    if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
-    } else if (e.type === "dragleave") {
+    } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
   };
@@ -276,7 +404,6 @@ export default function BusinessProfile() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleDeviceImageUpload(e.dataTransfer.files);
     }
@@ -289,242 +416,272 @@ export default function BusinessProfile() {
   };
 
   return (
-    <div className="space-y-8 relative">
+    <div className="space-y-6">
       {/* Toast Notification */}
       {showToast && (
-        <div className={`fixed bottom-8 right-8 z-50 flex items-center space-x-2.5 text-white px-5 py-3.5 rounded-xl shadow-2xl border border-white/10 animate-slide-in max-w-md ${
-          toastType === 'success' ? 'bg-fillPrimary' : 'bg-orange-600'
-        }`}>
-          {toastType === 'success' ? (
-            <Check className="h-4.5 w-4.5 text-white flex-shrink-0" />
-          ) : (
-            <AlertTriangle className="h-4.5 w-4.5 text-white flex-shrink-0" />
-          )}
-          <span className="text-xs font-semibold leading-normal">{toastMessage}</span>
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5">
+          <div
+            className={`flex items-center space-x-3 px-5 py-3.5 rounded-xl shadow-xl text-sm font-semibold text-white ${
+              toastType === 'success' ? 'bg-[#2E7D32]' : 'bg-[#EF6C00]'
+            }`}
+          >
+            {toastType === 'success' ? (
+              <Check className="h-5 w-5 shrink-0" />
+            ) : (
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+            )}
+            <span>{toastMessage}</span>
+          </div>
         </div>
       )}
 
-      {/* Discard Changes Modal */}
+      {/* Discard Modal */}
       {showDiscardModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-black/5 animate-scale-up space-y-4">
-            <div className="flex items-center space-x-2.5 text-orange-600">
-              <AlertTriangle className="h-5 w-5" />
-              <h4 className="font-wixDisplay font-bold text-textDark">¿Descartar cambios?</h4>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-[#EF6C00]">
+              <AlertTriangle className="h-6 w-6" />
+              <h3 className="font-wixDisplay text-lg font-bold">¿Descartar cambios?</h3>
             </div>
-            <p className="text-xs text-textDark/70 leading-relaxed">
-              Tienes cambios no guardados en el formulario del negocio. Si sales ahora, todos los datos no guardados se perderán permanentemente.
+            <p className="text-sm text-textDark/70 leading-relaxed">
+              Tienes cambios sin guardar en el formulario. Si sales ahora, todos los datos ingresados se perderán permanentemente.
             </p>
-            <div className="flex space-x-2 justify-end pt-2">
+            <div className="flex justify-end space-x-3 pt-2">
               <button
                 type="button"
                 onClick={() => setShowDiscardModal(false)}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer"
+                className="px-4 py-2 border border-black/10 hover:bg-black/5 rounded-xl text-xs font-semibold text-textDark/80 transition-colors cursor-pointer"
               >
-                Seguir Editando
+                Continuar editando
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDiscard}
-                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/10 transition-colors cursor-pointer"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm"
               >
-                Descartar Cambios
+                Descartar cambios
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* -------------------- VIEW 1: MASTER LIST -------------------- */}
-      {viewMode === 'list' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h3 className="font-wixDisplay text-2xl font-bold text-fillPrimary">Mis negocios turísticos</h3>
-              <p className="text-sm text-textDark/70 mt-1">
-                Gestiona tus publicaciones, sube fotografías y verifica el estado de aprobación de tus locales en la aplicación.
-              </p>
-            </div>
-            <button
-              onClick={handleStartCreate}
-              className="flex items-center justify-center space-x-2 px-5 py-3 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer self-start sm:self-center"
-            >
-              <Plus className="h-4.5 w-4.5" />
-              <span>Registrar Nuevo Negocio</span>
-            </button>
-          </div>
-
-          {/* Grid of existing businesses */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {myPois.map((poi) => (
-              <div 
-                key={poi.id}
-                className="bg-white rounded-2xl border border-black/5 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
-              >
-                {/* Header Image / Cover */}
-                <div className="relative h-44 bg-bgPrimary border-b border-black/5 overflow-hidden">
-                  {poi.images && poi.images.length > 0 ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img 
-                      src={poi.images[0]} 
-                      alt={poi.name} 
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-textDark/35 text-xs font-semibold">
-                      <ImageIcon className="h-6 w-6 mr-1.5 opacity-60" /> Sin portada cargada
-                    </div>
-                  )}
-                  {/* Category Chip */}
-                  <span className="absolute top-3 left-3 bg-accentWine text-white px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-md">
-                    {poi.category}
-                  </span>
-                  
-                  {/* Status Badge */}
-                  <span className={`absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-md border ${
-                    poi.status === 'approved'
-                      ? 'bg-green-600 text-white border-green-500'
-                      : poi.status === 'pending'
-                      ? 'bg-yellow-500 text-textDark border-yellow-400'
-                      : poi.status === 'rejected'
-                      ? 'bg-red-600 text-white border-red-500'
-                      : 'bg-orange-600 text-white border-orange-500'
-                  }`}>
-                    {poi.status === 'approved' && 'Publicado'}
-                    {poi.status === 'pending' && 'En Revisión'}
-                    {poi.status === 'rejected' && 'Rechazado'}
-                    {poi.status === 'correction' && 'Cambios Solicitados'}
-                  </span>
-                </div>
-
-                {/* Content body */}
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <div className="space-y-2.5">
-                    <h4 className="font-wixDisplay text-lg font-bold text-textDark">{poi.name}</h4>
-                    <p className="text-xs text-textDark/60 line-clamp-2 leading-relaxed">
-                      {poi.description}
-                    </p>
-                  </div>
-
-                  <div className="pt-3.5 border-t border-black/5 space-y-2 text-[11px] text-textDark/75">
-                    <div className="flex items-center">
-                      <MapPin className="h-3.5 w-3.5 text-fillPrimary mr-2 flex-shrink-0" />
-                      <span className="truncate" title={poi.address}>{poi.address}</span>
-                    </div>
-                    {poi.email && (
-                      <div className="flex items-center">
-                        <Mail className="h-3.5 w-3.5 text-fillPrimary mr-2 flex-shrink-0" />
-                        <span className="truncate">{poi.email}</span>
-                      </div>
-                    )}
-                    {poi.phone && (
-                      <div className="flex items-center">
-                        <Phone className="h-3.5 w-3.5 text-fillPrimary mr-2 flex-shrink-0" />
-                        <span>{poi.phone}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {poi.status === 'rejected' && poi.feedback && (
-                    <div className="p-3 bg-red-50 rounded-xl border border-red-150 text-[10px] text-red-800 leading-relaxed font-mono">
-                      <strong>Motivo de rechazo:</strong> {poi.feedback}
-                    </div>
-                  )}
-                  {poi.status === 'correction' && poi.feedback && (
-                    <div className="p-3 bg-orange-50 rounded-xl border border-orange-150 text-[10px] text-orange-800 leading-relaxed font-mono">
-                      <strong>Corrección pedida:</strong> {poi.feedback}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => handleStartEdit(poi)}
-                    className="w-full py-2 bg-bgPrimary hover:bg-black/5 border border-black/5 text-textDark hover:text-accentWine font-bold rounded-lg text-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                    <span>Administrar Perfil</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {myPois.length === 0 && (
-              <div className="col-span-1 md:col-span-2 lg:col-span-3 bg-white border border-black/5 rounded-2xl py-12 flex flex-col items-center justify-center text-center p-6 space-y-3">
-                <Store className="h-10 w-10 text-textDark/30" />
-                <div>
-                  <h4 className="font-wixDisplay text-sm font-bold text-textDark">No tienes negocios cargados</h4>
-                  <p className="text-xs text-textDark/50 mt-1 max-w-sm leading-relaxed">
-                    Registra tu primer establecimiento turístico completando los datos comerciales obligatorios y subiendo fotos de tu local.
-                  </p>
-                </div>
-                <button
-                  onClick={handleStartCreate}
-                  className="px-4 py-2 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-lg text-xs shadow-md transition-transform hover:-translate-y-0.5 cursor-pointer"
-                >
-                  Comenzar Registro
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* -------------------- VIEW 2 & 3: FORM VIEW (CREATE & EDIT) -------------------- */}
-      {viewMode !== 'list' && (
-        <div className="space-y-6">
-          {/* Header row */}
-          <div className="flex items-center space-x-3 pb-4 border-b border-black/5">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-4">
+          {viewMode !== 'list' && (
             <button
               onClick={handleCancel}
-              className="p-2 hover:bg-black/5 rounded-xl text-textDark/60 transition-colors cursor-pointer"
-              title="Volver"
+              className="p-2 border border-black/10 hover:bg-black/5 rounded-xl text-textDark transition-colors cursor-pointer"
+              title="Volver a la lista"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <div>
-              <h3 className="font-wixDisplay text-xl font-bold text-accentWine">
-                {viewMode === 'create' ? 'Registrar Nuevo Negocio Turístico' : `Administrar: ${selectedPoi?.name}`}
-              </h3>
-              <p className="text-xs text-textDark/55 mt-0.5">
-                {viewMode === 'create' 
-                  ? 'Complete todos los campos obligatorios para registrar y enviar su local a validación.' 
-                  : 'Modifique los campos requeridos. Guardar enviará el local nuevamente a revisión administrativa.'}
-              </p>
-            </div>
+          )}
+          <div>
+            <h1 className="font-wixDisplay text-3xl font-extrabold text-fillPrimary">
+              {viewMode === 'list'
+                ? 'Mis Negocios'
+                : viewMode === 'create'
+                ? 'Nuevo Negocio Turístico'
+                : 'Editar Negocio Turístico'}
+            </h1>
+            <p className="text-sm text-textDark/60 mt-1">
+              {viewMode === 'list'
+                ? 'Gestiona la información de tus puntos de interés registrados en la plataforma Ando'
+                : 'Completa los campos obligatorios para registrar o actualizar tu establecimiento'}
+            </p>
           </div>
+        </div>
 
-          {/* Form and Image Columns Grid */}
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            {/* Left 2 columns: Form Inputs */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Validation errors warning */}
-              {(validationErrors.length > 0 || formatErrors.length > 0) && (
-                <div className="p-4 bg-orange-50 rounded-2xl border border-orange-150 flex items-start space-x-3 text-xs leading-relaxed text-orange-900 shadow-xs">
-                  <AlertTriangle className="h-4.5 w-4.5 text-orange-600 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    {validationErrors.length > 0 && (
-                      <p>
-                        <strong>Campos obligatorios vacíos:</strong> {validationErrors.join(', ')}.
-                      </p>
+        {viewMode === 'list' && (
+          <button
+            onClick={handleStartCreate}
+            className="flex items-center space-x-2 px-5 py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer self-start sm:self-auto"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Registrar Nuevo Negocio</span>
+          </button>
+        )}
+      </div>
+
+      {/* LIST VIEW */}
+      {viewMode === 'list' && (
+        <div className="space-y-6">
+          {myPois.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-black/5 p-12 text-center shadow-sm">
+              <div className="mx-auto w-16 h-16 rounded-full bg-fillPrimary/10 flex items-center justify-center text-fillPrimary mb-4">
+                <Store className="h-8 w-8" />
+              </div>
+              <h3 className="font-wixDisplay text-lg font-bold text-textDark mb-1">
+                No tienes negocios registrados
+              </h3>
+              <p className="text-sm text-textDark/60 max-w-md mx-auto mb-6">
+                Comienza registrando tu primer establecimiento turístico para que pueda ser validado por el administrador y publicado en la app.
+              </p>
+              <button
+                onClick={handleStartCreate}
+                className="inline-flex items-center space-x-2 px-6 py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Registrar Negocio</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {myPois.map((poi) => (
+                <div
+                  key={poi.id}
+                  className="bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all group"
+                >
+                  {/* Card Thumbnail */}
+                  <div className="relative h-48 bg-bgPrimary overflow-hidden">
+                    {poi.images && poi.images.length > 0 && (typeof poi.images[0] === 'string' ? poi.images[0] : (poi.images[0] as any)?.url) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={typeof poi.images[0] === 'string' ? poi.images[0] : (poi.images[0] as any)?.url}
+                        alt={poi.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-textDark/30">
+                        <ImageIcon className="h-10 w-10 mb-1" />
+                        <span className="text-[11px] font-semibold">Sin imagen</span>
+                      </div>
                     )}
-                    {formatErrors.map((err, i) => (
-                      <p key={i} className="font-semibold">• {err}</p>
-                    ))}
+                    
+                    {/* Status Badge */}
+                    <div className="absolute top-3 right-3">
+                      <span
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold shadow-sm backdrop-blur-md uppercase tracking-wider ${
+                          poi.status === 'approved'
+                            ? 'bg-green-500/90 text-white'
+                            : poi.status === 'rejected'
+                            ? 'bg-red-500/90 text-white'
+                            : poi.status === 'correction'
+                            ? 'bg-orange-500/90 text-white'
+                            : 'bg-yellow-500/90 text-white'
+                        }`}
+                      >
+                        {poi.status === 'approved'
+                          ? 'Aprobado'
+                          : poi.status === 'rejected'
+                          ? 'Rechazado'
+                          : poi.status === 'correction'
+                          ? 'Requiere Corrección'
+                          : 'En Revisión'}
+                      </span>
+                    </div>
+
+                    <div className="absolute bottom-3 left-3">
+                      <span className="px-2.5 py-1 rounded-lg bg-black/60 text-white text-[11px] font-bold backdrop-blur-md">
+                        {poi.category}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Content */}
+                  <div className="p-5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h3 className="font-wixDisplay text-lg font-bold text-textDark line-clamp-1 mb-1">
+                        {poi.name}
+                      </h3>
+                      <p className="text-xs text-textDark/60 line-clamp-2 leading-relaxed mb-4">
+                        {poi.description}
+                      </p>
+
+                      <div className="space-y-2 text-xs text-textDark/70 mb-4">
+                        <div className="flex items-start space-x-2">
+                          <MapPin className="h-4 w-4 text-fillPrimary shrink-0 mt-0.5" />
+                          <span className="line-clamp-1">{poi.address || 'Sin dirección'}</span>
+                        </div>
+                        {poi.phone && (
+                          <div className="flex items-center space-x-2">
+                            <Phone className="h-4 w-4 text-fillPrimary shrink-0" />
+                            <span>{poi.phone}</span>
+                          </div>
+                        )}
+                        {poi.website && (
+                          <div className="flex items-center space-x-2">
+                            <Globe className="h-4 w-4 text-fillPrimary shrink-0" />
+                            <a
+                              href={poi.website.startsWith('http') ? poi.website : `https://${poi.website}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-fillPrimary hover:underline line-clamp-1"
+                            >
+                              {poi.website}
+                            </a>
+                          </div>
+                        )}
+                        {poi.instagram && (
+                          <div className="flex items-center space-x-2">
+                            <InstagramIcon className="h-4 w-4 text-pink-600 shrink-0" />
+                            <span className="text-pink-600 font-semibold">{poi.instagram}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-black/5 flex items-center justify-end">
+                      <button
+                        onClick={() => handleStartEdit(poi)}
+                        className="flex items-center space-x-1.5 px-4 py-2 border border-black/10 hover:border-fillPrimary hover:text-fillPrimary text-textDark rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        <span>Editar Negocio</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              )}
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-              <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm">
-                <form onSubmit={handleSave} className="space-y-6">
-                  <h4 className="font-wixDisplay text-base font-bold text-textDark mb-4 pb-2 border-b border-black/5">Información Comercial</h4>
-                  
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      {/* CREATE / EDIT FORM VIEW */}
+      {viewMode !== 'list' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          {/* Main Form Left Column */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white rounded-2xl border border-black/5 p-6 sm:p-8 shadow-sm">
+              <form onSubmit={handleSave} className="space-y-6">
+                {/* Error Banner */}
+                {(validationErrors.length > 0 || formatErrors.length > 0) && (
+                  <div className="p-4 bg-orange-50/70 border border-orange-200/80 rounded-xl space-y-2">
+                    <div className="flex items-center space-x-2 text-orange-800 text-xs font-bold">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>Verifique los siguientes campos:</span>
+                    </div>
+                    <ul className="text-xs text-orange-700/90 list-disc list-inside space-y-0.5">
+                      {validationErrors.map((err, i) => (
+                        <li key={`v-${i}`}>El campo <strong>{err}</strong> es obligatorio.</li>
+                      ))}
+                      {formatErrors.map((err, i) => (
+                        <li key={`f-${i}`}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Section 1: General Info */}
+                <div>
+                  <h3 className="font-wixDisplay text-lg font-bold text-textDark mb-1">
+                    Información Principal
+                  </h3>
+                  <p className="text-xs text-textDark/60 mb-5">
+                    Datos básicos del establecimiento turístico para su identificación
+                  </p>
+
+                  <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Nombre del Negocio *
+                        Nombre del Negocio / Establecimiento *
                       </label>
                       <input
                         type="text"
-                        placeholder="Ej. Bodega Santa Julia"
+                        placeholder="Ej. Bodega Los Andes"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
@@ -535,15 +692,15 @@ export default function BusinessProfile() {
 
                     <div>
                       <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Categoría de Servicio *
+                        Categoría Principal *
                       </label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-bold"
+                        className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold cursor-pointer"
                       >
                         {categories
-                          .filter((cat) => cat.enabled)
+                          .filter((c) => c.enabled)
                           .map((cat) => (
                             <option key={cat.id} value={cat.name}>
                               {cat.name}
@@ -552,25 +709,85 @@ export default function BusinessProfile() {
                       </select>
                     </div>
 
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
+                        Descripción Detallada *
+                      </label>
+                      <textarea
+                        rows={4}
+                        placeholder="Describe la experiencia turística, historia, propuestas y características del lugar..."
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
+                          !description.trim() ? 'border-orange-300' : 'border-black/10'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Location */}
+                <div className="pt-6 border-t border-black/5">
+                  <h3 className="font-wixDisplay text-lg font-bold text-textDark mb-1">
+                    Ubicación Geográfica
+                  </h3>
+                  <p className="text-xs text-textDark/60 mb-5">
+                    Selecciona la región, departamento, zona y coordenadas exactas
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
+                        Región Turística *
+                      </label>
+                      <select
+                        value={regionId}
+                        onChange={(e) => handleRegionChange(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold cursor-pointer"
+                      >
+                        <option value="" disabled>Seleccione una región</option>
+                        {regions.map((reg) => (
+                          <option key={reg.id} value={reg.id}>
+                            {reg.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
+                        Departamento *
+                      </label>
+                      <select
+                        value={departamentoId}
+                        onChange={(e) => handleDepartmentChange(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold cursor-pointer"
+                      >
+                        <option value="" disabled>Seleccione un departamento</option>
+                        {availableDepartments.map((dep) => (
+                          <option key={dep.id} value={dep.id}>
+                            {dep.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Descripción General (Máx. 500 caract.) *
+                        Zona Turística (Opcional)
                       </label>
-                      <div className="relative">
-                        <textarea
-                          rows={4}
-                          maxLength={500}
-                          placeholder="Describe la propuesta turística, productos principales o servicios..."
-                          value={description}
-                          onChange={(e) => setDescription(e.target.value)}
-                          className={`w-full px-4 py-3 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm leading-relaxed ${
-                            !description.trim() ? 'border-orange-300' : 'border-black/10'
-                          }`}
-                        />
-                        <span className="absolute bottom-3 right-3 text-[10px] text-textDark/40 font-bold">
-                          {description.length} / 500
-                        </span>
-                      </div>
+                      <select
+                        value={zonaId}
+                        onChange={(e) => setZonaId(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold cursor-pointer"
+                      >
+                        <option value="">Sin zona específica / General del departamento</option>
+                        {zones.map((zone) => (
+                          <option key={zone.id} value={zone.id}>
+                            {zone.nombre}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="sm:col-span-2">
@@ -579,7 +796,7 @@ export default function BusinessProfile() {
                       </label>
                       <input
                         type="text"
-                        placeholder="Calle, Número, Departamento, Provincia"
+                        placeholder="Calle, Número, Localidad"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                         className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
@@ -590,11 +807,11 @@ export default function BusinessProfile() {
 
                     <div>
                       <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Latitud Geográfica *
+                        Latitud *
                       </label>
                       <input
                         type="text"
-                        placeholder="Ej. -32.8894"
+                        placeholder="Ej. -32.8900"
                         value={lat}
                         onChange={(e) => setLat(e.target.value)}
                         className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-mono font-semibold ${
@@ -605,11 +822,11 @@ export default function BusinessProfile() {
 
                     <div>
                       <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Longitud Geográfica *
+                        Longitud *
                       </label>
                       <input
                         type="text"
-                        placeholder="Ej. -68.8681"
+                        placeholder="Ej. -68.8400"
                         value={lng}
                         onChange={(e) => setLng(e.target.value)}
                         className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-mono font-semibold ${
@@ -618,149 +835,167 @@ export default function BusinessProfile() {
                       />
                     </div>
                   </div>
+                </div>
 
-                  <h4 className="font-wixDisplay text-base font-bold text-textDark mt-8 mb-4 pb-2 border-b border-black/5">Contacto y Horarios</h4>
-                  
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Email de Contacto *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ej. contacto@nonegocio.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
-                          !email.trim() ? 'border-orange-300' : 'border-black/10'
-                        }`}
-                      />
-                    </div>
+                {/* Section 3: Contact & Social Presence */}
+                <div className="pt-6 border-t border-black/5">
+                  <h3 className="font-wixDisplay text-lg font-bold text-textDark mb-1">
+                    Contacto y Presencia Digital
+                  </h3>
+                  <p className="text-xs text-textDark/60 mb-5">
+                    Información para que los turistas puedan comunicarse y acceder a tus redes
+                  </p>
 
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
                       <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
                         Teléfono de Contacto *
                       </label>
-                      <input
-                        type="text"
-                        placeholder="Ej. +54 261 4123456"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
-                          !phone.trim() ? 'border-orange-300' : 'border-black/10'
-                        }`}
-                      />
+                      <div className="relative">
+                        <Phone className="absolute left-3.5 top-3 h-4 w-4 text-textDark/40" />
+                        <input
+                          type="text"
+                          placeholder="Ej. +54 261 4123456"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className={`w-full pl-10 pr-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
+                            !phone.trim() ? 'border-orange-300' : 'border-black/10'
+                          }`}
+                        />
+                      </div>
                     </div>
 
-                    <div className="sm:col-span-2">
+                    <div>
                       <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Horario de Atención de Muestra *
+                        Sitio Web (Opcional)
                       </label>
-                      <input
-                        type="text"
-                        placeholder="Ej. Lunes a Viernes de 09:00 a 18:00 hs"
-                        value={hours}
-                        onChange={(e) => setHours(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
-                          !hours.trim() ? 'border-orange-300' : 'border-black/10'
-                        }`}
-                      />
+                      <div className="relative">
+                        <Globe className="absolute left-3.5 top-3 h-4 w-4 text-textDark/40" />
+                        <input
+                          type="text"
+                          placeholder="Ej. https://miestablecimiento.com"
+                          value={website}
+                          onChange={(e) => setWebsite(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
+                        Instagram (Opcional)
+                      </label>
+                      <div className="relative">
+                        <InstagramIcon className="absolute left-3.5 top-3 h-4 w-4 text-textDark/40" />
+                        <input
+                          type="text"
+                          placeholder="Ej. @miestablecimiento"
+                          value={instagram}
+                          onChange={(e) => setInstagram(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold"
+                        />
+                      </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Submit and Cancel Tools */}
-                  <div className="pt-6 border-t border-black/5 flex space-x-3 justify-end">
-                    <button
-                      type="button"
-                      onClick={handleCancel}
-                      className="px-5 py-2.5 border border-black/10 hover:bg-black/5 text-textDark/75 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={validationErrors.length > 0 || formatErrors.length > 0}
-                      className="flex items-center space-x-2 px-6 py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none"
-                    >
-                      <Save className="h-4 w-4" />
-                      <span>{viewMode === 'create' ? 'Registrar Negocio' : 'Guardar Cambios'}</span>
-                    </button>
-                  </div>
-                </form>
-              </div>
+                {/* Submit & Cancel Buttons */}
+                <div className="pt-6 border-t border-black/5 flex space-x-3 justify-end">
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="px-5 py-2.5 border border-black/10 hover:bg-black/5 text-textDark/75 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={validationErrors.length > 0 || formatErrors.length > 0}
+                    className="flex items-center space-x-2 px-6 py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none"
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>{viewMode === 'create' ? 'Registrar Negocio' : 'Guardar Cambios'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
+          </div>
 
-            {/* Right Column: R2 Drag & Drop Multimedia */}
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm space-y-6">
-                <div>
-                  <h4 className="font-wixDisplay text-base font-bold text-textDark">Galería de imágenes</h4>
-                  <p className="text-xs text-textDark/60 mt-0.5">Gestiona las fotografías oficiales del negocio</p>
+          {/* Right Column: Image Uploader & Media */}
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm space-y-6">
+              <div>
+                <h4 className="font-wixDisplay text-base font-bold text-textDark">Galería de imágenes</h4>
+                <p className="text-xs text-textDark/60 mt-0.5">Gestiona las fotografías oficiales del negocio</p>
+              </div>
+
+              {/* Hidden File Input for Device Filesystem */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleFileInputChange}
+              />
+
+              {/* Drag and Drop Zone */}
+              <div 
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center space-y-2 ${
+                  dragActive 
+                    ? 'border-fillPrimary bg-fillPrimary/5 scale-[1.01]' 
+                    : 'border-black/10 hover:border-fillPrimary/60 bg-bgPrimary/40 hover:bg-bgPrimary/60'
+                }`}
+              >
+                <UploadCloud className="h-8 w-8 text-fillPrimary/70" />
+                <div className="text-xs">
+                  <p className="font-bold text-textDark/80">Arrastra fotos de tu dispositivo aquí o haz clic para explorar</p>
+                  <p className="text-[10px] text-textDark/50 mt-1">Soporta PNG, JPG, WEBP (Máx. {generalParams.maxImagesPerPOI} imágenes)</p>
                 </div>
+              </div>
 
-                {/* Hidden File Input for Device Filesystem */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileInputChange}
-                />
-
-                {/* Drag and Drop Zone (US-GIT-09) */}
-                <div 
-                  onDragEnter={handleDrag}
-                  onDragOver={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center space-y-2 ${
-                    dragActive 
-                      ? 'border-fillPrimary bg-fillPrimary/5 scale-[1.01]' 
-                      : 'border-black/10 hover:border-fillPrimary/60 bg-bgPrimary/40 hover:bg-bgPrimary/60'
-                  }`}
-                >
-                  <UploadCloud className="h-8 w-8 text-fillPrimary/70" />
-                  <div className="text-xs">
-                    <p className="font-bold text-textDark/80">Arrastra fotos de tu dispositivo aquí o haz clic para explorar</p>
-                    <p className="text-[10px] text-textDark/50 mt-1">Soporta PNG, JPG, WEBP (Máx. {generalParams.maxImagesPerPOI} imágenes)</p>
+              {/* Uploading progress animation */}
+              {isUploading && (
+                <div className="space-y-2 bg-bgPrimary/60 p-3 rounded-lg border border-black/5">
+                  <div className="flex justify-between items-center text-[10px] font-bold">
+                    <span className="flex items-center text-textDark/70">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-fillPrimary mr-1.5" />
+                      Subiendo imágenes...
+                    </span>
+                    <span className="text-fillPrimary">{uploadProgress}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-black/5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-fillPrimary rounded-full transition-all duration-150"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
                   </div>
                 </div>
+              )}
 
-                {/* Uploading progress animation */}
-                {isUploading && (
-                  <div className="space-y-2 bg-bgPrimary/60 p-3 rounded-lg border border-black/5">
-                    <div className="flex justify-between items-center text-[10px] font-bold">
-                      <span className="flex items-center text-textDark/70">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-fillPrimary mr-1.5" />
-                        Subiendo imágenes...
-                      </span>
-                      <span className="text-fillPrimary">{uploadProgress}%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-black/5 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-fillPrimary rounded-full transition-all duration-150"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Uploaded Images Grid */}
-                <div className="space-y-3">
-                  <span className="text-xs font-bold text-textDark/60 block">Imágenes Guardadas ({images.length} / {generalParams.maxImagesPerPOI})</span>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    {images.map((imgUrl, index) => (
+              {/* Uploaded Images Grid */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-textDark/60 block">
+                  Imágenes Guardadas ({images.length} / {generalParams.maxImagesPerPOI})
+                </span>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  {images.map((imgUrl, index) => {
+                    const src = typeof imgUrl === 'string' ? imgUrl : (imgUrl as any)?.url;
+                    return (
                       <div key={index} className="group relative h-24 rounded-lg overflow-hidden border border-black/5 bg-bgPrimary">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={imgUrl}
+                          src={src}
                           alt={`POI Image ${index + 1}`}
                           className="h-full w-full object-cover transition-transform group-hover:scale-105"
                         />
-                        {/* Hover delete button (US-GIT-11) */}
+                        {/* Hover delete button */}
                         <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <button
                             type="button"
@@ -775,15 +1010,15 @@ export default function BusinessProfile() {
                           </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
 
-                    {images.length === 0 && (
-                      <div className="col-span-2 border border-black/5 rounded-lg py-6 flex flex-col items-center justify-center text-textDark/30 text-xs">
-                        <ImageIcon className="h-5 w-5 mb-1" />
-                        <span>No hay imágenes cargadas aún</span>
-                      </div>
-                    )}
-                  </div>
+                  {images.length === 0 && (
+                    <div className="col-span-2 border border-black/5 rounded-lg py-6 flex flex-col items-center justify-center text-textDark/30 text-xs">
+                      <ImageIcon className="h-5 w-5 mb-1" />
+                      <span>No hay imágenes cargadas aún</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
