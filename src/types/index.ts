@@ -122,3 +122,12 @@ export interface ValidationState {
   allowedTransitions: string[]; // IDs de estados destinos válidos
 }
 
+export interface AdminDashboardMetrics {
+  totalPois: number;
+  aprobados: number;
+  pendientes: number;
+  rechazados: number;
+  categoriesCount: Record<string, number>;
+  logs: AuditLog[];
+}
+

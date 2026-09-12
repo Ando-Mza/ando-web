@@ -15,19 +15,14 @@ import {
 import Link from 'next/link';
 
 export default function AdminDashboard() {
-  const { pois, logs, integrations, currentUser } = useApp();
+  const { adminMetrics, logs, integrations, currentUser } = useApp();
 
-  // Calcular métricas rápidas
-  const totalPois = pois.length;
-  const pendingValidation = pois.filter(p => p.status === 'pending').length;
-  const approvedPois = pois.filter(p => p.status === 'approved').length;
+  // Métricas reales y consolidadas obtenidas del endpoint dedicado GET /poi/admin/metricas
+  const totalPois = adminMetrics?.totalPois ?? 0;
+  const pendingValidation = adminMetrics?.pendientes ?? 0;
+  const approvedPois = adminMetrics?.aprobados ?? 0;
   const activeIntegrations = integrations.filter(i => i.enabled).length;
-
-  // Contar por categorías para mostrar en el desglose
-  const categoriesCount = pois.reduce((acc: { [key: string]: number }, poi) => {
-    acc[poi.category] = (acc[poi.category] || 0) + 1;
-    return acc;
-  }, {});
+  const categoriesCount = adminMetrics?.categoriesCount ?? {};
 
   return (
     <div className="space-y-8">
@@ -167,10 +162,24 @@ export default function AdminDashboard() {
                         <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                           log.action === 'approve' 
                             ? 'bg-green-50 text-green-700 border border-green-200' 
-                            : 'bg-red-50 text-red-700 border border-red-200'
+                            : log.action === 'reject'
+                            ? 'bg-red-50 text-red-700 border border-red-200'
+                            : 'bg-amber-100 text-amber-900 border border-amber-300'
                         }`}>
-                          {log.action === 'approve' ? <CheckCircle className="h-3 w-3 mr-0.5" /> : <XCircle className="h-3 w-3 mr-0.5" />}
-                          <span>{log.action === 'approve' ? 'Aprobado' : 'Rechazado'}</span>
+                          {log.action === 'approve' ? (
+                            <CheckCircle className="h-3 w-3 mr-0.5" />
+                          ) : log.action === 'reject' ? (
+                            <XCircle className="h-3 w-3 mr-0.5" />
+                          ) : (
+                            <AlertCircle className="h-3 w-3 mr-0.5 text-amber-600" />
+                          )}
+                          <span>
+                            {log.action === 'approve'
+                              ? 'Aprobado'
+                              : log.action === 'reject'
+                              ? 'Rechazado'
+                              : 'Corrección'}
+                          </span>
                         </span>
                       </td>
                       <td className="py-3.5 px-3 text-textDark/70">{log.adminName}</td>
