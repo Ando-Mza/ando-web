@@ -55,9 +55,9 @@ interface AppContextProps {
   deleteProviderAccount: (id: string, options?: { passwordActual?: string; motivo?: string; detalle?: string }) => Promise<{ success: boolean; error?: string }>;
   adminCreateUser: (userData: Omit<User, 'id'> & { password?: string }) => Promise<{ success: boolean; error?: string }>;
   adminDeleteUser: (id: string) => { success: boolean };
-  approvePOI: (id: string, adminName: string) => void;
-  rejectPOI: (id: string, adminName: string, feedback: string) => void;
-  requestCorrectionPOI: (id: string, adminName: string, feedback: string) => void;
+  approvePOI: (id: string, adminName: string) => Promise<{ success: boolean; error?: string }>;
+  rejectPOI: (id: string, adminName: string, feedback: string) => Promise<{ success: boolean; error?: string }>;
+  requestCorrectionPOI: (id: string, adminName: string, feedback: string) => Promise<{ success: boolean; error?: string }>;
   deletePOIImage: (poiId: string, imageUrl: string, adminName: string) => void;
   updateGeneralParams: (params: GeneralParams) => void;
   resetGeneralParams: () => void;
@@ -65,8 +65,8 @@ interface AppContextProps {
   updateIntegration: (integration: Integration) => void;
   testIntegrationConnection: (id: string) => Promise<boolean>;
   updateTranslation: (lang: string, key: string, value: string) => void;
-  addPOI: (poi: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => void;
-  updatePOI: (poi: POI) => void;
+  addPOI: (poi: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => Promise<{ success: boolean; id?: string; error?: string }>;
+  updatePOI: (poi: POI) => Promise<{ success: boolean; error?: string }>;
   loadSchedulesForPoi: (poiId: string) => Promise<void>;
   saveSchedules: (poiId: string, newSchedules: Schedule[]) => Promise<{ success: boolean; error?: string }>;
   addCategory: (category: Omit<Category, 'id'>) => void;
@@ -133,15 +133,22 @@ function mapBackendPoi(p: any): POI {
 
   // Extracción robusta de nombre de categoría
   let catName = 'General';
+  let catIds: string[] = [];
   if (Array.isArray(p.categorias) && p.categorias.length > 0) {
     const firstCat = p.categorias[0];
     catName = typeof firstCat === 'string' ? firstCat : (firstCat?.nombre || firstCat?.categoria?.nombre || 'General');
+    catIds = p.categorias.map((c: any) => (typeof c === 'string' ? c : (c.id || c.categoriaId))).filter(Boolean);
   } else if (Array.isArray(p.categoriaPois) && p.categoriaPois.length > 0) {
     catName = p.categoriaPois[0]?.categoria?.nombre || 'General';
+    catIds = p.categoriaPois.map((cp: any) => cp.categoriaId || cp.categoria?.id).filter(Boolean);
   } else if (p.categoria) {
     catName = typeof p.categoria === 'object' ? (p.categoria?.nombre || 'General') : String(p.categoria);
+    if (typeof p.categoria === 'object' && p.categoria.id) catIds = [p.categoria.id];
   } else if (p.categoriaNombre) {
     catName = p.categoriaNombre;
+  }
+  if (Array.isArray(p.categoriaIds) && p.categoriaIds.length > 0) {
+    catIds = p.categoriaIds;
   }
 
   // Extracción robusta de imágenes
@@ -162,11 +169,24 @@ function mapBackendPoi(p: any): POI {
   const rawStatus = typeof p.estado === 'object' ? (p.estado?.nombre || p.estado?.name || '') : (p.estado || p.estadoNombre || p.status || '');
   const mappedStatus = mapBackendStatusToFrontend(rawStatus);
 
+  // Conteo de validaciones y reportes comunitarios
+  const confirmaciones = p.resumenComunitario?.confirmaciones ?? (
+    Array.isArray(p.validaciones)
+      ? p.validaciones.filter((v: any) => v.tipoValidacion === 'confirmacion' || v.tipoValidacion === 'CONFIRMACION').length
+      : 0
+  );
+  const reportes = p.resumenComunitario?.reportes ?? (
+    Array.isArray(p.validaciones)
+      ? p.validaciones.filter((v: any) => v.tipoValidacion === 'reporte' || v.tipoValidacion === 'REPORTE').length
+      : 0
+  );
+
   return {
     id: p.id || '',
     name: p.nombre || p.name || 'Sin nombre',
     description: p.descripcion || p.description || '',
     category: catName,
+    categoriaIds: catIds,
     address: p.direccion || p.address || '',
     location: {
       lat: p.latitud !== undefined && p.latitud !== null ? Number(p.latitud) : -32.8894,
@@ -182,6 +202,29 @@ function mapBackendPoi(p: any): POI {
     clicksCount: p.clicksCount || p.clics || 0,
     rating: p.rating || p.puntuacionPromedio || undefined,
     reviewsCount: p.reviewsCount || p.cantidadReviews || undefined,
+
+    // Datos geográficos y comerciales CYN-02 & CYN-05
+    organizacionId: p.organizacionId || p.organizacion?.id,
+    organizacionNombre: p.organizacion?.nombre || p.nombreEmpresa,
+    departamentoId: p.departamentoId || p.departamento?.id,
+    regionId: p.regionId || p.region?.id,
+    zonaId: p.zonaId || p.zona?.id,
+    departamentoNombre: p.departamento?.nombre,
+    regionNombre: p.region?.nombre,
+    zonaNombre: p.zona?.nombre,
+    website: p.website || '',
+    instagram: p.instagram || '',
+    duracionEstimada: p.duracionEstimada ? Number(p.duracionEstimada) : undefined,
+    precioMin: p.precioMin !== undefined && p.precioMin !== null ? Number(p.precioMin) : undefined,
+    precioMax: p.precioMax !== undefined && p.precioMax !== null ? Number(p.precioMax) : undefined,
+    fuente: p.fuente || 'prestador',
+    horarios: p.horarios || [],
+    creadoPorNombre: p.creadoPor ? `${p.creadoPor.nombre || ''} ${p.creadoPor.apellido || ''}`.trim() : (p.usuarioNombre || undefined),
+    creadoPorEmail: p.creadoPor?.email || p.usuarioEmail,
+    validacionesCount: confirmaciones,
+    reportesCount: reportes,
+    validaciones: p.validaciones || [],
+    revisiones: p.revisiones || [],
   };
 }
 
@@ -777,101 +820,134 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { success: true };
   };
 
-  const approvePOI = async (id: string, adminName: string) => {
+  const approvePOI = async (id: string, adminName: string): Promise<{ success: boolean; error?: string }> => {
+    const target = pois.find((p) => p.id === id);
+    if (!target) {
+      return { success: false, error: 'Registro no encontrado en el sistema.' };
+    }
+
+    // Regla de negocio y Criterio de Aceptación 48 (CYN-05):
+    // "El Administrador intenta aprobar un registro con datos obligatorios incompletos:
+    // Que el sistema bloquee la aprobación y muestre el mensaje 'No se puede aprobar un registro con información obligatoria incompleta'"
+    const isMissingMandatory =
+      !target.name?.trim() ||
+      !target.description?.trim() ||
+      !target.address?.trim() ||
+      !target.departamentoId ||
+      !target.regionId;
+
+    if (isMissingMandatory) {
+      return {
+        success: false,
+        error: 'No se puede aprobar un registro con información obligatoria incompleta',
+      };
+    }
+
+    try {
+      // Usar el endpoint específico de aprobación formal del admin
+      await api.aprobarPoi(id);
+    } catch (err: any) {
+      console.warn('Error al aprobar POI en backend:', err);
+      return {
+        success: false,
+        error: err.message || 'No se pudo aprobar el registro en el servidor.',
+      };
+    }
+
     setPois((prev) =>
       prev.map((poi) => (poi.id === id ? { ...poi, status: 'approved', feedback: undefined } : poi))
     );
 
-    const target = pois.find((p) => p.id === id);
-    try {
-      // Usar el endpoint específico de aprobación del admin
-      await api.aprobarPoi(id);
-    } catch (err) {
-      console.warn('Error al aprobar POI en backend:', err);
-      // Fallback al endpoint genérico
-      try {
-        await api.updatePoiStatus(id, 'aprobado');
-      } catch (e) {
-        console.warn('Error en fallback approvePoiStatus:', e);
-      }
-    }
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      poiId: id,
+      poiName: target.name,
+      action: 'approve',
+      adminName,
+      comment: 'POI aprobado formalmente para su publicación en catálogo y mapa.',
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
 
-    if (target) {
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: id,
-        poiName: target.name,
-        action: 'approve',
-        adminName,
-        comment: 'POI aprobado para su publicación.',
-        timestamp: new Date().toISOString(),
-      };
-      setLogs((prev) => [newLog, ...prev]);
-    }
+    return { success: true };
   };
 
-  const rejectPOI = async (id: string, adminName: string, feedback: string) => {
-    setPois((prev) =>
-      prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected', feedback } : poi))
-    );
+  const rejectPOI = async (id: string, adminName: string, feedback: string): Promise<{ success: boolean; error?: string }> => {
+    if (!feedback || !feedback.trim()) {
+      return { success: false, error: 'El motivo del rechazo es obligatorio.' };
+    }
 
     const target = pois.find((p) => p.id === id);
+    if (!target) {
+      return { success: false, error: 'Registro no encontrado.' };
+    }
+
     try {
       // Usar el endpoint específico de rechazo del admin
-      await api.rechazarPoi(id, feedback);
-    } catch (err) {
+      await api.rechazarPoi(id, feedback.trim());
+    } catch (err: any) {
       console.warn('Error al rechazar POI en backend:', err);
-      try {
-        await api.updatePoiStatus(id, 'rechazado');
-      } catch (e) {
-        console.warn('Error en fallback rejectPoiStatus:', e);
-      }
-    }
-
-    if (target) {
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: id,
-        poiName: target.name,
-        action: 'reject',
-        adminName,
-        comment: feedback,
-        timestamp: new Date().toISOString(),
+      return {
+        success: false,
+        error: err.message || 'Error al procesar el rechazo en el servidor.',
       };
-      setLogs((prev) => [newLog, ...prev]);
     }
-  };
 
-  const requestCorrectionPOI = async (id: string, adminName: string, feedback: string) => {
     setPois((prev) =>
-      prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction', feedback } : poi))
+      prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected', feedback: feedback.trim() } : poi))
     );
 
-    const target = pois.find((p) => p.id === id);
-    try {
-      // Usar el endpoint específico de corrección del admin
-      await api.solicitarCorreccionPoi(id, feedback);
-    } catch (err) {
-      console.warn('Error al solicitar corrección de POI en backend:', err);
-      try {
-        await api.updatePoiStatus(id, 'pendiente');
-      } catch (e) {
-        console.warn('Error en fallback correctionPoiStatus:', e);
-      }
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      poiId: id,
+      poiName: target.name,
+      action: 'reject',
+      adminName,
+      comment: feedback.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
+
+    return { success: true };
+  };
+
+  const requestCorrectionPOI = async (id: string, adminName: string, feedback: string): Promise<{ success: boolean; error?: string }> => {
+    if (!feedback || !feedback.trim()) {
+      return { success: false, error: 'Las observaciones de corrección son obligatorias.' };
     }
 
-    if (target) {
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: id,
-        poiName: target.name,
-        action: 'correction',
-        adminName,
-        comment: feedback,
-        timestamp: new Date().toISOString(),
-      };
-      setLogs((prev) => [newLog, ...prev]);
+    const target = pois.find((p) => p.id === id);
+    if (!target) {
+      return { success: false, error: 'Registro no encontrado.' };
     }
+
+    try {
+      // Usar el endpoint específico de solicitud de corrección del admin
+      await api.solicitarCorreccionPoi(id, feedback.trim());
+    } catch (err: any) {
+      console.warn('Error al solicitar corrección de POI en backend:', err);
+      return {
+        success: false,
+        error: err.message || 'Error al enviar observaciones de corrección al servidor.',
+      };
+    }
+
+    setPois((prev) =>
+      prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction', feedback: feedback.trim() } : poi))
+    );
+
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      poiId: id,
+      poiName: target.name,
+      action: 'correction',
+      adminName,
+      comment: feedback.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
+
+    return { success: true };
   };
 
   const deletePOIImage = async (poiId: string, imageUrl: string, adminName: string) => {
@@ -986,66 +1062,107 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  const addPOI = async (poiData: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => {
-    const newPOI: POI = {
-      ...poiData,
-      id: `poi-${Date.now()}`,
-      status: 'pending',
-      createdBy: currentUser?.id || '',
-      updatedAt: new Date().toISOString(),
-    };
-    setPois((prev) => [...prev, newPOI]);
-
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-    if (token) {
-      try {
-        const payload = {
-          nombre: poiData.name,
-          descripcion: poiData.description,
-          direccion: poiData.address,
-          latitud: poiData.location.lat,
-          longitud: poiData.location.lng,
-          telefono: poiData.phone,
-          emailContacto: poiData.email,
-          imagenes: poiData.images,
-          imagenPrincipalUrl: poiData.images?.[0] || '',
-        };
-        const created = await api.createPoi(payload);
-        // Actualizar el ID local con el ID real del backend
-        if (created?.id) {
-          setPois((prev) =>
-            prev.map((p) => (p.id === newPOI.id ? { ...p, id: created.id } : p))
-          );
+  const addPOI = async (
+    poiData: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>
+  ): Promise<{ success: boolean; id?: string; error?: string }> => {
+    try {
+      // Resolver categorías: si categoriaIds no viene, buscar por nombre
+      let resolvedCategoryIds = poiData.categoriaIds || [];
+      if (resolvedCategoryIds.length === 0 && poiData.category) {
+        const found = categories.find(
+          (c) => c.name.toLowerCase() === poiData.category.toLowerCase()
+        );
+        if (found) {
+          resolvedCategoryIds = [found.id];
         }
-      } catch (err) {
-        console.warn('Nota de sincronización backend POI:', err);
       }
+
+      // Si aún no hay categorías, fallback a la primera activa
+      if (resolvedCategoryIds.length === 0 && categories.length > 0) {
+        const firstActive = categories.find((c) => c.enabled) || categories[0];
+        resolvedCategoryIds = [firstActive.id];
+      }
+
+      const payload: any = {
+        nombre: poiData.name,
+        descripcion: poiData.description,
+        direccion: poiData.address,
+        latitud: Number(poiData.location.lat),
+        longitud: Number(poiData.location.lng),
+        departamentoId: poiData.departamentoId,
+        regionId: poiData.regionId,
+        zonaId: poiData.zonaId || undefined,
+        categoriaIds: resolvedCategoryIds,
+        organizacionId: poiData.organizacionId || undefined,
+        telefono: poiData.phone || undefined,
+        emailContacto: poiData.email || undefined,
+        website: poiData.website || undefined,
+        instagram: poiData.instagram || undefined,
+        imagenes: poiData.images || [],
+        imagenPrincipalUrl: poiData.images?.[0] || undefined,
+        duracionEstimada: poiData.duracionEstimada ? Number(poiData.duracionEstimada) : undefined,
+        precioMin: poiData.precioMin !== undefined ? Number(poiData.precioMin) : undefined,
+        precioMax: poiData.precioMax !== undefined ? Number(poiData.precioMax) : undefined,
+        horarios: Array.isArray(poiData.horarios) ? poiData.horarios : undefined,
+      };
+
+      const created = await api.createPoi(payload);
+      const mappedNewPoi = mapBackendPoi(created);
+
+      setPois((prev) => [mappedNewPoi, ...prev.filter((p) => p.id !== mappedNewPoi.id)]);
+      return { success: true, id: mappedNewPoi.id };
+    } catch (err: any) {
+      console.error('Error al persistir POI en backend:', err);
+      return {
+        success: false,
+        error: err.message || 'Error al registrar el establecimiento en el servidor.',
+      };
     }
   };
 
-  const updatePOI = async (updatedPoi: POI) => {
-    setPois((prev) =>
-      prev.map((p) => (p.id === updatedPoi.id ? { ...updatedPoi, updatedAt: new Date().toISOString() } : p))
-    );
-
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-    if (token && !updatedPoi.id.startsWith('poi-')) {
-      try {
-        const payload = {
-          nombre: updatedPoi.name,
-          descripcion: updatedPoi.description,
-          direccion: updatedPoi.address,
-          latitud: updatedPoi.location.lat,
-          longitud: updatedPoi.location.lng,
-          telefono: updatedPoi.phone,
-          emailContacto: updatedPoi.email,
-          imagenes: updatedPoi.images,
-          imagenPrincipalUrl: updatedPoi.images?.[0] || '',
-        };
-        await api.updatePoi(updatedPoi.id, payload);
-      } catch (err) {
-        console.warn('Nota de sincronización backend POI update:', err);
+  const updatePOI = async (updatedPoi: POI): Promise<{ success: boolean; error?: string }> => {
+    try {
+      let resolvedCategoryIds = updatedPoi.categoriaIds || [];
+      if (resolvedCategoryIds.length === 0 && updatedPoi.category) {
+        const found = categories.find(
+          (c) => c.name.toLowerCase() === updatedPoi.category.toLowerCase()
+        );
+        if (found) {
+          resolvedCategoryIds = [found.id];
+        }
       }
+
+      const payload: any = {
+        nombre: updatedPoi.name,
+        descripcion: updatedPoi.description,
+        direccion: updatedPoi.address,
+        latitud: Number(updatedPoi.location.lat),
+        longitud: Number(updatedPoi.location.lng),
+        departamentoId: updatedPoi.departamentoId,
+        regionId: updatedPoi.regionId,
+        zonaId: updatedPoi.zonaId || undefined,
+        categoriaIds: resolvedCategoryIds,
+        telefono: updatedPoi.phone || undefined,
+        emailContacto: updatedPoi.email || undefined,
+        website: updatedPoi.website || undefined,
+        instagram: updatedPoi.instagram || undefined,
+        imagenes: updatedPoi.images || [],
+        imagenPrincipalUrl: updatedPoi.images?.[0] || undefined,
+        duracionEstimada: updatedPoi.duracionEstimada ? Number(updatedPoi.duracionEstimada) : undefined,
+        precioMin: updatedPoi.precioMin !== undefined ? Number(updatedPoi.precioMin) : undefined,
+        precioMax: updatedPoi.precioMax !== undefined ? Number(updatedPoi.precioMax) : undefined,
+      };
+
+      const updated = await api.updatePoi(updatedPoi.id, payload);
+      const mapped = mapBackendPoi(updated);
+      setPois((prev) => prev.map((p) => (p.id === updatedPoi.id ? mapped : p)));
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error al actualizar POI en backend:', err);
+      return {
+        success: false,
+        error: err.message || 'Error al actualizar el establecimiento en el servidor.',
+      };
     }
   };
 

@@ -130,6 +130,24 @@ export const api = {
     request<any>(`/poi/etiquetas/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteEtiqueta: (id: string) => request<any>(`/poi/etiquetas/${id}`, 'DELETE'),
 
+  // Ubicaciones (Regiones, Departamentos, Zonas - US-CYN-02)
+  getRegiones: (includeAll?: boolean) =>
+    request<any[]>(`/ubicaciones/regiones${includeAll ? '?includeAll=true' : ''}`, 'GET'),
+  getDepartamentos: (regionId?: string, includeAll?: boolean) => {
+    const qs = new URLSearchParams();
+    if (regionId) qs.set('regionId', regionId);
+    if (includeAll) qs.set('includeAll', 'true');
+    const q = qs.toString();
+    return request<any[]>(`/ubicaciones/departamentos${q ? `?${q}` : ''}`, 'GET');
+  },
+  getZonas: (departamentoId?: string, includeAll?: boolean) => {
+    const qs = new URLSearchParams();
+    if (departamentoId) qs.set('departamentoId', departamentoId);
+    if (includeAll) qs.set('includeAll', 'true');
+    const q = qs.toString();
+    return request<any[]>(`/ubicaciones/zonas${q ? `?${q}` : ''}`, 'GET');
+  },
+
   // POIs (Prestador)
   getMyPois: () => request<any[]>('/poi/prestador/my-pois', 'GET'),
   getMyPoiDetail: (id: string) => request<any>(`/poi/prestador/my-pois/${id}`, 'GET'),

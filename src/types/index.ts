@@ -34,6 +34,30 @@ export interface POI {
   clicksCount?: number;  // Cantidad de clics / vistas del negocio en la app
   rating?: number;       // Calificación promedio (1 a 5)
   reviewsCount?: number; // Total de valoraciones recibidas
+
+  // Campos extendidos de negocio y trazabilidad (CYN-02 & CYN-05)
+  organizacionId?: string;
+  categoriaIds?: string[];
+  departamentoId?: string;
+  regionId?: string;
+  zonaId?: string;
+  website?: string;
+  instagram?: string;
+  duracionEstimada?: number;
+  precioMin?: number;
+  precioMax?: number;
+  fuente?: 'prestador' | 'turista' | string;
+  horarios?: any[];
+  departamentoNombre?: string;
+  regionNombre?: string;
+  zonaNombre?: string;
+  creadoPorNombre?: string;
+  creadoPorEmail?: string;
+  organizacionNombre?: string;
+  validacionesCount?: number;
+  reportesCount?: number;
+  validaciones?: any[];
+  revisiones?: any[];
 }
 
 export interface ReviewReply {
