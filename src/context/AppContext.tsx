@@ -166,7 +166,9 @@ function mapBackendPoi(p: any): POI {
   }
 
   // Extracción robusta de estado
-  const rawStatus = typeof p.estado === 'object' ? (p.estado?.nombre || p.estado?.name || '') : (p.estado || p.estadoNombre || p.status || '');
+  const rawStatus = typeof p.estado === 'object'
+    ? (p.estado?.nombre || p.estado?.name || p.estado?.id || '')
+    : (p.estado || p.estadoNombre || p.status || p.estadoId || '');
   const mappedStatus = mapBackendStatusToFrontend(rawStatus);
 
   // Conteo de validaciones y reportes comunitarios
@@ -181,6 +183,15 @@ function mapBackendPoi(p: any): POI {
       : 0
   );
 
+  // Extracción robusta de feedback/observaciones de la última revisión o rechazo
+  let latestFeedback = p.observaciones || p.feedback || p.motivoRechazo || undefined;
+  if (!latestFeedback && Array.isArray(p.revisiones) && p.revisiones.length > 0) {
+    const revWithObs = [...p.revisiones].reverse().find((r: any) => r.observaciones && String(r.observaciones).trim() !== '');
+    if (revWithObs) {
+      latestFeedback = revWithObs.observaciones;
+    }
+  }
+
   return {
     id: p.id || '',
     name: p.nombre || p.name || 'Sin nombre',
@@ -194,7 +205,7 @@ function mapBackendPoi(p: any): POI {
     },
     images: imageList,
     status: mappedStatus,
-    feedback: p.observaciones || p.feedback || p.motivoRechazo || undefined,
+    feedback: latestFeedback,
     createdBy: p.creadoPorId || p.organizacionId || p.usuarioId || '',
     updatedAt: p.updatedAt || p.actualizadoEn || new Date().toISOString(),
     email: p.emailContacto || p.email || '',
@@ -651,15 +662,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (token) {
-      api.logout().catch(err => console.error('Error logging out from server:', err));
+      api.logout().catch((err) => console.error('Error logging out from server:', err));
     }
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('ando_real_pois');
+      localStorage.removeItem('selectedProviderPoiId');
+      localStorage.removeItem('ando_estado_aprobado_id');
+    }
     setCurrentUser(null);
     setPois([]);
     setUsers([]);
     setSchedules([]);
     setLogs([]);
+    setProviderReviews([]);
+    setServices([]);
+    setNotifications([]);
   };
 
   const registerProvider = async (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }): Promise<{ success: boolean; error?: string }> => {
@@ -896,9 +915,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    setPois((prev) =>
-      prev.map((poi) => (poi.id === id ? { ...poi, status: 'approved', feedback: undefined } : poi))
-    );
+    setPois((prev) => {
+      const updated = prev.map((poi) => (poi.id === id ? { ...poi, status: 'approved' as const, feedback: undefined } : poi));
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ando_real_pois', JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
 
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
@@ -935,9 +960,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    setPois((prev) =>
-      prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected', feedback: feedback.trim() } : poi))
-    );
+    setPois((prev) => {
+      const updated = prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected' as const, feedback: feedback.trim() } : poi));
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ando_real_pois', JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
 
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
@@ -974,9 +1005,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    setPois((prev) =>
-      prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction', feedback: feedback.trim() } : poi))
-    );
+    setPois((prev) => {
+      const updated = prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction' as const, feedback: feedback.trim() } : poi));
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ando_real_pois', JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
 
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,

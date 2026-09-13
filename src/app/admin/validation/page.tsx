@@ -562,6 +562,23 @@ export default function ContentValidation() {
                           </div>
                         )}
                       </div>
+
+                      {poi.status === 'correction' && poi.feedback && (
+                        <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-200 text-[11px] text-orange-950 flex items-start space-x-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 text-orange-600 flex-shrink-0 mt-0.5" />
+                          <div className="line-clamp-2 leading-tight">
+                            <span className="font-bold">Corrección:</span> {poi.feedback}
+                          </div>
+                        </div>
+                      )}
+                      {poi.status === 'rejected' && poi.feedback && (
+                        <div className="p-2.5 bg-red-50 rounded-xl border border-red-200 text-[11px] text-red-950 flex items-start space-x-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 text-red-600 flex-shrink-0 mt-0.5" />
+                          <div className="line-clamp-2 leading-tight">
+                            <span className="font-bold">Rechazo:</span> {poi.feedback}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -633,6 +650,11 @@ export default function ContentValidation() {
                             <div>
                               <p className="font-bold text-textDark text-sm">{poi.name}</p>
                               <p className="text-[11px] text-textDark/60 truncate max-w-xs">{poi.description}</p>
+                              {poi.status === 'correction' && poi.feedback && (
+                                <p className="text-[10px] text-orange-800 font-semibold truncate max-w-xs mt-0.5">
+                                  Obs: {poi.feedback}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1043,6 +1065,31 @@ export default function ContentValidation() {
                   </div>
                 )}
               </div>
+
+              {/* Observaciones de corrección o rechazo */}
+              {selectedPoi.feedback && (
+                <div className={`p-4 rounded-xl border flex items-start space-x-3 ${
+                  selectedPoi.status === 'correction'
+                    ? 'bg-orange-50 border-orange-200 text-orange-950'
+                    : selectedPoi.status === 'rejected'
+                    ? 'bg-red-50 border-red-200 text-red-950'
+                    : 'bg-amber-50 border-amber-200 text-amber-950'
+                }`}>
+                  <AlertTriangle className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
+                    selectedPoi.status === 'correction' ? 'text-orange-600' : 'text-red-600'
+                  }`} />
+                  <div className="space-y-1 text-xs leading-relaxed flex-1">
+                    <p className="font-bold text-sm">
+                      {selectedPoi.status === 'correction'
+                        ? 'Observaciones de Corrección Solicitada:'
+                        : selectedPoi.status === 'rejected'
+                        ? 'Motivo del Rechazo:'
+                        : 'Observaciones del Administrador:'}
+                    </p>
+                    <p className="whitespace-pre-wrap">{selectedPoi.feedback}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Description */}
               <div className="space-y-1.5">

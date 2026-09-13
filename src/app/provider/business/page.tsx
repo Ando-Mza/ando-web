@@ -669,13 +669,21 @@ export default function BusinessProfile() {
                   </div>
 
                   {poi.status === 'rejected' && poi.feedback && (
-                    <div className="p-3 bg-red-50 rounded-xl border border-red-100 text-[10px] text-red-800 leading-relaxed font-mono">
-                      <strong>Motivo de rechazo:</strong> {poi.feedback}
+                    <div className="p-3 bg-red-50 rounded-xl border border-red-200 text-xs text-red-950 flex items-start space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="block text-red-900 font-bold">Motivo de rechazo:</strong>
+                        <span className="leading-tight">{poi.feedback}</span>
+                      </div>
                     </div>
                   )}
                   {poi.status === 'correction' && poi.feedback && (
-                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-150 text-[10px] text-amber-800 leading-relaxed font-mono">
-                      <strong>Corrección pedida:</strong> {poi.feedback}
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-300 text-xs text-amber-950 flex items-start space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="block text-amber-900 font-bold">Corrección solicitada:</strong>
+                        <span className="leading-tight">{poi.feedback}</span>
+                      </div>
                     </div>
                   )}
 
@@ -739,6 +747,38 @@ export default function BusinessProfile() {
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             {/* Left 2 columns: Form Inputs */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Correction or Rejection Observations Banner */}
+              {viewMode === 'edit' && selectedPoi?.status === 'correction' && selectedPoi?.feedback && (
+                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-300 flex items-start space-x-3 text-xs text-amber-950 shadow-xs">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h5 className="font-bold text-sm text-amber-900">
+                      Observaciones del Administrador (Corrección Solicitada):
+                    </h5>
+                    <p className="leading-relaxed whitespace-pre-wrap font-medium text-amber-950">
+                      {selectedPoi.feedback}
+                    </p>
+                    <p className="text-[11px] text-amber-800/80 pt-1 border-t border-amber-200">
+                      Por favor actualice los datos o imágenes señaladas y guarde los cambios para que su negocio vuelva a ser evaluado.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {viewMode === 'edit' && selectedPoi?.status === 'rejected' && selectedPoi?.feedback && (
+                <div className="p-4 bg-red-50 rounded-2xl border border-red-200 flex items-start space-x-3 text-xs text-red-950 shadow-xs">
+                  <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h5 className="font-bold text-sm text-red-900">
+                      Motivo del Rechazo:
+                    </h5>
+                    <p className="leading-relaxed whitespace-pre-wrap font-medium text-red-950">
+                      {selectedPoi.feedback}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Validation errors warning */}
               {(validationErrors.length > 0 || formatErrors.length > 0) && (
                 <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-start space-x-3 text-xs leading-relaxed text-amber-900 shadow-xs">
