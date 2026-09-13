@@ -9,37 +9,36 @@ import {
   CalendarRange, 
   LogOut, 
   ChevronLeft, 
-  ChevronRight,
-  Bell,
-  User
+  ChevronRight, 
+  User,
+  Layers,
+  MessageSquare,
+  HelpCircle
 } from 'lucide-react';
 import Link from 'next/link';
+import NotificationCenter from '@/components/NotificationCenter';
 
 export default function ProviderLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, logout, login } = useApp();
+  const { currentUser, logout } = useApp();
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Asegurar que el usuario esté autenticado para facilitar pruebas
+  // Verificar autenticación real — sin auto-login mock
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
       if (!currentUser) {
-        // Auto-login de prestador si se entra directamente a la ruta para evitar redirecciones molestas en desarrollo
-        const logged = login('provider');
-        if (!logged) {
-          router.push('/');
-        }
+        router.push('/');
       } else if (currentUser.role !== 'provider') {
         router.push('/');
       }
-    }, 0);
+    }, 150);
     return () => clearTimeout(timer);
-  }, [currentUser, login, router]);
+  }, [currentUser, router]);
 
   if (!mounted || !currentUser) {
     return (
@@ -54,28 +53,46 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
 
   const menuItems = [
     {
-      name: 'Métricas del negocio',
+      name: 'Dashboard',
       path: '/provider/dashboard',
       icon: LayoutDashboard,
-      desc: 'Visualizaciones de tu POI'
+      desc: 'Resumen e interacciones'
     },
     {
-      name: 'Mis negocios',
+      name: 'Mi Establecimiento',
       path: '/provider/business',
       icon: Store,
-      desc: 'Información del local y fotos'
+      desc: 'Información y fotos del local'
     },
     {
-      name: 'Gestión de horarios',
+      name: 'Días y Horarios',
       path: '/provider/schedules',
       icon: CalendarRange,
-      desc: 'Horarios de atención'
+      desc: 'Franjas de atención'
     },
     {
-      name: 'Mi cuenta',
+      name: 'Servicios y Ofertas',
+      path: '/provider/services',
+      icon: Layers,
+      desc: 'Comodidades y actividades'
+    },
+    {
+      name: 'Reseñas de Turistas',
+      path: '/provider/reviews',
+      icon: MessageSquare,
+      desc: 'Opiniones y respuestas'
+    },
+    {
+      name: 'Mi Perfil y Cuenta',
       path: '/provider/profile',
       icon: User,
-      desc: 'Ajustes del perfil'
+      desc: 'Datos comerciales y seguridad'
+    },
+    {
+      name: 'Centro de Ayuda',
+      path: '/provider/help',
+      icon: HelpCircle,
+      desc: 'Preguntas y soporte'
     }
   ];
 
@@ -185,17 +202,15 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
                 <span>{currentUser.businessName}</span>
               </div>
             )}
-            <button className="relative p-2 rounded-lg hover:bg-black/5 text-textDark/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary cursor-pointer" aria-label="Notificaciones">
-              <Bell className="h-5 w-5" />
-            </button>
+            <NotificationCenter />
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-textDark">{currentUser.name}</p>
                 <p className="text-[10px] text-textDark/60 font-medium">Prestador asociado</p>
               </div>
-              <div className="h-8 w-8 rounded-full bg-fillPrimary text-white flex items-center justify-center font-semibold text-sm">
-                S
+              <div className="h-8 w-8 rounded-full bg-fillPrimary text-white flex items-center justify-center font-semibold text-sm uppercase">
+                {currentUser.name ? currentUser.name.slice(0, 2) : 'PR'}
               </div>
             </div>
           </div>

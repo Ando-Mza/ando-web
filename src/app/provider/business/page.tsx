@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
-import { uploadFileToR2 } from '@/utils/api';
-import { POI } from '@/types';
+import { uploadFileToR2, api } from '@/utils/api';
+import { POI, Region, Departamento, Zona } from '@/types';
 import { 
   UploadCloud, 
   Trash2, 
@@ -11,17 +11,63 @@ import {
   Image as ImageIcon, 
   Loader2, 
   Check, 
-  AlertTriangle,
-  Plus,
-  Store,
-  ArrowLeft,
-  Mail,
-  Phone,
-  MapPin,
-  Edit2
+  AlertTriangle, 
+  Plus, 
+  Store, 
+  ArrowLeft, 
+  Phone, 
+  MapPin, 
+  Edit2,
+  Globe,
+  Clock,
+  DollarSign,
+  Compass
 } from 'lucide-react';
 
+const InstagramIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+  </svg>
+);
+
 type ViewMode = 'list' | 'create' | 'edit';
+
+// Fallback de Regiones y Departamentos de Mendoza en caso de demora de red
+const FALLBACK_REGIONES: Region[] = [
+  { id: 'reg-gran-mendoza', nombre: 'Gran Mendoza' },
+  { id: 'reg-valle-de-uco', nombre: 'Valle de Uco' },
+  { id: 'reg-zona-sur', nombre: 'Zona Sur' },
+  { id: 'reg-zona-este', nombre: 'Zona Este' },
+  { id: 'reg-zona-norte', nombre: 'Zona Norte' },
+];
+
+const FALLBACK_DEPARTAMENTOS: Departamento[] = [
+  // Gran Mendoza
+  { id: 'dep-capital', nombre: 'Ciudad de Mendoza', regionId: 'reg-gran-mendoza' },
+  { id: 'dep-godoy-cruz', nombre: 'Godoy Cruz', regionId: 'reg-gran-mendoza' },
+  { id: 'dep-guaymallen', nombre: 'Guaymallén', regionId: 'reg-gran-mendoza' },
+  { id: 'dep-las-heras', nombre: 'Las Heras', regionId: 'reg-gran-mendoza' },
+  { id: 'dep-lujan-de-cuyo', nombre: 'Luján de Cuyo', regionId: 'reg-gran-mendoza' },
+  { id: 'dep-maipu', nombre: 'Maipú', regionId: 'reg-gran-mendoza' },
+  // Valle de Uco
+  { id: 'dep-tupungato', nombre: 'Tupungato', regionId: 'reg-valle-de-uco' },
+  { id: 'dep-tunuyan', nombre: 'Tunuyán', regionId: 'reg-valle-de-uco' },
+  { id: 'dep-san-carlos', nombre: 'San Carlos', regionId: 'reg-valle-de-uco' },
+  // Zona Sur
+  { id: 'dep-san-rafael', nombre: 'San Rafael', regionId: 'reg-zona-sur' },
+  { id: 'dep-general-alvear', nombre: 'General Alvear', regionId: 'reg-zona-sur' },
+  { id: 'dep-malargue', nombre: 'Malargüe', regionId: 'reg-zona-sur' },
+  // Zona Este
+  { id: 'dep-san-martin', nombre: 'San Martín', regionId: 'reg-zona-este' },
+  { id: 'dep-rivadavia', nombre: 'Rivadavia', regionId: 'reg-zona-este' },
+  { id: 'dep-junin', nombre: 'Junín', regionId: 'reg-zona-este' },
+  { id: 'dep-santa-rosa', nombre: 'Santa Rosa', regionId: 'reg-zona-este' },
+  { id: 'dep-la-paz', nombre: 'La Paz', regionId: 'reg-zona-este' },
+  // Zona Norte
+  { id: 'dep-lavalle', nombre: 'Lavalle', regionId: 'reg-zona-norte' },
+];
 
 export default function BusinessProfile() {
   const { pois, addPOI, updatePOI, generalParams, categories, currentUser } = useApp();
@@ -33,60 +79,158 @@ export default function BusinessProfile() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
 
+  // Ubicaciones dinámicas desde backend
+  const [regiones, setRegiones] = useState<Region[]>(FALLBACK_REGIONES);
+  const [departamentos, setDepartamentos] = useState<Departamento[]>(FALLBACK_DEPARTAMENTOS);
+  const [zonas, setZonas] = useState<Zona[]>([]);
+
   // Form states
+  // 1. Básicos (Obligatorios)
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
+  
+  // 2. Ubicación (Obligatorios: Región, Departamento, Dirección, Lat, Lng. Opcional: Zona)
+  const [regionId, setRegionId] = useState('');
+  const [departamentoId, setDepartamentoId] = useState('');
+  const [zonaId, setZonaId] = useState('');
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
-  const [email, setEmail] = useState('');
+
+  // 3. Precios y Visita (Opcionales)
+  const [precioMin, setPrecioMin] = useState<string>('');
+  const [precioMax, setPrecioMax] = useState<string>('');
+  const [duracionEstimada, setDuracionEstimada] = useState<string>('');
+
+  // 4. Contacto y Redes (Opcionales)
   const [phone, setPhone] = useState('');
-  const [hours, setHours] = useState('');
+  const [website, setWebsite] = useState('');
+  const [instagram, setInstagram] = useState('');
+
+  // 5. Imágenes (Opcional)
   const [images, setImages] = useState<string[]>([]);
 
-  // Simulation states
+  // Simulation / Upload states
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Modal & Toast states
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState<'success' | 'warning'>('success');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'warning'>('success');
   const [showDiscardModal, setShowDiscardModal] = useState(false);
 
+  // Cargar regiones y departamentos desde la API al montar
+  useEffect(() => {
+    let isMounted = true;
+    async function loadUbicaciones() {
+      try {
+        const [regs, deps] = await Promise.allSettled([
+          api.getRegiones(),
+          api.getDepartamentos(),
+        ]);
+
+        if (isMounted) {
+          if (regs.status === 'fulfilled' && Array.isArray(regs.value) && regs.value.length > 0) {
+            setRegiones(regs.value);
+            if (!regionId) {
+              setRegionId(regs.value[0].id);
+            }
+          }
+          if (deps.status === 'fulfilled' && Array.isArray(deps.value) && deps.value.length > 0) {
+            setDepartamentos(deps.value);
+          }
+        }
+      } catch (e) {
+        console.warn('Uso de fallbacks para ubicaciones:', e);
+      }
+    }
+    loadUbicaciones();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Departamentos filtrados por la región activa
+  const filteredDepartamentos = React.useMemo(() => {
+    if (!regionId) return departamentos;
+    return departamentos.filter((d) => d.regionId === regionId || (d as any).region?.id === regionId);
+  }, [departamentos, regionId]);
+
+  // Sincronizar departamento cuando cambia la región o cuando se cargan los departamentos
+  useEffect(() => {
+    if (filteredDepartamentos.length > 0) {
+      if (!departamentoId || !filteredDepartamentos.some((d) => d.id === departamentoId)) {
+        setDepartamentoId(filteredDepartamentos[0].id);
+      }
+    } else {
+      setDepartamentoId('');
+      setZonas([]);
+      setZonaId('');
+    }
+  }, [regionId, filteredDepartamentos]);
+
+  // Cargar zonas cuando cambia el departamento
+  useEffect(() => {
+    let isMounted = true;
+    async function loadZonasForDept() {
+      if (!departamentoId) {
+        setZonas([]);
+        setZonaId('');
+        return;
+      }
+      
+      // Chequear si el departamento seleccionado ya contiene zonas precargadas
+      const currentDept = departamentos.find((d) => d.id === departamentoId) as any;
+      if (currentDept?.zonas && Array.isArray(currentDept.zonas) && currentDept.zonas.length > 0) {
+        if (isMounted) setZonas(currentDept.zonas);
+        return;
+      }
+
+      try {
+        const zList = await api.getZonas(departamentoId);
+        if (isMounted) {
+          if (Array.isArray(zList)) {
+            setZonas(zList);
+          } else {
+            setZonas([]);
+          }
+        }
+      } catch (e) {
+        if (isMounted) setZonas([]);
+      }
+    }
+    loadZonasForDept();
+    return () => {
+      isMounted = false;
+    };
+  }, [departamentoId, departamentos]);
+
   // Get POIs belonging to the active provider
-  const myPois = pois.filter((p) => 
+  const myPois = currentUser?.role === 'provider' ? pois : pois.filter((p) => 
     currentUser?.role === 'admin' || 
     (providerId && p.createdBy === providerId) || 
     !p.createdBy
   );
 
-  // Derived validation states (calculated during render to prevent set-state-in-effect cascading renders)
+  // Derived validation states
   const validationErrors: string[] = [];
   const formatErrors: string[] = [];
 
   if (viewMode !== 'list') {
-    if (!name.trim()) validationErrors.push('Nombre del negocio');
-    if (!category.trim()) validationErrors.push('Categoría');
-    if (!description.trim()) validationErrors.push('Descripción');
-    if (!address.trim()) validationErrors.push('Dirección física');
+    if (!name.trim() || name.trim().length < 2) validationErrors.push('Nombre del negocio (mín. 2 caracteres)');
+    if (!category.trim()) validationErrors.push('Categoría de servicio');
+    if (!description.trim() || description.trim().length < 10) validationErrors.push('Descripción (mín. 10 caracteres)');
+    if (!regionId.trim()) validationErrors.push('Región');
+    if (!departamentoId.trim()) validationErrors.push('Departamento');
+    if (!address.trim() || address.trim().length < 5) validationErrors.push('Dirección física (mín. 5 caracteres)');
     if (!lat.trim()) validationErrors.push('Latitud');
     if (!lng.trim()) validationErrors.push('Longitud');
-    if (!email.trim()) validationErrors.push('Email de contacto');
-    if (!phone.trim()) validationErrors.push('Teléfono de contacto');
-    if (!hours.trim()) validationErrors.push('Horario de atención');
 
-    // Validate Email format
-    if (email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        formatErrors.push('El formato del Email es inválido (ej. negocio@ejemplo.com)');
-      }
-    }
-
-    // Validate Phone format
+    // Validate Phone format (opcional)
     if (phone.trim()) {
       const phoneRegex = /^\+?[0-9\s-]{6,18}$/;
       if (!phoneRegex.test(phone)) {
@@ -94,7 +238,14 @@ export default function BusinessProfile() {
       }
     }
 
-    // Validate coordinates
+    // Validate Website (opcional)
+    if (website.trim()) {
+      if (!/^https?:\/\/.+\..+/.test(website.trim()) && !/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(website.trim())) {
+        formatErrors.push('El Sitio Web debe tener un formato válido (ej. https://minegocio.com o minegocio.com)');
+      }
+    }
+
+    // Validate Coordinates
     if (lat.trim()) {
       const latNum = parseFloat(lat);
       if (isNaN(latNum) || latNum < -90 || latNum > 90) {
@@ -107,9 +258,18 @@ export default function BusinessProfile() {
         formatErrors.push('La Longitud debe ser un número válido entre -180 y 180');
       }
     }
+
+    // Validate Prices (opcional)
+    if (precioMin.trim() && precioMax.trim()) {
+      const min = parseFloat(precioMin);
+      const max = parseFloat(precioMax);
+      if (!isNaN(min) && !isNaN(max) && min > max) {
+        formatErrors.push('El Precio Mínimo no puede ser mayor al Precio Máximo');
+      }
+    }
   }
 
-  const triggerToast = (msg: string, type: 'success' | 'warning' = 'success') => {
+  const triggerToast = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setToastMessage(msg);
     setToastType(type);
     setShowToast(true);
@@ -119,14 +279,30 @@ export default function BusinessProfile() {
   const handleStartCreate = () => {
     setName('');
     setDescription('');
-    const activeCats = categories.filter(c => c.enabled);
+    const activeCats = categories.filter((c) => c.enabled);
     setCategory(activeCats.length > 0 ? activeCats[0].name : 'Enoturismo');
+    
+    // Región inicial
+    const initialRegId = regiones[0]?.id || '';
+    setRegionId(initialRegId);
+    
+    // Depto inicial
+    const initialDeptos = departamentos.filter((d) => !initialRegId || d.regionId === initialRegId || (d as any).region?.id === initialRegId);
+    setDepartamentoId(initialDeptos[0]?.id || '');
+    setZonaId('');
+    
     setAddress('');
-    setLat('-32.8900');
-    setLng('-68.8400');
-    setEmail('');
+    setLat('-32.8908');
+    setLng('-68.8272');
+    
+    setPrecioMin('');
+    setPrecioMax('');
+    setDuracionEstimada('');
+    
     setPhone('');
-    setHours('');
+    setWebsite('');
+    setInstagram('');
+    
     setImages([]);
     setSelectedPoi(null);
     setViewMode('create');
@@ -137,14 +313,41 @@ export default function BusinessProfile() {
     setName(poi.name);
     setDescription(poi.description);
     setCategory(poi.category);
+    
+    // Determinar región y departamento
+    let targetDeptId = poi.departamentoId || '';
+    let targetRegId = poi.regionId || '';
+
+    if (!targetRegId && targetDeptId) {
+      const matchDep = departamentos.find((d) => d.id === targetDeptId);
+      if (matchDep) targetRegId = matchDep.regionId || (matchDep as any).region?.id || '';
+    }
+
+    if (!targetRegId) {
+      targetRegId = regiones[0]?.id || '';
+    }
+    if (!targetDeptId) {
+      const deptosInReg = departamentos.filter((d) => !targetRegId || d.regionId === targetRegId || (d as any).region?.id === targetRegId);
+      targetDeptId = deptosInReg[0]?.id || '';
+    }
+
+    setRegionId(targetRegId);
+    setDepartamentoId(targetDeptId);
+    setZonaId(poi.zonaId || '');
+    
     setAddress(poi.address);
-    setLat(poi.location.lat.toString());
-    setLng(poi.location.lng.toString());
-    setEmail(poi.email || '');
+    setLat(poi.location?.lat?.toString() || '-32.8908');
+    setLng(poi.location?.lng?.toString() || '-68.8272');
+    
+    setPrecioMin(poi.precioMin !== undefined ? poi.precioMin.toString() : '');
+    setPrecioMax(poi.precioMax !== undefined ? poi.precioMax.toString() : '');
+    setDuracionEstimada(poi.duracionEstimada !== undefined ? poi.duracionEstimada.toString() : '');
+    
     setPhone(poi.phone || '');
-    // Horario: prefilled with mock hours or default placeholder
-    setHours(poi.address.includes('Cobos') ? 'Lunes a Sábado 09:00 a 19:30, Dom 10:00 a 14:00' : 'Lunes a Domingos 09:00 a 18:00');
-    setImages(poi.images);
+    setWebsite(poi.website || '');
+    setInstagram(poi.instagram || '');
+    
+    setImages(poi.images || []);
     setViewMode('edit');
   };
 
@@ -154,9 +357,12 @@ export default function BusinessProfile() {
         name.trim() !== '' ||
         description.trim() !== '' ||
         address.trim() !== '' ||
-        email.trim() !== '' ||
         phone.trim() !== '' ||
-        hours.trim() !== '' ||
+        website.trim() !== '' ||
+        instagram.trim() !== '' ||
+        precioMin.trim() !== '' ||
+        precioMax.trim() !== '' ||
+        duracionEstimada.trim() !== '' ||
         images.length > 0
       );
     } else if (viewMode === 'edit' && selectedPoi) {
@@ -164,11 +370,18 @@ export default function BusinessProfile() {
         name !== selectedPoi.name ||
         description !== selectedPoi.description ||
         category !== selectedPoi.category ||
+        regionId !== (selectedPoi.regionId || '') ||
+        departamentoId !== (selectedPoi.departamentoId || '') ||
+        zonaId !== (selectedPoi.zonaId || '') ||
         address !== selectedPoi.address ||
         lat !== selectedPoi.location.lat.toString() ||
         lng !== selectedPoi.location.lng.toString() ||
-        email !== (selectedPoi.email || '') ||
         phone !== (selectedPoi.phone || '') ||
+        website !== (selectedPoi.website || '') ||
+        instagram !== (selectedPoi.instagram || '') ||
+        precioMin !== (selectedPoi.precioMin !== undefined ? selectedPoi.precioMin.toString() : '') ||
+        precioMax !== (selectedPoi.precioMax !== undefined ? selectedPoi.precioMax.toString() : '') ||
+        duracionEstimada !== (selectedPoi.duracionEstimada !== undefined ? selectedPoi.duracionEstimada.toString() : '') ||
         images !== selectedPoi.images
       );
     }
@@ -188,45 +401,69 @@ export default function BusinessProfile() {
     setViewMode('list');
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validationErrors.length > 0 || formatErrors.length > 0) {
       triggerToast('Por favor resuelva los errores del formulario antes de guardar.', 'warning');
       return;
     }
 
+    setIsSaving(true);
+
+    const matchCat = categories.find((c) => c.name.toLowerCase() === category.toLowerCase() || c.id === category);
+    const catIds = matchCat ? [matchCat.id] : [];
+
     const poiPayload = {
-      name,
-      description,
+      name: name.trim(),
+      description: description.trim(),
       category,
-      address,
+      categoriaIds: catIds,
+      regionId,
+      departamentoId,
+      zonaId: zonaId.trim() || undefined,
+      address: address.trim(),
       location: {
         lat: parseFloat(lat),
         lng: parseFloat(lng),
       },
+      precioMin: precioMin.trim() ? parseFloat(precioMin) : undefined,
+      precioMax: precioMax.trim() ? parseFloat(precioMax) : undefined,
+      duracionEstimada: duracionEstimada.trim() ? parseInt(duracionEstimada, 10) : undefined,
+      phone: phone.trim() || undefined,
+      website: website.trim() ? (website.startsWith('http') ? website.trim() : `https://${website.trim()}`) : undefined,
+      instagram: instagram.trim() || undefined,
       images,
-      email,
-      phone,
+      imagenPrincipalUrl: images[0] || undefined,
     };
 
     if (viewMode === 'create') {
-      addPOI(poiPayload);
-      triggerToast('¡Establecimiento registrado con éxito! Enviado a revisión por el administrador.');
+      const res = await addPOI(poiPayload);
+      setIsSaving(false);
+      if (res.success) {
+        triggerToast('¡Establecimiento registrado con éxito! Enviado a revisión por el administrador.');
+        setViewMode('list');
+      } else {
+        triggerToast(res.error || 'Ocurrió un error al registrar el negocio', 'error');
+      }
     } else if (viewMode === 'edit' && selectedPoi) {
       const updatedPoi: POI = {
         ...selectedPoi,
         ...poiPayload,
-        status: 'pending', // Regla de negocio: pasa a revisión tras edición
+        status: 'pending', // Pasa a revisión tras edición
         updatedAt: new Date().toISOString(),
       };
-      updatePOI(updatedPoi);
-      triggerToast('Establecimiento actualizado con éxito. Se ha enviado a revisión.');
+      const res = await updatePOI(updatedPoi);
+      setIsSaving(false);
+      if (res.success) {
+        triggerToast('Establecimiento actualizado con éxito. Se ha enviado a revisión.');
+        setViewMode('list');
+      } else {
+        triggerToast(res.error || 'Ocurrió un error al actualizar el negocio', 'error');
+      }
     }
-
-    setViewMode('list');
   };
 
-  // Subida de imágenes reales desde el dispositivo a Cloudflare R2 (US-GIT-09)
+  // Subida de imágenes reales desde el dispositivo a Cloudflare R2
   const handleDeviceImageUpload = async (fileList: FileList | File[]) => {
     const files = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
     if (files.length === 0) return;
@@ -289,11 +526,11 @@ export default function BusinessProfile() {
   };
 
   return (
-    <div className="space-y-8 relative">
+    <div className="space-y-8 relative font-wixText">
       {/* Toast Notification */}
       {showToast && (
         <div className={`fixed bottom-8 right-8 z-50 flex items-center space-x-2.5 text-white px-5 py-3.5 rounded-xl shadow-2xl border border-white/10 animate-slide-in max-w-md ${
-          toastType === 'success' ? 'bg-fillPrimary' : 'bg-orange-600'
+          toastType === 'success' ? 'bg-fillPrimary' : toastType === 'error' ? 'bg-red-600' : 'bg-amber-600'
         }`}>
           {toastType === 'success' ? (
             <Check className="h-4.5 w-4.5 text-white flex-shrink-0" />
@@ -308,12 +545,12 @@ export default function BusinessProfile() {
       {showDiscardModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-black/5 animate-scale-up space-y-4">
-            <div className="flex items-center space-x-2.5 text-orange-600">
+            <div className="flex items-center space-x-2.5 text-amber-600">
               <AlertTriangle className="h-5 w-5" />
               <h4 className="font-wixDisplay font-bold text-textDark">¿Descartar cambios?</h4>
             </div>
             <p className="text-xs text-textDark/70 leading-relaxed">
-              Tienes cambios no guardados en el formulario del negocio. Si sales ahora, todos los datos no guardados se perderán permanentemente.
+              Tienes cambios no guardados en el formulario del negocio. Si sales ahora, todos los datos se perderán.
             </p>
             <div className="flex space-x-2 justify-end pt-2">
               <button
@@ -342,7 +579,7 @@ export default function BusinessProfile() {
             <div>
               <h3 className="font-wixDisplay text-2xl font-bold text-fillPrimary">Mis negocios turísticos</h3>
               <p className="text-sm text-textDark/70 mt-1">
-                Gestiona tus publicaciones, sube fotografías y verifica el estado de aprobación de tus locales en la aplicación.
+                Gestiona tus publicaciones, sube fotografías y verifica el estado de aprobación de tus puntos de interés turísticos.
               </p>
             </div>
             <button
@@ -411,27 +648,33 @@ export default function BusinessProfile() {
                       <MapPin className="h-3.5 w-3.5 text-fillPrimary mr-2 flex-shrink-0" />
                       <span className="truncate" title={poi.address}>{poi.address}</span>
                     </div>
-                    {poi.email && (
-                      <div className="flex items-center">
-                        <Mail className="h-3.5 w-3.5 text-fillPrimary mr-2 flex-shrink-0" />
-                        <span className="truncate">{poi.email}</span>
-                      </div>
-                    )}
                     {poi.phone && (
                       <div className="flex items-center">
                         <Phone className="h-3.5 w-3.5 text-fillPrimary mr-2 flex-shrink-0" />
                         <span>{poi.phone}</span>
                       </div>
                     )}
+                    {poi.website && (
+                      <div className="flex items-center">
+                        <Globe className="h-3.5 w-3.5 text-fillPrimary mr-2 flex-shrink-0" />
+                        <span className="truncate">{poi.website}</span>
+                      </div>
+                    )}
+                    {poi.instagram && (
+                      <div className="flex items-center">
+                        <InstagramIcon className="h-3.5 w-3.5 text-fillPrimary mr-2 flex-shrink-0" />
+                        <span>{poi.instagram}</span>
+                      </div>
+                    )}
                   </div>
 
                   {poi.status === 'rejected' && poi.feedback && (
-                    <div className="p-3 bg-red-50 rounded-xl border border-red-150 text-[10px] text-red-800 leading-relaxed font-mono">
+                    <div className="p-3 bg-red-50 rounded-xl border border-red-100 text-[10px] text-red-800 leading-relaxed font-mono">
                       <strong>Motivo de rechazo:</strong> {poi.feedback}
                     </div>
                   )}
                   {poi.status === 'correction' && poi.feedback && (
-                    <div className="p-3 bg-orange-50 rounded-xl border border-orange-150 text-[10px] text-orange-800 leading-relaxed font-mono">
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-150 text-[10px] text-amber-800 leading-relaxed font-mono">
                       <strong>Corrección pedida:</strong> {poi.feedback}
                     </div>
                   )}
@@ -482,12 +725,12 @@ export default function BusinessProfile() {
             </button>
             <div>
               <h3 className="font-wixDisplay text-xl font-bold text-accentWine">
-                {viewMode === 'create' ? 'Registrar Nuevo Negocio Turístico' : `Administrar: ${selectedPoi?.name}`}
+                {viewMode === 'create' ? 'Registrar Nuevo Negocio Turístico (POI)' : `Administrar: ${selectedPoi?.name}`}
               </h3>
               <p className="text-xs text-textDark/55 mt-0.5">
                 {viewMode === 'create' 
-                  ? 'Complete todos los campos obligatorios para registrar y enviar su local a validación.' 
-                  : 'Modifique los campos requeridos. Guardar enviará el local nuevamente a revisión administrativa.'}
+                  ? 'Complete los datos obligatorios. Su local quedará en estado pendiente hasta su validación.' 
+                  : 'Modifique los datos comerciales. Al guardar pasará a revisión administrativa.'}
               </p>
             </div>
           </div>
@@ -498,12 +741,12 @@ export default function BusinessProfile() {
             <div className="lg:col-span-2 space-y-6">
               {/* Validation errors warning */}
               {(validationErrors.length > 0 || formatErrors.length > 0) && (
-                <div className="p-4 bg-orange-50 rounded-2xl border border-orange-150 flex items-start space-x-3 text-xs leading-relaxed text-orange-900 shadow-xs">
-                  <AlertTriangle className="h-4.5 w-4.5 text-orange-600 flex-shrink-0 mt-0.5" />
+                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-start space-x-3 text-xs leading-relaxed text-amber-900 shadow-xs">
+                  <AlertTriangle className="h-4.5 w-4.5 text-amber-600 flex-shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     {validationErrors.length > 0 && (
                       <p>
-                        <strong>Campos obligatorios vacíos:</strong> {validationErrors.join(', ')}.
+                        <strong>Campos obligatorios incompletos:</strong> {validationErrors.join(', ')}.
                       </p>
                     )}
                     {formatErrors.map((err, i) => (
@@ -515,32 +758,36 @@ export default function BusinessProfile() {
 
               <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm">
                 <form onSubmit={handleSave} className="space-y-6">
-                  <h4 className="font-wixDisplay text-base font-bold text-textDark mb-4 pb-2 border-b border-black/5">Información Comercial</h4>
+                  {/* SECCIÓN 1: INFORMACIÓN BÁSICA */}
+                  <h4 className="font-wixDisplay text-base font-bold text-textDark pb-2 border-b border-black/5 flex items-center space-x-2">
+                    <Store className="h-4 w-4 text-fillPrimary" />
+                    <span>Información Principal</span>
+                  </h4>
                   
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
                         Nombre del Negocio *
                       </label>
                       <input
                         type="text"
-                        placeholder="Ej. Bodega Santa Julia"
+                        placeholder="Ej. Bodega Los Andes"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
-                          !name.trim() ? 'border-orange-300' : 'border-black/10'
+                        className={`w-full px-4 py-2.5 rounded-xl border bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold ${
+                          !name.trim() ? 'border-amber-300' : 'border-black/10 focus:border-fillPrimary'
                         }`}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Categoría de Servicio *
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Categoría Principal *
                       </label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-bold"
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-bold focus:border-fillPrimary"
                       >
                         {categories
                           .filter((cat) => cat.enabled)
@@ -553,18 +800,18 @@ export default function BusinessProfile() {
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Descripción General (Máx. 500 caract.) *
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Descripción General (Mín. 10 caract.) *
                       </label>
                       <div className="relative">
                         <textarea
-                          rows={4}
+                          rows={3}
                           maxLength={500}
-                          placeholder="Describe la propuesta turística, productos principales o servicios..."
+                          placeholder="Describe la propuesta turística, experiencias, degustaciones y servicios principales..."
                           value={description}
                           onChange={(e) => setDescription(e.target.value)}
-                          className={`w-full px-4 py-3 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm leading-relaxed ${
-                            !description.trim() ? 'border-orange-300' : 'border-black/10'
+                          className={`w-full px-4 py-3 rounded-xl border bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs leading-relaxed ${
+                            !description.trim() ? 'border-amber-300' : 'border-black/10 focus:border-fillPrimary'
                           }`}
                         />
                         <span className="absolute bottom-3 right-3 text-[10px] text-textDark/40 font-bold">
@@ -572,103 +819,225 @@ export default function BusinessProfile() {
                         </span>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
+                  {/* SECCIÓN 2: UBICACIÓN GEOGRÁFICA */}
+                  <h4 className="font-wixDisplay text-base font-bold text-textDark mt-8 pb-2 border-b border-black/5 flex items-center space-x-2">
+                    <Compass className="h-4 w-4 text-fillPrimary" />
+                    <span>Ubicación Geográfica en Mendoza</span>
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                    {/* Región */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Región *
+                      </label>
+                      <select
+                        value={regionId}
+                        onChange={(e) => setRegionId(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary cursor-pointer"
+                      >
+                        {regiones.length === 0 && <option value="">Cargando regiones...</option>}
+                        {regiones.map((reg) => (
+                          <option key={reg.id} value={reg.id}>
+                            {reg.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Departamento */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Departamento *
+                      </label>
+                      <select
+                        value={departamentoId}
+                        onChange={(e) => setDepartamentoId(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary cursor-pointer"
+                      >
+                        {filteredDepartamentos.length === 0 && (
+                          <option value="">No hay departamentos disponibles</option>
+                        )}
+                        {filteredDepartamentos.map((dep) => (
+                          <option key={dep.id} value={dep.id}>
+                            {dep.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Zona (Opcional) */}
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Zona / Localidad <span className="text-textDark/40 font-normal">(Opcional)</span>
+                      </label>
+                      <select
+                        value={zonaId}
+                        onChange={(e) => setZonaId(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary cursor-pointer"
+                      >
+                        <option value="">Sin zona específica</option>
+                        {zonas.map((z) => (
+                          <option key={z.id} value={z.id}>
+                            {z.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Dirección */}
+                    <div className="sm:col-span-3">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
                         Dirección Física Completa *
                       </label>
                       <input
                         type="text"
-                        placeholder="Calle, Número, Departamento, Provincia"
+                        placeholder="Ej. Ruta Provincial 60 Km 15, Maipú"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
-                          !address.trim() ? 'border-orange-300' : 'border-black/10'
+                        className={`w-full px-4 py-2.5 rounded-xl border bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold ${
+                          !address.trim() ? 'border-amber-300' : 'border-black/10 focus:border-fillPrimary'
                         }`}
                       />
                     </div>
 
+                    {/* Coordenadas */}
+                    <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                          Latitud Geográfica *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ej. -32.8908"
+                          value={lat}
+                          onChange={(e) => setLat(e.target.value)}
+                          className={`w-full px-4 py-2.5 rounded-xl border bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-mono font-semibold ${
+                            !lat.trim() ? 'border-amber-300' : 'border-black/10 focus:border-fillPrimary'
+                          }`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                          Longitud Geográfica *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ej. -68.8272"
+                          value={lng}
+                          onChange={(e) => setLng(e.target.value)}
+                          className={`w-full px-4 py-2.5 rounded-xl border bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-mono font-semibold ${
+                            !lng.trim() ? 'border-amber-300' : 'border-black/10 focus:border-fillPrimary'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECCIÓN 3: PRECIOS Y VISITA (OPCIONALES) */}
+                  <h4 className="font-wixDisplay text-base font-bold text-textDark mt-8 pb-2 border-b border-black/5 flex items-center space-x-2">
+                    <DollarSign className="h-4 w-4 text-fillPrimary" />
+                    <span>Rango de Precios y Duración Estimada</span>
+                    <span className="text-[10px] text-textDark/40 font-normal uppercase ml-1">(Opcional)</span>
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Latitud Geográfica *
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Precio Mínimo ($ ARS)
                       </label>
                       <input
-                        type="text"
-                        placeholder="Ej. -32.8894"
-                        value={lat}
-                        onChange={(e) => setLat(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-mono font-semibold ${
-                          !lat.trim() ? 'border-orange-300' : 'border-black/10'
-                        }`}
+                        type="number"
+                        min="0"
+                        placeholder="Ej. 1500"
+                        value={precioMin}
+                        onChange={(e) => setPrecioMin(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Longitud Geográfica *
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Precio Máximo ($ ARS)
                       </label>
                       <input
-                        type="text"
-                        placeholder="Ej. -68.8681"
-                        value={lng}
-                        onChange={(e) => setLng(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-mono font-semibold ${
-                          !lng.trim() ? 'border-orange-300' : 'border-black/10'
-                        }`}
+                        type="number"
+                        min="0"
+                        placeholder="Ej. 6500"
+                        value={precioMax}
+                        onChange={(e) => setPrecioMax(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Duración de Visita (minutos)
+                      </label>
+                      <input
+                        type="number"
+                        min="10"
+                        step="5"
+                        placeholder="Ej. 90 (1h 30m)"
+                        value={duracionEstimada}
+                        onChange={(e) => setDuracionEstimada(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary"
                       />
                     </div>
                   </div>
 
-                  <h4 className="font-wixDisplay text-base font-bold text-textDark mt-8 mb-4 pb-2 border-b border-black/5">Contacto y Horarios</h4>
+                  {/* SECCIÓN 4: CONTACTO Y REDES SOCIALES (OPCIONALES) */}
+                  <h4 className="font-wixDisplay text-base font-bold text-textDark mt-8 pb-2 border-b border-black/5 flex items-center space-x-2">
+                    <Phone className="h-4 w-4 text-fillPrimary" />
+                    <span>Contacto y Enlaces Oficiales</span>
+                    <span className="text-[10px] text-textDark/40 font-normal uppercase ml-1">(Opcional)</span>
+                  </h4>
                   
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Email de Contacto *
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Teléfono de Contacto
                       </label>
                       <input
                         type="text"
-                        placeholder="Ej. contacto@nonegocio.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
-                          !email.trim() ? 'border-orange-300' : 'border-black/10'
-                        }`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Teléfono de Contacto *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ej. +54 261 4123456"
+                        placeholder="Ej. +54 9 261 4123456"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
-                          !phone.trim() ? 'border-orange-300' : 'border-black/10'
-                        }`}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary"
                       />
                     </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                        Horario de Atención de Muestra *
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Sitio Web Oficial
                       </label>
                       <input
                         type="text"
-                        placeholder="Ej. Lunes a Viernes de 09:00 a 18:00 hs"
-                        value={hours}
-                        onChange={(e) => setHours(e.target.value)}
-                        className={`w-full px-4 py-2.5 rounded-lg border bg-bgPrimary focus:bg-white focus:outline-none transition-all text-sm font-semibold ${
-                          !hours.trim() ? 'border-orange-300' : 'border-black/10'
-                        }`}
+                        placeholder="Ej. https://bodegalosandes.com"
+                        value={website}
+                        onChange={(e) => setWebsite(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                        Usuario de Instagram
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. @bodegalosandes"
+                        value={instagram}
+                        onChange={(e) => setInstagram(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/40 focus:bg-white focus:outline-none transition-all text-xs font-semibold focus:border-fillPrimary"
                       />
                     </div>
                   </div>
 
-                  {/* Submit and Cancel Tools */}
+                  {/* Submit and Cancel Buttons */}
                   <div className="pt-6 border-t border-black/5 flex space-x-3 justify-end">
                     <button
                       type="button"
@@ -679,10 +1048,14 @@ export default function BusinessProfile() {
                     </button>
                     <button
                       type="submit"
-                      disabled={validationErrors.length > 0 || formatErrors.length > 0}
+                      disabled={validationErrors.length > 0 || formatErrors.length > 0 || isSaving}
                       className="flex items-center space-x-2 px-6 py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none"
                     >
-                      <Save className="h-4 w-4" />
+                      {isSaving ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
                       <span>{viewMode === 'create' ? 'Registrar Negocio' : 'Guardar Cambios'}</span>
                     </button>
                   </div>
@@ -695,7 +1068,7 @@ export default function BusinessProfile() {
               <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-sm space-y-6">
                 <div>
                   <h4 className="font-wixDisplay text-base font-bold text-textDark">Galería de imágenes</h4>
-                  <p className="text-xs text-textDark/60 mt-0.5">Gestiona las fotografías oficiales del negocio</p>
+                  <p className="text-xs text-textDark/60 mt-0.5">Sube fotografías oficiales para la ficha turística</p>
                 </div>
 
                 {/* Hidden File Input for Device Filesystem */}
@@ -708,7 +1081,7 @@ export default function BusinessProfile() {
                   onChange={handleFileInputChange}
                 />
 
-                {/* Drag and Drop Zone (US-GIT-09) */}
+                {/* Drag and Drop Zone */}
                 <div 
                   onDragEnter={handleDrag}
                   onDragOver={handleDrag}
@@ -723,7 +1096,7 @@ export default function BusinessProfile() {
                 >
                   <UploadCloud className="h-8 w-8 text-fillPrimary/70" />
                   <div className="text-xs">
-                    <p className="font-bold text-textDark/80">Arrastra fotos de tu dispositivo aquí o haz clic para explorar</p>
+                    <p className="font-bold text-textDark/80">Arrastra fotos aquí o haz clic para explorar</p>
                     <p className="text-[10px] text-textDark/50 mt-1">Soporta PNG, JPG, WEBP (Máx. {generalParams.maxImagesPerPOI} imágenes)</p>
                   </div>
                 </div>
@@ -760,7 +1133,7 @@ export default function BusinessProfile() {
                           alt={`POI Image ${index + 1}`}
                           className="h-full w-full object-cover transition-transform group-hover:scale-105"
                         />
-                        {/* Hover delete button (US-GIT-11) */}
+                        {/* Hover delete button */}
                         <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <button
                             type="button"

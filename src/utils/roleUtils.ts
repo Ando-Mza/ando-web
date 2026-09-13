@@ -2,11 +2,15 @@ import { UserRole, POIStatus } from '../types';
 import { USER_ROLES, POI_STATUSES, BACKEND_POI_STATUS_MAP } from '../constants/enums';
 
 /**
- * Normalizes raw role strings from backend APIs into standard UserRole types.
+ * Normalizes raw role strings or role objects from backend APIs into standard UserRole types.
  */
-export function mapBackendRoleToFrontend(roleName?: string): UserRole {
-  if (!roleName) return USER_ROLES.TOURIST;
-  const normalized = roleName.trim().toLowerCase();
+export function mapBackendRoleToFrontend(roleInput?: any): UserRole {
+  if (!roleInput) return USER_ROLES.TOURIST;
+  let roleName = roleInput;
+  if (typeof roleInput === 'object') {
+    roleName = roleInput.nombre || roleInput.name || roleInput.rol?.nombre || roleInput.role || '';
+  }
+  const normalized = String(roleName || '').trim().toLowerCase();
   if (normalized === 'administrador' || normalized === 'admin') {
     return USER_ROLES.ADMIN;
   }
@@ -17,14 +21,30 @@ export function mapBackendRoleToFrontend(roleName?: string): UserRole {
 }
 
 /**
- * Normalizes backend POI status strings into standard POIStatus types.
+ * Normalizes backend POI status strings or status objects into standard POIStatus types.
  */
-export function mapBackendStatusToFrontend(statusStr?: string): POIStatus {
-  if (!statusStr) return POI_STATUSES.PENDING;
-  const normalized = statusStr.trim().toLowerCase();
-  if (normalized === 'aprobado' || normalized === 'approved') return POI_STATUSES.APPROVED;
-  if (normalized === 'rechazado' || normalized === 'rejected') return POI_STATUSES.REJECTED;
-  if (normalized === 'corregir' || normalized === 'correction') return POI_STATUSES.CORRECTION;
+export function mapBackendStatusToFrontend(statusInput?: any): POIStatus {
+  if (!statusInput) return POI_STATUSES.PENDING;
+  let statusStr = statusInput;
+  if (typeof statusInput === 'object') {
+    statusStr = statusInput.nombre || statusInput.name || statusInput.codigo || '';
+  }
+  const normalized = String(statusStr || '').trim().toLowerCase();
+  if (normalized === 'aprobado' || normalized === 'approved' || normalized === 'validado por la comunidad') {
+    return POI_STATUSES.APPROVED;
+  }
+  if (normalized === 'rechazado' || normalized === 'rejected') {
+    return POI_STATUSES.REJECTED;
+  }
+  if (
+    normalized === 'corregir' || 
+    normalized === 'correction' || 
+    normalized === 'corrección solicitada' || 
+    normalized === 'correccion solicitada' ||
+    normalized === 'observado por la comunidad'
+  ) {
+    return POI_STATUSES.CORRECTION;
+  }
   return POI_STATUSES.PENDING;
 }
 

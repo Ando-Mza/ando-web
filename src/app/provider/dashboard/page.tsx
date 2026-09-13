@@ -6,29 +6,45 @@ import {
   Store,
   Clock, 
   AlertCircle,
-  CheckCircle,
-  MapPin,
-  Image as ImageIcon,
-  Calendar,
-  AlertTriangle,
-  ChevronRight,
-  Phone,
-  Mail,
-  Sparkles,
-  Award,
-  Star,
-  MousePointerClick,
-  MessageSquare,
-  Send,
-  User as UserIcon
+  CheckCircle, 
+  MapPin, 
+  Image as ImageIcon, 
+  Calendar, 
+  AlertTriangle, 
+  ChevronRight, 
+  Phone, 
+  Mail, 
+  Sparkles, 
+  Award, 
+  Star, 
+  MousePointerClick, 
+  MessageSquare, 
+  Send, 
+  User as UserIcon,
+  Briefcase,
+  Layers
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ProviderDashboard() {
-  const { pois, schedules, generalParams, currentUser, reviews, addReviewReply } = useApp();
+  const { 
+    pois, 
+    schedules, 
+    generalParams, 
+    currentUser, 
+    providerReviews, 
+    loadProviderReviews, 
+    replyToReview 
+  } = useApp();
+
+  // Cargar reseñas reales del prestador
+  useEffect(() => {
+    loadProviderReviews();
+  }, []);
 
   // 1. Memoizar POIs del prestador autenticado
   const providerPois = React.useMemo(() => {
+    if (currentUser?.role === 'provider') return pois;
     const providerId = currentUser?.id || '';
     return pois.filter((p) => 
       currentUser?.role === 'admin' || 
@@ -76,7 +92,7 @@ export default function ProviderDashboard() {
 
   const selectedPoi = providerPois.find((p) => p.id === selectedPoiId) || providerPois[0];
   const selectedSchedules = schedules.filter((s) => s.poiId === selectedPoi?.id);
-  const selectedReviews = reviews.filter((r) => r.poiId === selectedPoi?.id);
+  const selectedReviews = providerReviews.filter((r) => r.poiId === selectedPoi?.id);
 
   // 3. Cálculo dinámico del porcentaje de completitud del perfil del negocio seleccionado
   const calculateCompleteness = () => {
@@ -94,9 +110,9 @@ export default function ProviderDashboard() {
 
   const completenessScore = calculateCompleteness();
 
-  const handleSendReply = (reviewId: string) => {
+  const handleSendReply = async (reviewId: string) => {
     if (!replyText.trim()) return;
-    addReviewReply(reviewId, replyText.trim());
+    await replyToReview(reviewId, replyText.trim());
     setReplyingToReviewId(null);
     setReplyText('');
   };
@@ -253,67 +269,91 @@ export default function ProviderDashboard() {
         </div>
       )}
 
-      {/* Real Per-Business Metrics Grid */}
+      {/* Real Per-Business Metrics Grid - All Clickable */}
       {selectedPoi && (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Métrica 1: Clics / Interacciones */}
-          <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
-            <div className="p-3 bg-fillPrimary/10 text-fillPrimary rounded-xl">
-              <MousePointerClick className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Clics / Vistas</p>
-              <h4 className="text-2xl font-bold text-textDark">
-                {(selectedPoi.clicksCount || 0).toLocaleString()}{' '}
-                <span className="text-xs font-normal text-textDark/40">interacciones</span>
-              </h4>
-            </div>
-          </div>
-
-          {/* Métrica 2: Rating Promedio y Reseñas */}
-          <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
-            <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl">
-              <Star className="h-6 w-6 fill-yellow-400 text-yellow-400" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Calificación Promedio</p>
-              {selectedReviews.length > 0 ? (
+          {/* Métrica 1: Clics / Vistas -> Link to Business */}
+          <Link
+            href="/provider/business"
+            className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md hover:border-fillPrimary/20 transition-all flex items-center justify-between group cursor-pointer"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-fillPrimary/10 text-fillPrimary rounded-xl group-hover:scale-105 transition-transform">
+                <MousePointerClick className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Clics / Vistas</p>
                 <h4 className="text-2xl font-bold text-textDark">
-                  {(selectedReviews.reduce((acc, r) => acc + r.rating, 0) / selectedReviews.length).toFixed(1)}{' '}
-                  <span className="text-xs font-normal text-textDark/40">
-                    ({selectedReviews.length} reseña{selectedReviews.length !== 1 ? 's' : ''})
-                  </span>
+                  {(selectedPoi.clicksCount || 0).toLocaleString()}{' '}
+                  <span className="text-xs font-normal text-textDark/40">interacciones</span>
                 </h4>
-              ) : (
-                <h4 className="text-sm font-bold text-textDark/50 mt-1">Sin reseñas</h4>
-              )}
+              </div>
             </div>
-          </div>
+            <ChevronRight className="h-5 w-5 text-textDark/30 group-hover:text-fillPrimary group-hover:translate-x-0.5 transition-all" />
+          </Link>
 
-          {/* Métrica 3: Galería Multimedia */}
-          <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
-            <div className="p-3 bg-accentWine/10 text-accentWine rounded-xl">
-              <ImageIcon className="h-6 w-6" />
+          {/* Métrica 2: Rating Promedio y Reseñas -> Link to Reviews */}
+          <Link
+            href="/provider/reviews"
+            className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md hover:border-yellow-300 transition-all flex items-center justify-between group cursor-pointer"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl group-hover:scale-105 transition-transform">
+                <Star className="h-6 w-6 fill-yellow-400 text-yellow-400" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Calificación / Reseñas</p>
+                {selectedReviews.length > 0 ? (
+                  <h4 className="text-2xl font-bold text-textDark">
+                    {(selectedReviews.reduce((acc, r) => acc + r.rating, 0) / selectedReviews.length).toFixed(1)}{' '}
+                    <span className="text-xs font-normal text-textDark/40">
+                      ({selectedReviews.length} reseña{selectedReviews.length !== 1 ? 's' : ''})
+                    </span>
+                  </h4>
+                ) : (
+                  <h4 className="text-sm font-bold text-textDark/50 mt-1">Ver panel de reseñas →</h4>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Galería de Fotos</p>
-              <h4 className="text-2xl font-bold text-textDark">
-                {selectedPoi.images?.length || 0}{' '}
-                <span className="text-xs font-normal text-textDark/40">/ {generalParams.maxImagesPerPOI} máx</span>
-              </h4>
-            </div>
-          </div>
+            <ChevronRight className="h-5 w-5 text-textDark/30 group-hover:text-yellow-600 group-hover:translate-x-0.5 transition-all" />
+          </Link>
 
-          {/* Métrica 4: Completitud del Perfil */}
-          <div className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md transition-shadow flex items-center space-x-4">
-            <div className="p-3 bg-accentPurple/10 text-accentPurple rounded-xl">
-              <Award className="h-6 w-6" />
+          {/* Métrica 3: Galería Multimedia -> Link to Business Images */}
+          <Link
+            href="/provider/business"
+            className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md hover:border-accentWine/20 transition-all flex items-center justify-between group cursor-pointer"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-accentWine/10 text-accentWine rounded-xl group-hover:scale-105 transition-transform">
+                <ImageIcon className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Galería de Fotos</p>
+                <h4 className="text-2xl font-bold text-textDark">
+                  {selectedPoi.images?.length || 0}{' '}
+                  <span className="text-xs font-normal text-textDark/40">/ {generalParams.maxImagesPerPOI} máx</span>
+                </h4>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Completitud Perfil</p>
-              <h4 className="text-2xl font-bold text-textDark">{completenessScore}%</h4>
+            <ChevronRight className="h-5 w-5 text-textDark/30 group-hover:text-accentWine group-hover:translate-x-0.5 transition-all" />
+          </Link>
+
+          {/* Métrica 4: Completitud del Perfil -> Link to Profile */}
+          <Link
+            href="/provider/profile"
+            className="bg-white rounded-xl p-5 border border-black/5 shadow-xs hover:shadow-md hover:border-accentPurple/20 transition-all flex items-center justify-between group cursor-pointer"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-accentPurple/10 text-accentPurple rounded-xl group-hover:scale-105 transition-transform">
+                <Award className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-textDark/50 uppercase tracking-wider">Completitud Perfil</p>
+                <h4 className="text-2xl font-bold text-textDark">{completenessScore}%</h4>
+              </div>
             </div>
-          </div>
+            <ChevronRight className="h-5 w-5 text-textDark/30 group-hover:text-accentPurple group-hover:translate-x-0.5 transition-all" />
+          </Link>
         </div>
       )}
 
@@ -333,32 +373,46 @@ export default function ProviderDashboard() {
                     Información pública visible para turistas en ANDO.
                   </p>
                 </div>
-                <span className="bg-accentWine/10 text-accentWine px-3 py-1 rounded-full text-xs font-bold">
-                  {selectedPoi.category}
-                </span>
+                <Link
+                  href="/provider/business"
+                  className="bg-accentWine/10 text-accentWine hover:bg-accentWine/20 px-3 py-1 rounded-full text-xs font-bold transition-colors inline-flex items-center space-x-1"
+                >
+                  <span>{selectedPoi.category}</span>
+                  <ChevronRight className="h-3 w-3" />
+                </Link>
               </div>
 
               {/* Cover Image */}
-              <div className="relative h-56 w-full rounded-xl overflow-hidden bg-bgPrimary border border-black/5">
+              <Link 
+                href="/provider/business" 
+                className="relative h-56 w-full rounded-xl overflow-hidden bg-bgPrimary border border-black/5 block group cursor-pointer"
+                title="Haga clic para gestionar fotos del local"
+              >
                 {selectedPoi.images && selectedPoi.images.length > 0 ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={selectedPoi.images[0]}
                     alt={selectedPoi.name}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover group-hover:scale-102 transition-transform duration-300"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-textDark/40 space-y-2">
-                    <ImageIcon className="h-10 w-10 text-textDark/20" />
-                    <span className="text-xs">Sin fotos de portada cargadas.</span>
+                  <div className="flex flex-col items-center justify-center h-full text-textDark/40 space-y-2 group-hover:text-fillPrimary transition-colors">
+                    <ImageIcon className="h-10 w-10 text-textDark/20 group-hover:text-fillPrimary/40 transition-colors" />
+                    <span className="text-xs font-medium">Sin fotos de portada cargadas. Haga clic para subir fotos.</span>
                   </div>
                 )}
-              </div>
+              </Link>
 
               {/* Details List */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div className="bg-bgPrimary/50 p-4 rounded-xl border border-black/5 space-y-2">
-                  <span className="font-bold text-textDark/70 uppercase tracking-wider block">Ubicación y Dirección</span>
+                <Link
+                  href="/provider/business"
+                  className="bg-bgPrimary/50 p-4 rounded-xl border border-black/5 space-y-2 hover:bg-bgPrimary/80 transition-colors block"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-textDark/70 uppercase tracking-wider block">Ubicación y Dirección</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-textDark/40" />
+                  </div>
                   <p className="flex items-start text-textDark font-medium">
                     <MapPin className="h-4 w-4 mr-1.5 text-fillPrimary flex-shrink-0 mt-0.5" />
                     <span>{selectedPoi.address || 'Sin dirección especificada'}</span>
@@ -366,10 +420,16 @@ export default function ProviderDashboard() {
                   <p className="text-[11px] text-textDark/50">
                     GPS: Lat {selectedPoi.location?.lat}, Lng {selectedPoi.location?.lng}
                   </p>
-                </div>
+                </Link>
 
-                <div className="bg-bgPrimary/50 p-4 rounded-xl border border-black/5 space-y-2">
-                  <span className="font-bold text-textDark/70 uppercase tracking-wider block">Contacto Comercial</span>
+                <Link
+                  href="/provider/business"
+                  className="bg-bgPrimary/50 p-4 rounded-xl border border-black/5 space-y-2 hover:bg-bgPrimary/80 transition-colors block"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-textDark/70 uppercase tracking-wider block">Contacto Comercial</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-textDark/40" />
+                  </div>
                   {selectedPoi.phone && (
                     <p className="flex items-center text-textDark font-medium">
                       <Phone className="h-3.5 w-3.5 mr-1.5 text-fillPrimary flex-shrink-0" />
@@ -385,7 +445,7 @@ export default function ProviderDashboard() {
                   {!selectedPoi.phone && !selectedPoi.email && (
                     <p className="text-textDark/50">Sin datos de contacto cargados</p>
                   )}
-                </div>
+                </Link>
               </div>
 
               {/* Description */}
@@ -430,10 +490,16 @@ export default function ProviderDashboard() {
                     ))}
                   </div>
                 ) : (
-                  <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-center space-x-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
-                    <span>Este negocio aún no posee reglas horarias asociadas.</span>
-                  </div>
+                  <Link
+                    href="/provider/schedules"
+                    className="p-4 bg-amber-50/50 hover:bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-center justify-between transition-colors block"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                      <span>Este negocio aún no posee reglas horarias asociadas.</span>
+                    </div>
+                    <span className="font-bold text-fillPrimary underline">Configurar Ahora →</span>
+                  </Link>
                 )}
               </div>
             </div>
@@ -450,14 +516,18 @@ export default function ProviderDashboard() {
                     Opiniones públicas dejadas por visitantes para <strong className="text-textDark font-bold">{selectedPoi.name}</strong>.
                   </p>
                 </div>
-                <div className="flex items-center space-x-1.5 bg-yellow-50 text-yellow-800 px-3 py-1 rounded-full border border-yellow-200 text-xs font-bold">
+                <Link
+                  href="/provider/reviews"
+                  className="flex items-center space-x-1.5 bg-yellow-50 hover:bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full border border-yellow-200 text-xs font-bold transition-colors"
+                >
                   <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
                   <span>
                     {selectedReviews.length > 0
                       ? `${(selectedReviews.reduce((acc, r) => acc + r.rating, 0) / selectedReviews.length).toFixed(1)} / 5.0`
-                      : 'Sin reseñas'}
+                      : 'Ver todas'}
                   </span>
-                </div>
+                  <ChevronRight className="h-3 w-3" />
+                </Link>
               </div>
 
               {selectedReviews.length > 0 ? (
@@ -495,16 +565,20 @@ export default function ProviderDashboard() {
                       </p>
 
                       {/* Reply from Provider if exists */}
-                      {rev.reply ? (
+                      {(rev.response || rev.status === 'respondida') ? (
                         <div className="ml-4 pl-3 border-l-2 border-fillPrimary bg-white p-3 rounded-r-xl text-xs space-y-1 border border-black/5 shadow-2xs">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-fillPrimary flex items-center space-x-1">
                               <Store className="h-3.5 w-3.5 text-fillPrimary" />
-                              <span>Respuesta de {rev.reply.authorName || selectedPoi.name}</span>
+                              <span>Respuesta de {rev.response?.authorName || currentUser?.businessName || selectedPoi.name}</span>
                             </span>
-                            <span className="text-[10px] text-textDark/40">{rev.reply.date}</span>
+                            <span className="text-[10px] text-textDark/40">
+                              {rev.response?.fechaCreacion ? rev.response.fechaCreacion.split('T')[0] : rev.date}
+                            </span>
                           </div>
-                          <p className="text-textDark/80 italic">{rev.reply.comment}</p>
+                          <p className="text-textDark/80 italic">
+                            {rev.response?.comentario || 'Tu respuesta pública ha sido registrada en el sistema.'}
+                          </p>
                         </div>
                       ) : (
                         <div>
@@ -536,17 +610,25 @@ export default function ProviderDashboard() {
                               </div>
                             </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReplyingToReviewId(rev.id);
-                                setReplyText('');
-                              }}
-                              className="text-xs font-bold text-fillPrimary hover:underline inline-flex items-center space-x-1 pt-1 cursor-pointer"
-                            >
-                              <MessageSquare className="h-3.5 w-3.5" />
-                              <span>Responder como prestador</span>
-                            </button>
+                            <div className="flex items-center space-x-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReplyingToReviewId(rev.id);
+                                  setReplyText('');
+                                }}
+                                className="text-xs font-bold text-fillPrimary hover:underline inline-flex items-center space-x-1 pt-1 cursor-pointer"
+                              >
+                                <MessageSquare className="h-3.5 w-3.5" />
+                                <span>Responder como prestador</span>
+                              </button>
+                              <Link
+                                href="/provider/reviews"
+                                className="text-xs font-medium text-textDark/50 hover:text-fillPrimary pt-1"
+                              >
+                                Ir al panel de reseñas →
+                              </Link>
+                            </div>
                           )}
                         </div>
                       )}
@@ -558,6 +640,12 @@ export default function ProviderDashboard() {
                   <MessageSquare className="h-8 w-8 text-textDark/20 mx-auto" />
                   <p className="text-xs font-bold text-textDark/60">Aún no hay reseñas registradas para este negocio</p>
                   <p className="text-[11px] text-textDark/40">Las opiniones dejadas por turistas en la app móvil aparecerán aquí.</p>
+                  <Link
+                    href="/provider/reviews"
+                    className="inline-block pt-2 text-xs font-bold text-fillPrimary hover:underline"
+                  >
+                    Ver panel de reseñas completo →
+                  </Link>
                 </div>
               )}
             </div>
@@ -576,7 +664,10 @@ export default function ProviderDashboard() {
                   href="/provider/business" 
                   className="w-full py-3 px-4 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs transition-all shadow-xs flex items-center justify-between cursor-pointer"
                 >
-                  <span>Actualizar Fotos o Información</span>
+                  <div className="flex items-center space-x-2">
+                    <Store className="h-4 w-4" />
+                    <span>Actualizar Fotos o Información</span>
+                  </div>
                   <ChevronRight className="h-4 w-4" />
                 </Link>
 
@@ -584,7 +675,32 @@ export default function ProviderDashboard() {
                   href="/provider/schedules" 
                   className="w-full py-3 px-4 bg-bgPrimary hover:bg-black/5 border border-black/10 text-textDark font-bold rounded-xl text-xs transition-all flex items-center justify-between cursor-pointer"
                 >
-                  <span>Modificar Horarios de Atención</span>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-fillPrimary" />
+                    <span>Modificar Días y Horarios</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+
+                <Link 
+                  href="/provider/services" 
+                  className="w-full py-3 px-4 bg-bgPrimary hover:bg-black/5 border border-black/10 text-textDark font-bold rounded-xl text-xs transition-all flex items-center justify-between cursor-pointer"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Layers className="h-4 w-4 text-accentPurple" />
+                    <span>Administrar Servicios y Comodidades</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+
+                <Link 
+                  href="/provider/reviews" 
+                  className="w-full py-3 px-4 bg-bgPrimary hover:bg-black/5 border border-black/10 text-textDark font-bold rounded-xl text-xs transition-all flex items-center justify-between cursor-pointer"
+                >
+                  <div className="flex items-center space-x-2">
+                    <MessageSquare className="h-4 w-4 text-yellow-600" />
+                    <span>Ver y Responder Reseñas</span>
+                  </div>
                   <ChevronRight className="h-4 w-4" />
                 </Link>
 
@@ -592,7 +708,7 @@ export default function ProviderDashboard() {
                   href="/provider/business" 
                   className="w-full py-3 px-4 bg-white hover:bg-black/5 border border-black/10 text-textDark/80 font-semibold rounded-xl text-xs transition-all flex items-center justify-between cursor-pointer"
                 >
-                  <span>Registrar Nuevo Negocio</span>
+                  <span>Registrar Nuevo Establecimiento</span>
                   <Store className="h-4 w-4 text-fillPrimary" />
                 </Link>
               </div>

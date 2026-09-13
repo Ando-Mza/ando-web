@@ -3,6 +3,8 @@ export type UserRole = 'admin' | 'provider' | 'tourist';
 export interface User {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   role: UserRole;
   businessName?: string; // Solo para Prestadores
@@ -19,21 +21,66 @@ export interface POI {
   name: string;
   description: string;
   category: string;
+  categoriaIds?: string[];
   address: string;
   location: {
     lat: number;
     lng: number;
   };
+  regionId?: string;
+  departamentoId?: string;
+  zonaId?: string;
+  precioMin?: number;
+  precioMax?: number;
+  website?: string;
+  phone?: string;
+  instagram?: string;
+  duracionEstimada?: number;
+  imagenPrincipalUrl?: string;
   images: string[];
   status: POIStatus;
   feedback?: string; // Comentarios de rechazo o solicitud de corrección
   createdBy: string; // ID del prestador
   updatedAt: string;
   email?: string;
-  phone?: string;
   clicksCount?: number;  // Cantidad de clics / vistas del negocio en la app
   rating?: number;       // Calificación promedio (1 a 5)
   reviewsCount?: number; // Total de valoraciones recibidas
+
+  // Campos extendidos de negocio y trazabilidad (CYN-02 & CYN-05)
+  organizacionId?: string;
+  fuente?: 'prestador' | 'turista' | string;
+  horarios?: any[];
+  departamentoNombre?: string;
+  regionNombre?: string;
+  zonaNombre?: string;
+  creadoPorNombre?: string;
+  creadoPorEmail?: string;
+  organizacionNombre?: string;
+  validacionesCount?: number;
+  reportesCount?: number;
+  validaciones?: any[];
+  revisiones?: any[];
+}
+
+export interface Region {
+  id: string;
+  nombre: string;
+  activo?: boolean;
+}
+
+export interface Departamento {
+  id: string;
+  nombre: string;
+  regionId: string;
+  activo?: boolean;
+}
+
+export interface Zona {
+  id: string;
+  nombre: string;
+  departamentoId: string;
+  activo?: boolean;
 }
 
 export interface ReviewReply {
@@ -106,6 +153,73 @@ export interface Category {
   enabled: boolean;
 }
 
+export interface Etiqueta {
+  id: string;
+  nombre: string;
+  activa: boolean;
+  fechaCreacion?: string;
+}
+
+export interface ServiceItem {
+  id: string;
+  poiId: string;
+  name: string;
+  description: string;
+  category?: string;
+  price: number;
+  durationMinutes: number;
+  maxCapacity?: number;
+  isAvailable: boolean;
+  terms?: string;
+}
+
+export interface ReviewItem {
+  id: string;
+  poiId: string;
+  poiName?: string;
+  userName: string;
+  userAvatar?: string;
+  rating: number; // 1 a 5
+  comment: string;
+  date: string;
+  status: 'pendiente de respuesta' | 'respondida' | 'publicada';
+  images?: string[];
+  response?: {
+    id?: string;
+    comentario: string;
+    fechaCreacion: string;
+    authorName?: string;
+  };
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error' | 'validation' | 'review';
+  isRead: boolean;
+  createdAt: string;
+  actionUrl?: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  entity: string;
+  entityId?: string;
+  adminName: string;
+  ip?: string;
+  detail?: string;
+}
+
+export interface FAQItem {
+  id: string;
+  question: string;
+  answer: string;
+  category: 'pois' | 'schedules' | 'account' | 'validation' | 'general';
+}
+
 export interface ValidationState {
   id: string;
   name: string;
@@ -113,4 +227,5 @@ export interface ValidationState {
   enabled: boolean;
   allowedTransitions: string[]; // IDs de estados destinos válidos
 }
+
 

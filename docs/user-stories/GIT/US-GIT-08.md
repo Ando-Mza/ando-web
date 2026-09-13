@@ -1,39 +1,35 @@
-# US-GIT-08: Gestión de Horarios y Temporadas
+# US-GIT-08: Gestión de Multimedia como Turista
 
 ## Información General
-*   **Identificador:** US-GIT-08
-*   **Actor:** Prestador / Administrador
-*   **Puntos de Historia:** 5
-*   **Precondiciones:**
-    *   El Prestador/Administrador debe encontrarse autenticado.
-    *   El negocio o POI debe estar registrado en el sistema.
-    *   El usuario debe poseer permisos de edición sobre dicho negocio o POI.
-*   **Historias de Usuario Relacionadas:** US-CYN-02, US-GIT-01, US-GIT-07
+- **Identificador:** US-GIT-08
+- **Actor:** Turista
+- **Puntos de Historia:** 3
+- **Precondiciones:**
+  - El Turista debe estar autenticado.
+  - Debe estar redactando o haber publicado una reseña sobre un POI.
+- **Historias de Usuario Relacionadas:** US-ACC-01, US-ACC-03, US-RYV-01, US-RYV-02
 
 ---
 
 ## Descripción General
-Como Prestador o Administrador,
-quiero gestionar los horarios de atención y temporadas de funcionamiento de un Punto de Interés o negocio turístico,
-para brindar información actualizada a los turistas y evitar recomendaciones hacia lugares que no se encuentren disponibles.
+**Como** Turista  
+**Quiero** adjuntar imágenes a mi reseña de un POI  
+**Para** complementar mi opinión con evidencia visual y ayudar a otros Turistas a conocer mejor el lugar.
 
 ---
 
 ## Descripción Funcional
-El sistema deberá permitir registrar, modificar y consultar los horarios de atención y los períodos de apertura de un negocio o POI turístico. El Prestador podrá definir horarios regulares por día de la semana, así como temporadas especiales (alta, baja o eventos específicos) con fechas de vigencia determinadas.
-
-Esta información será utilizada por los módulos de búsqueda, recomendaciones e itinerarios para mostrar únicamente opciones disponibles en la fecha seleccionada por el usuario.
+Al redactar una reseña sobre un POI, el Turista puede adjuntar una o más imágenes desde su dispositivo. El sistema genera una URL prefirmada mediante el backend y el cliente sube la imagen directamente al bucket de Cloudflare R2. La imagen es procesada en background por Sharp antes de almacenarse. Una vez procesada, el sistema almacena la URL pública resultante asociada a la reseña. Las imágenes de la reseña se visualizan en el perfil público del POI junto al comentario del Turista.
 
 ---
 
 ## Criterios de Aceptación
 | Cuando | Espero | Pantalla |
 | :--- | :--- | :--- |
-| El prestador accede a la gestión de horarios de un negocio | El sistema muestra los horarios actualmente registrados | Formulario de Gestión de Horarios |
-| El prestador registra horarios de atención para cada día de la semana | El sistema valida y almacena correctamente la información ingresada | Formulario de Gestión de Horarios |
-| El prestador define una temporada especial indicando fecha de inicio y fin | El sistema registra la temporada y la asocia al negocio o punto de interés | Formulario de Gestión de Horarios / Temporadas |
-| El prestador modifica horarios o temporadas existentes | El sistema actualiza la información y conserva la nueva configuración | Formulario de Gestión de Horarios |
-| El prestador intenta ingresar una fecha de fin anterior a la fecha de inicio de la temporada | El sistema muestra un mensaje de validación ("La fecha de fin debe ser posterior o igual a la de inicio") y no permite guardar la información | Formulario de Gestión de Horarios |
-| Un turista consulta un negocio o punto de interés | El sistema muestra los horarios vigentes correspondientes a la fecha seleccionada, teniendo en cuenta la temporada | Pantalla de detalle de POI |
-| El motor de recomendaciones genera sugerencias para una fecha determinada | El sistema considera únicamente lugares abiertos y disponibles en esa fecha de acuerdo a su horario y temporada | Motor de Recomendaciones (Servicio) |
-| Un administrador consulta la información de un negocio | El sistema permite visualizar las temporadas y horarios registrados para tareas de control y validación | Panel de Administración |
+| El Turista presiona el botón “subir imagen” en su reseña y adjunta una imagen válida (JPG, PNG o WEBP) a su reseña | El sistema sube la imagen a Cloudflare R2, la procesa en background y la muestra junto a la reseña en el perfil del POI | - |
+| El Turista presiona el botón “subir imagen” en su reseña y adjunta un archivo en formato no soportado | El sistema muestra por pantalla el mensaje "El archivo debe ser una imagen en formato JPG, PNG o WEBP" y bloquea el botón “guardar” | - |
+| El Turista presiona el botón “subir imagen” en su reseña y adjunta una imagen que supera el tamaño máximo permitido | El sistema muestra "La imagen no puede superar los 30 MB" y bloquea el botón “guardar” | - |
+| El Turista presiona el botón “eliminar imagen” antes de publicar su reseña | El sistema elimina la URL asociada a la reseña y el archivo del bucket de Cloudflare R2. Se muestra por pantalla el mensaje “Su imagen fue eliminada” | - |
+| La imagen fue subida pero el procesamiento en background aún no finalizó | El sistema muestra un mensaje de "Procesando imagen..." y la imagen se visualiza una vez que el proceso finaliza | - |
+| El Turista presiona el botón “subir imagen ”en su reseña, pero al selecciona la misma pero pierde la conexión durante la subida | La operación se cancela y el sistema no almacena ningún registro parcial en ImagenPOI ni de la reseña. | - |
+| El Turista intenta eliminar la única imagen de su reseña presionando el botón “eliminar imagen” | El sistema le advierte "Tu reseña quedará sin imágenes. ¿Confirmás la eliminación?" y procede sólo si el Turista presiona el botón “confirmar” | - |

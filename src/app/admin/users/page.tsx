@@ -151,7 +151,7 @@ export default function UserManagementPage() {
   const isFormValid = isNameFilled && isEmailValid && isCuitValid && isPasswordFilledForCreate && isBusinessNameFilled;
 
   // 5. SAVE HANDLER
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) return;
 
@@ -167,7 +167,7 @@ export default function UserManagementPage() {
         status: formStatus
       };
 
-      const res = adminCreateUser(payload);
+      const res = await adminCreateUser(payload);
       if (res.success) {
         triggerToast(`Usuario "${formName}" creado exitosamente.`);
         setViewMode('list');
@@ -189,7 +189,7 @@ export default function UserManagementPage() {
         updatedData.password = formPassword;
       }
 
-      const res = updateProviderProfile(selectedUser.id, updatedData);
+      const res = await updateProviderProfile(selectedUser.id, updatedData);
       if (res.success) {
         triggerToast(`Usuario "${formName}" actualizado exitosamente.`);
         setViewMode('list');
@@ -198,6 +198,7 @@ export default function UserManagementPage() {
       }
     }
   };
+
 
   // 6. DELETE HANDLER
   const askDeleteUser = (user: User) => {
@@ -239,7 +240,7 @@ export default function UserManagementPage() {
       {/* Overview Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h3 className="font-wixDisplay text-2xl font-bold text-accentWine">Gestión de Usuarios (GDU)</h3>
+          <h3 className="font-wixDisplay text-2xl font-bold text-accentWine">Gestión de Usuarios</h3>
           <p className="text-sm text-textDark/60">
             Administra los roles, credenciales y estados de las cuentas de prestadores y administradores del ecosistema.
           </p>
