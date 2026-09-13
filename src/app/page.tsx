@@ -116,7 +116,8 @@ export default function LoginPage() {
   // Helper validation functions
   const validateEmailFormat = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const validateCuitFormat = (cuit: string) => /^\d{11}$/.test(cuit.replace(/[-]/g, ''));
-  const validatePasswordStrength = (pwd: string) => pwd.length >= 8 && /[A-Z]/.test(pwd) && /[0-9]/.test(pwd);
+  const validatePasswordStrength = (pwd: string) =>
+    pwd.length >= 8 && /[A-Z]/.test(pwd) && /[0-9]/.test(pwd) && /[^A-Za-z0-9]/.test(pwd);
   
   const calculateAge = (birthDateString: string) => {
     const today = new Date();
@@ -148,7 +149,7 @@ export default function LoginPage() {
       errors.push('Debes tener al menos 18 años para registrarte como prestador.');
     }
     if (!validatePasswordStrength(regPassword)) {
-      errors.push('La contraseña debe tener al menos 8 caracteres, incluir una mayúscula y al menos un número.');
+      errors.push('La contraseña debe tener al menos 8 caracteres, incluir una mayúscula, un número y un carácter especial.');
     }
     if (regPassword !== regConfirmPassword) {
       errors.push('Las contraseñas no coinciden.');
@@ -231,7 +232,7 @@ export default function LoginPage() {
     const errors: string[] = [];
 
     if (!validatePasswordStrength(resetPasswordVal)) {
-      errors.push('La contraseña debe tener al menos 8 caracteres, incluir una mayúscula y un número.');
+      errors.push('La contraseña debe tener al menos 8 caracteres, incluir una mayúscula, un número y un carácter especial.');
     }
     if (resetPasswordVal !== resetConfirmPasswordVal) {
       errors.push('Las contraseñas no coinciden.');
@@ -272,6 +273,7 @@ export default function LoginPage() {
   const regReqLen = regPassword.length >= 8;
   const regReqCap = /[A-Z]/.test(regPassword);
   const regReqNum = /[0-9]/.test(regPassword);
+  const regReqSpecial = /[^A-Za-z0-9]/.test(regPassword);
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-bgPrimary px-4 py-12 sm:px-6 lg:px-8 font-wixText">
@@ -598,6 +600,12 @@ export default function LoginPage() {
                         </span>
                         <span className={regReqNum ? "text-textDark font-medium" : ""}>Al menos un número</span>
                       </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className={regReqSpecial ? "text-green-600 font-bold" : "text-textDark/35"}>
+                          {regReqSpecial ? '✓' : '●'}
+                        </span>
+                        <span className={regReqSpecial ? "text-textDark font-medium" : ""}>Al menos un carácter especial</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -857,6 +865,12 @@ export default function LoginPage() {
                         {/[0-9]/.test(resetPasswordVal) ? '✓' : '●'}
                       </span>
                       <span>Al menos un número (0-9)</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <span className={/[^A-Za-z0-9]/.test(resetPasswordVal) ? "text-green-600 font-bold" : "text-textDark/35"}>
+                        {/[^A-Za-z0-9]/.test(resetPasswordVal) ? '✓' : '●'}
+                      </span>
+                      <span>Al menos un carácter especial (!@#$%^&*...)</span>
                     </div>
                   </div>
                 </div>

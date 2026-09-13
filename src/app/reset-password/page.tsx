@@ -4,16 +4,16 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/utils/api';
-import { 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  CheckCircle2, 
-  AlertCircle, 
-  ArrowLeft, 
-  KeyRound, 
-  ShieldCheck, 
-  Sparkles 
+import {
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertCircle,
+  ArrowLeft,
+  KeyRound,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 
 function ResetPasswordForm() {
@@ -64,12 +64,13 @@ function ResetPasswordForm() {
   }, [token]);
 
   // 2. Validaciones de la contraseña
-  const hasMinLength = password.length >= 8;
+  const hasLength = password.length >= 8 && password.length <= 12;
+  const hasCapital = /[A-Z]/.test(password);
   const hasNumber = /\d/.test(password);
-  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
   const passwordsMatch = password.length > 0 && password === confirmPassword;
 
-  const isFormValid = hasMinLength && hasNumber && hasLetter && passwordsMatch;
+  const isFormValid = hasLength && hasCapital && hasNumber && hasSpecial && passwordsMatch;
 
   // 3. Envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,19 +109,19 @@ function ResetPasswordForm() {
         <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-600 border border-red-200">
           <AlertCircle className="h-8 w-8" />
         </div>
-        <div className="space-y-2">
-          <h3 className="font-wixDisplay text-xl font-bold text-textDark">Enlace no válido o expirado</h3>
-          <p className="text-xs text-textDark/70 max-w-sm mx-auto leading-relaxed">
-            {tokenError || 'Por motivos de seguridad, los enlaces de recuperación tienen una validez temporal de 1 hora.'}
+        <div>
+          <h3 className="font-wixDisplay font-bold text-lg text-textDark">Enlace no válido</h3>
+          <p className="text-xs text-textDark/60 mt-2 max-w-sm mx-auto leading-relaxed">
+            {tokenError}
           </p>
         </div>
         <div className="pt-2">
           <Link
             href="/"
-            className="inline-flex items-center justify-center px-6 py-3 bg-accentWine text-white rounded-xl text-xs font-bold shadow-md hover:bg-accentWine/90 transition-all cursor-pointer"
+            className="inline-flex items-center space-x-2 text-xs font-bold text-accentWine hover:underline"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            <span>Volver a solicitar recuperación</span>
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Volver al inicio de sesión</span>
           </Link>
         </div>
       </div>
@@ -129,22 +130,22 @@ function ResetPasswordForm() {
 
   if (isSuccess) {
     return (
-      <div className="space-y-6 text-center py-6 animate-fade-in">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-50 text-green-600 border border-green-200 shadow-sm">
+      <div className="space-y-6 text-center py-6">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-50 text-green-600 border border-green-200">
           <CheckCircle2 className="h-8 w-8" />
         </div>
-        <div className="space-y-2">
-          <h3 className="font-wixDisplay text-2xl font-bold text-textDark">¡Contraseña restablecida!</h3>
-          <p className="text-xs text-textDark/70 max-w-sm mx-auto leading-relaxed">
-            Tu contraseña ha sido actualizada con éxito. Ya podés iniciar sesión con tus nuevas credenciales.
+        <div>
+          <h3 className="font-wixDisplay font-bold text-lg text-textDark">¡Contraseña restablecida!</h3>
+          <p className="text-xs text-textDark/60 mt-2 max-w-sm mx-auto leading-relaxed">
+            Tu clave ha sido actualizada con éxito. Ya podés iniciar sesión en la plataforma con tus nuevas credenciales.
           </p>
         </div>
         <div className="pt-4">
           <Link
             href="/"
-            className="w-full inline-flex items-center justify-center py-3.5 px-6 bg-accentWine hover:bg-accentWine/90 text-white rounded-xl text-sm font-bold shadow-lg shadow-accentWine/20 transition-all cursor-pointer"
+            className="w-full py-3 px-6 bg-accentWine hover:bg-accentWine/90 text-white rounded-xl text-xs font-bold shadow-lg shadow-accentWine/20 transition-all inline-flex items-center justify-center space-x-2"
           >
-            <span>Iniciar sesión en ANDO</span>
+            <span>Ir a Iniciar Sesión</span>
           </Link>
         </div>
       </div>
@@ -152,22 +153,15 @@ function ResetPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in">
-      <div className="space-y-2 text-center">
-        <h3 className="font-wixDisplay text-2xl font-bold text-textDark">Creá tu nueva contraseña</h3>
-        <p className="text-xs text-textDark/70">
-          Ingresá una clave segura que cumpla con los requisitos mínimos de la plataforma.
-        </p>
-      </div>
-
+    <form onSubmit={handleSubmit} className="space-y-5">
       {errorMessage && (
-        <div className="flex items-center space-x-2.5 p-3.5 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>{errorMessage}</span>
+        <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 flex items-start space-x-2.5 text-xs text-red-700">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5 text-red-500" />
+          <p className="leading-snug">{errorMessage}</p>
         </div>
       )}
 
-      {/* Campo: Nueva Contraseña */}
+      {/* Nueva Contraseña */}
       <div className="space-y-1.5">
         <label className="block text-xs font-bold text-textDark">Nueva contraseña</label>
         <div className="relative">
@@ -176,7 +170,7 @@ function ResetPasswordForm() {
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mínimo 8 caracteres"
+            placeholder="Ingresá tu nueva clave"
             required
             className="w-full pl-10 pr-10 py-3 rounded-xl bg-bgPrimary/60 border border-black/10 text-xs font-medium text-textDark placeholder-textDark/40 focus:outline-none focus:ring-2 focus:ring-accentWine/20 focus:border-accentWine transition-all"
           />
@@ -190,7 +184,7 @@ function ResetPasswordForm() {
         </div>
       </div>
 
-      {/* Campo: Confirmar Contraseña */}
+      {/* Confirmar Contraseña */}
       <div className="space-y-1.5">
         <label className="block text-xs font-bold text-textDark">Confirmar nueva contraseña</label>
         <div className="relative">
@@ -216,15 +210,27 @@ function ResetPasswordForm() {
       {/* Requisitos Checklist */}
       <div className="p-3.5 rounded-xl bg-bgPrimary/40 border border-black/5 space-y-2 text-[11px]">
         <div className="flex items-center space-x-2">
-          <div className={`h-2 w-2 rounded-full ${hasMinLength ? 'bg-green-500' : 'bg-black/20'}`} />
-          <span className={hasMinLength ? 'text-green-700 font-semibold' : 'text-textDark/60'}>
-            Mínimo 8 caracteres
+          <div className={`h-2 w-2 rounded-full ${hasLength ? 'bg-green-500' : 'bg-black/20'}`} />
+          <span className={hasLength ? 'text-green-700 font-semibold' : 'text-textDark/60'}>
+            Entre 8 y 12 caracteres
           </span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className={`h-2 w-2 rounded-full ${hasLetter && hasNumber ? 'bg-green-500' : 'bg-black/20'}`} />
-          <span className={hasLetter && hasNumber ? 'text-green-700 font-semibold' : 'text-textDark/60'}>
-            Contiene letras y números
+          <div className={`h-2 w-2 rounded-full ${hasCapital ? 'bg-green-500' : 'bg-black/20'}`} />
+          <span className={hasCapital ? 'text-green-700 font-semibold' : 'text-textDark/60'}>
+            Al menos una letra MAYÚSCULA
+          </span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className={`h-2 w-2 rounded-full ${hasNumber ? 'bg-green-500' : 'bg-black/20'}`} />
+          <span className={hasNumber ? 'text-green-700 font-semibold' : 'text-textDark/60'}>
+            Al menos un número (0-9)
+          </span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className={`h-2 w-2 rounded-full ${hasSpecial ? 'bg-green-500' : 'bg-black/20'}`} />
+          <span className={hasSpecial ? 'text-green-700 font-semibold' : 'text-textDark/60'}>
+            Al menos un carácter especial (!@#$%^&*...)
           </span>
         </div>
         <div className="flex items-center space-x-2">

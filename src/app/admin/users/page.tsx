@@ -189,7 +189,7 @@ export default function UserManagementPage() {
         updatedData.password = formPassword;
       }
 
-      const res = updateProviderProfile(selectedUser.id, updatedData);
+      const res = await updateProviderProfile(selectedUser.id, updatedData);
       if (res.success) {
         triggerToast(`Usuario "${formName}" actualizado exitosamente.`);
         setViewMode('list');

@@ -3,20 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { 
-  Save, 
-  X, 
-  Trash2, 
-  Lock, 
-  User as UserIcon, 
-  Mail, 
-  Phone, 
-  Briefcase, 
-  FileText, 
-  AlertTriangle, 
-  Check, 
-  Eye, 
-  EyeOff 
+import {
+  Save,
+  X,
+  Trash2,
+  Lock,
+  User as UserIcon,
+  Mail,
+  Phone,
+  Briefcase,
+  FileText,
+  AlertTriangle,
+  Check,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function ProviderProfilePage() {
@@ -31,12 +31,24 @@ export default function ProviderProfilePage() {
   }, [currentUser, router]);
 
   // Form States
-  const [nombre, setNombre] = useState(() => currentUser?.name.split(' ')[0] || '');
-  const [apellido, setApellido] = useState(() => currentUser?.name.split(' ').slice(1).join(' ') || '');
+  const [nombre, setNombre] = useState(() => currentUser?.firstName ?? (currentUser?.name.split(' ')[0] || ''));
+  const [apellido, setApellido] = useState(() => currentUser?.lastName ?? (currentUser?.name.split(' ').slice(1).join(' ') || ''));
   const [email, setEmail] = useState(() => currentUser?.email || '');
   const [phone, setPhone] = useState(() => currentUser?.phone || '');
   const [cuit, setCuit] = useState(() => currentUser?.cuit || '');
   const [businessName, setBusinessName] = useState(() => currentUser?.businessName || '');
+
+  // Sincronizar campos del formulario cuando currentUser se carga desde el backend
+  useEffect(() => {
+    if (currentUser) {
+      setNombre(currentUser.firstName ?? (currentUser.name.split(' ')[0] || ''));
+      setApellido(currentUser.lastName ?? (currentUser.name.split(' ').slice(1).join(' ') || ''));
+      setEmail(currentUser.email || '');
+      setPhone(currentUser.phone || '');
+      setCuit(currentUser.cuit || '');
+      setBusinessName(currentUser.businessName || '');
+    }
+  }, [currentUser]);
 
   // Password States
   const [currentPassword, setCurrentPassword] = useState('');
@@ -58,7 +70,7 @@ export default function ProviderProfilePage() {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
   if (!currentUser) return null;
@@ -70,10 +82,9 @@ export default function ProviderProfilePage() {
 
   // Check if form has modifications (dirty check)
   const isFormDirty = () => {
-    const parts = currentUser.name.split(' ');
-    const initialNombre = parts[0] || '';
-    const initialApellido = parts.slice(1).join(' ') || '';
-    
+    const initialNombre = currentUser.firstName ?? (currentUser.name.split(' ')[0] || '');
+    const initialApellido = currentUser.lastName ?? (currentUser.name.split(' ').slice(1).join(' ') || '');
+
     return (
       nombre !== initialNombre ||
       apellido !== initialApellido ||
@@ -81,7 +92,6 @@ export default function ProviderProfilePage() {
       phone !== (currentUser.phone || '') ||
       cuit !== (currentUser.cuit || '') ||
       businessName !== (currentUser.businessName || '') ||
-      currentPassword !== '' ||
       newPassword !== '' ||
       confirmPassword !== ''
     );
@@ -93,7 +103,7 @@ export default function ProviderProfilePage() {
       showToast('Todos los campos de perfil son obligatorios.', 'error');
       return false;
     }
-    
+
     // Email regex
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       showToast('El correo electrónico tiene un formato inválido.', 'error');
@@ -112,18 +122,14 @@ export default function ProviderProfilePage() {
       return false;
     }
 
-    // Password change validations
-    if (currentPassword || newPassword || confirmPassword) {
+    // Password change validations (solo si se ingresa una nueva contraseña)
+    if (newPassword.trim() !== '' || confirmPassword.trim() !== '') {
       if (!currentPassword) {
-        showToast('Debes ingresar tu contraseña actual para realizar el cambio.', 'error');
+        showToast('Debes ingresar tu contraseña actual para confirmar el cambio de contraseña.', 'error');
         return false;
       }
-      if (currentUser.password && currentPassword !== currentUser.password) {
-        showToast('La contraseña actual ingresada es incorrecta.', 'error');
-        return false;
-      }
-      if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-        showToast('La nueva contraseña debe cumplir con los requisitos mínimos de seguridad.', 'error');
+      if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+        showToast('La nueva contraseña debe tener al menos 8 caracteres, una mayúscula, un número y un carácter especial.', 'error');
         return false;
       }
       if (newPassword !== confirmPassword) {
@@ -146,9 +152,10 @@ export default function ProviderProfilePage() {
 
   const confirmDiscardChanges = () => {
     // Reset inputs
-    const parts = currentUser.name.split(' ');
-    setNombre(parts[0] || '');
-    setApellido(parts.slice(1).join(' ') || '');
+    const initialNombre = currentUser.firstName ?? (currentUser.name.split(' ')[0] || '');
+    const initialApellido = currentUser.lastName ?? (currentUser.name.split(' ').slice(1).join(' ') || '');
+    setNombre(initialNombre);
+    setApellido(initialApellido);
     setEmail(currentUser.email || '');
     setPhone(currentUser.phone || '');
     setCuit(currentUser.cuit || '');
@@ -158,7 +165,7 @@ export default function ProviderProfilePage() {
     setConfirmPassword('');
     setShowCancelModal(false);
     showToast('Los cambios se descartaron', 'warning');
-    
+
     // Redirect to dashboard
     setTimeout(() => {
       router.push('/provider/dashboard');
@@ -175,23 +182,25 @@ export default function ProviderProfilePage() {
 
   const confirmSaveProfile = async () => {
     setShowSaveModal(false);
-    
+
     const payload: Partial<typeof currentUser> = {
       name: `${nombre.trim()} ${apellido.trim()}`,
+      firstName: nombre.trim(),
+      lastName: apellido.trim(),
       email: email.trim(),
       phone: phone.trim(),
       cuit: cuit.trim(),
       businessName: businessName.trim(),
     };
 
-    const res = updateProviderProfile(currentUser.id, payload);
+    const res = await updateProviderProfile(currentUser.id, payload);
     if (!res.success) {
       showToast(res.error || 'Error al guardar los datos del perfil.', 'error');
       return;
     }
 
-    // Si se completaron campos de contraseña, invocar cambio de contraseña en backend
-    if (newPassword && currentPassword) {
+    // Si se completó una nueva contraseña, invocar cambio de contraseña en backend
+    if (newPassword.trim() !== '') {
       const pwdRes = await changePassword(currentPassword, newPassword);
       if (!pwdRes.success) {
         showToast(pwdRes.error || 'Perfil guardado, pero falló el cambio de contraseña.', 'error');
@@ -251,14 +260,14 @@ export default function ProviderProfilePage() {
   const reqLength = newPassword.length >= 8;
   const reqCapital = /[A-Z]/.test(newPassword);
   const reqNumber = /[0-9]/.test(newPassword);
+  const reqSpecial = /[^A-Za-z0-9]/.test(newPassword);
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto pb-12 relative font-wixText">
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-8 right-8 z-50 flex items-center space-x-2.5 text-white px-5 py-3.5 rounded-xl shadow-2xl border border-white/10 animate-slide-in max-w-md ${
-          toast.type === 'success' ? 'bg-fillPrimary' : toast.type === 'error' ? 'bg-red-600' : 'bg-amber-600'
-        }`}>
+        <div className={`fixed bottom-8 right-8 z-50 flex items-center space-x-2.5 text-white px-5 py-3.5 rounded-xl shadow-2xl border border-white/10 animate-slide-in max-w-md ${toast.type === 'success' ? 'bg-fillPrimary' : toast.type === 'error' ? 'bg-red-600' : 'bg-amber-600'
+          }`}>
           {toast.type === 'success' ? (
             <Check className="h-4.5 w-4.5 text-white flex-shrink-0" />
           ) : (
@@ -338,7 +347,7 @@ export default function ProviderProfilePage() {
               <Trash2 className="h-5.5 w-5.5" />
               <h4 className="font-wixDisplay font-bold text-lg text-textDark">Eliminar Cuenta de Socio</h4>
             </div>
-            
+
             <div className="space-y-2 text-xs text-textDark/70 leading-relaxed">
               <p className="font-semibold text-red-700 bg-red-50 p-3 rounded-xl border border-red-100 flex items-center space-x-2">
                 <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
@@ -574,9 +583,10 @@ export default function ProviderProfilePage() {
                 <input
                   type={showCurrentPassword ? "text" : "password"}
                   value={currentPassword}
+                  autoComplete="current-password"
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/30 focus:border-fillPrimary focus:bg-white focus:outline-none transition-all text-xs"
-                  placeholder="Contraseña actual"
+                  placeholder="Contraseña actual (solo si vas a cambiarla)"
                 />
                 <button
                   type="button"
@@ -597,9 +607,10 @@ export default function ProviderProfilePage() {
                 <input
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
+                  autoComplete="new-password"
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/30 focus:border-fillPrimary focus:bg-white focus:outline-none transition-all text-xs"
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder="Mínimo 8 caracteres (opcional)"
                 />
                 <button
                   type="button"
@@ -620,6 +631,7 @@ export default function ProviderProfilePage() {
                 <input
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
+                  autoComplete="new-password"
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-black/10 bg-bgPrimary/30 focus:border-fillPrimary focus:bg-white focus:outline-none transition-all text-xs"
                   placeholder="Repita nueva contraseña"
@@ -656,6 +668,12 @@ export default function ProviderProfilePage() {
                   {reqNumber ? '✓' : '●'}
                 </span>
                 <span className={reqNumber ? "text-textDark" : ""}>Al menos un número (0-9)</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className={reqSpecial ? "text-green-600 font-bold" : "text-textDark/35"}>
+                  {reqSpecial ? '✓' : '●'}
+                </span>
+                <span className={reqSpecial ? "text-textDark" : ""}>Al menos un carácter especial (!@#$%^&*...)</span>
               </div>
             </div>
           )}
