@@ -50,7 +50,7 @@ interface AppContextProps {
   loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; role?: string; error?: string }>;
   logout: () => void;
   registerProvider: (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }) => Promise<{ success: boolean; error?: string }>;
-  updateProviderProfile: (id: string, updatedData: Partial<User>) => { success: boolean; error?: string };
+  updateProviderProfile: (id: string, updatedData: Partial<User>) => Promise<{ success: boolean; error?: string }>;
   changePassword: (passwordActual: string, passwordNueva: string) => Promise<{ success: boolean; error?: string }>;
   deleteProviderAccount: (id: string, options?: { passwordActual?: string; motivo?: string; detalle?: string }) => Promise<{ success: boolean; error?: string }>;
   adminCreateUser: (userData: Omit<User, 'id'> & { password?: string }) => Promise<{ success: boolean; error?: string }>;
@@ -235,6 +235,8 @@ function mapBackendUser(u: any): User {
   return {
     id: u.id,
     name: `${u.nombre || ''} ${u.apellido || ''}`.trim() || u.email,
+    firstName: u.nombre || undefined,
+    lastName: u.apellido || undefined,
     email: u.email,
     role: mappedRole,
     phone: u.telefono || '',
@@ -518,15 +520,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return;
           }
 
+          let firstName = profile?.nombre;
+          let lastName = profile?.apellido;
+          let cuit = '';
+
           if (detectedRole === 'provider') {
             try {
               const provProf = await api.getPrestadorProfile();
               if (provProf) {
                 if (provProf.user?.nombre) {
+                  firstName = provProf.user.nombre;
+                  lastName = provProf.user.apellido || '';
                   nombreCompleto = `${provProf.user.nombre} ${provProf.user.apellido || ''}`.trim();
                 }
                 if (provProf.organizacion?.nombre) {
                   businessName = provProf.organizacion.nombre;
+                }
+                if (provProf.organizacion?.cuit) {
+                  cuit = provProf.organizacion.cuit;
                 }
                 if (provProf.user?.telefono) {
                   phone = provProf.user.telefono;
@@ -540,9 +551,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const loggedUser: User = {
             id: profileId,
             name: nombreCompleto,
+            firstName: firstName || undefined,
+            lastName: lastName || undefined,
             email: profile?.email || jwtData?.email || '',
             role: detectedRole,
             businessName: businessName || undefined,
+            cuit: cuit || undefined,
             phone: phone || undefined,
             status: 'active',
           };
@@ -584,15 +598,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('refreshToken', data.refreshToken);
         
         let businessName = '';
+        let cuit = '';
         let phone = data.user?.telefono || '';
+        let firstName = data.user?.nombre;
+        let lastName = data.user?.apellido;
+
         if (mappedRole === 'provider') {
           try {
             const provProf = await api.getPrestadorProfile();
             if (provProf?.organizacion?.nombre) {
               businessName = provProf.organizacion.nombre;
             }
+            if (provProf?.organizacion?.cuit) {
+              cuit = provProf.organizacion.cuit;
+            }
             if (provProf?.user?.telefono) {
               phone = provProf.user.telefono;
+            }
+            if (provProf?.user?.nombre) {
+              firstName = provProf.user.nombre;
+              lastName = provProf.user.apellido || '';
             }
           } catch (e) {
             console.warn('No se pudo cargar perfil comercial inicial:', e);
@@ -601,10 +626,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         const loggedUser: User = {
           id: data.user.id,
-          name: `${data.user.nombre || ''} ${data.user.apellido || ''}`.trim() || data.user.email,
+          name: `${firstName || ''} ${lastName || ''}`.trim() || data.user.email,
+          firstName: firstName || undefined,
+          lastName: lastName || undefined,
           email: data.user.email,
           role: mappedRole,
           businessName: businessName || undefined,
+          cuit: cuit || undefined,
           phone: phone || undefined,
           status: 'active',
         };
@@ -637,8 +665,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const registerProvider = async (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }): Promise<{ success: boolean; error?: string }> => {
     try {
       const nameParts = userData.name.trim().split(' ');
-      const nombre = nameParts[0] || '';
-      const apellido = nameParts.slice(1).join(' ') || '';
+      const nombre = userData.firstName || nameParts[0] || '';
+      const apellido = userData.lastName || nameParts.slice(1).join(' ') || '';
       
       const payload = {
         nombre,
@@ -659,24 +687,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateProviderProfile = (id: string, updatedData: Partial<User>): { success: boolean; error?: string } => {
+  const updateProviderProfile = async (id: string, updatedData: Partial<User>): Promise<{ success: boolean; error?: string }> => {
     if (updatedData.email) {
       const emailTaken = users.some((u) => u.id !== id && u.email.toLowerCase() === updatedData.email!.toLowerCase());
       if (emailTaken) {
         return { success: false, error: 'El correo electrónico ya está en uso' };
       }
     }
-    
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, ...updatedData } : u))
-    );
-    
-    setCurrentUser((prev) => {
-      if (prev && prev.id === id) {
-        return { ...prev, ...updatedData };
-      }
-      return prev;
-    });
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (token) {
@@ -686,8 +703,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Admin editando otro usuario — usar PATCH /user/:id
         const parts = (updatedData.name || '').trim().split(' ');
         const payload: any = {};
-        if (updatedData.name) {
+        if (updatedData.firstName !== undefined) {
+          payload.nombre = updatedData.firstName;
+        } else if (updatedData.name) {
           payload.nombre = parts[0] || undefined;
+        }
+        if (updatedData.lastName !== undefined) {
+          payload.apellido = updatedData.lastName;
+        } else if (updatedData.name) {
           payload.apellido = parts.slice(1).join(' ') || undefined;
         }
         if (updatedData.phone !== undefined) payload.telefono = updatedData.phone;
@@ -699,24 +722,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             payload.fechaBaja = null;
           }
         }
-        api.updateUser(id, payload).catch((err) =>
-          console.warn('Nota de actualización usuario admin backend:', err)
-        );
+        try {
+          await api.updateUser(id, payload);
+        } catch (err: any) {
+          console.error('Error al actualizar usuario admin backend:', err);
+          return { success: false, error: err.message || 'Error al actualizar usuario.' };
+        }
       } else {
         // Prestador editando su propio perfil
         const parts = (updatedData.name || '').trim().split(' ');
         const payload = {
-          nombre: parts[0] || undefined,
-          apellido: parts.slice(1).join(' ') || undefined,
+          nombre: updatedData.firstName !== undefined ? updatedData.firstName : (parts[0] || undefined),
+          apellido: updatedData.lastName !== undefined ? updatedData.lastName : (parts.slice(1).join(' ') || undefined),
           telefono: updatedData.phone,
+          nombreOrganizacion: updatedData.businessName,
           nombreEmpresa: updatedData.businessName,
+          cuit: updatedData.cuit,
           cuitEmpresa: updatedData.cuit,
         };
-        api.updatePrestadorProfile(payload).catch((err) =>
-          console.warn('Nota de actualización perfil prestador backend:', err)
-        );
+        try {
+          await api.updatePrestadorProfile(payload);
+        } catch (err: any) {
+          console.error('Error al actualizar perfil prestador backend:', err);
+          return { success: false, error: err.message || 'Error al actualizar perfil comercial.' };
+        }
       }
     }
+
+    setUsers((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, ...updatedData } : u))
+    );
+    
+    setCurrentUser((prev) => {
+      if (prev && prev.id === id) {
+        return { ...prev, ...updatedData };
+      }
+      return prev;
+    });
 
     return { success: true };
   };
@@ -1095,7 +1137,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         categoriaIds: resolvedCategoryIds,
         organizacionId: poiData.organizacionId || undefined,
         telefono: poiData.phone || undefined,
-        emailContacto: poiData.email || undefined,
         website: poiData.website || undefined,
         instagram: poiData.instagram || undefined,
         imagenes: poiData.images || [],
@@ -1143,11 +1184,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         zonaId: updatedPoi.zonaId || undefined,
         categoriaIds: resolvedCategoryIds,
         telefono: updatedPoi.phone || undefined,
-        emailContacto: updatedPoi.email || undefined,
         website: updatedPoi.website || undefined,
         instagram: updatedPoi.instagram || undefined,
         imagenes: updatedPoi.images || [],
-        imagenPrincipalUrl: updatedPoi.images?.[0] || undefined,
+        imagenPrincipalUrl: updatedPoi.imagenPrincipalUrl || (updatedPoi.images?.[0] || undefined),
         duracionEstimada: updatedPoi.duracionEstimada ? Number(updatedPoi.duracionEstimada) : undefined,
         precioMin: updatedPoi.precioMin !== undefined ? Number(updatedPoi.precioMin) : undefined,
         precioMax: updatedPoi.precioMax !== undefined ? Number(updatedPoi.precioMax) : undefined,

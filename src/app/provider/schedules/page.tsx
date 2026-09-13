@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { Schedule, TimeRange, SeasonType } from '@/types';
 import { 
@@ -57,6 +58,8 @@ export default function BusinessSchedules() {
           localStorage.setItem('selectedProviderPoiId', defaultId);
         }
       }
+    } else {
+      setSelectedPoiId('');
     }
   }, [providerPois]);
 
@@ -67,8 +70,9 @@ export default function BusinessSchedules() {
     }
   }, [selectedPoiId]);
 
-  const selectedPoi = providerPois.find(p => p.id === selectedPoiId) || providerPois[0] || pois[0];
-  const mySchedules = schedules.filter(s => s.poiId === selectedPoi?.id);
+  const selectedPoi = providerPois.find(p => p.id === selectedPoiId) || (providerPois.length > 0 ? providerPois[0] : undefined);
+  const hasValidPoi = Boolean(selectedPoi && selectedPoi.id);
+  const mySchedules = selectedPoi ? schedules.filter(s => s.poiId === selectedPoi.id) : [];
 
   // Estados del editor (nueva regla o edición)
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
@@ -145,6 +149,11 @@ export default function BusinessSchedules() {
 
   // Validaciones críticas de negocio según US-GIT-01 y US-GIT-02
   const validateForm = (): boolean => {
+    if (!hasValidPoi || !selectedPoi?.id) {
+      setValidationError('Debes tener o seleccionar un Punto de Interés (POI) registrado antes de configurar días y horarios.');
+      return false;
+    }
+
     if (selectedDays.length === 0) {
       setValidationError('Debe seleccionar al menos un día de la semana.');
       return false;
@@ -253,7 +262,7 @@ export default function BusinessSchedules() {
     setValidationError('');
     setTouristAlert(null);
 
-    if (!validateForm()) {
+    if (!validateForm() || !selectedPoi) {
       setShake(true);
       setTimeout(() => setShake(false), 500);
       return;
@@ -326,6 +335,7 @@ export default function BusinessSchedules() {
 
   // Eliminación de una regla (US-GIT-03)
   const handleDeleteRule = async (id: string) => {
+    if (!selectedPoi) return;
     if (editingScheduleId === id) {
       resetForm();
     }
@@ -373,20 +383,48 @@ export default function BusinessSchedules() {
             <Store className="h-4 w-4 text-fillPrimary" />
             <span>Seleccionar POI a gestionar</span>
           </label>
-          <select
-            id="poi-select"
-            value={selectedPoiId}
-            onChange={(e) => handleSelectPoi(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg border border-fillPrimary/20 bg-bgPrimary focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 transition-all text-sm font-bold text-fillPrimary cursor-pointer shadow-2xs"
-          >
-            {providerPois.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.category})
-              </option>
-            ))}
-          </select>
+          {providerPois.length > 0 ? (
+            <select
+              id="poi-select"
+              value={selectedPoiId}
+              onChange={(e) => handleSelectPoi(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-lg border border-fillPrimary/20 bg-bgPrimary focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 transition-all text-sm font-bold text-fillPrimary cursor-pointer shadow-2xs"
+            >
+              {providerPois.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.category})
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="px-4 py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-xs font-semibold text-amber-800">
+              No hay negocios registrados
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Alerta si no hay POIs creados */}
+      {!hasValidPoi && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-5 py-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+          <div className="flex items-start space-x-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm text-amber-900">No tienes ningún negocio registrado</p>
+              <p className="text-xs text-amber-800/90 mt-0.5">
+                Para configurar días y horarios de atención, primero debes registrar tu punto de interés turístico.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/provider/business"
+            className="inline-flex items-center justify-center space-x-2 px-4 py-2 bg-fillPrimary hover:bg-fillPrimary/90 text-white font-bold rounded-xl text-xs transition-all shadow-sm flex-shrink-0"
+          >
+            <Store className="h-4 w-4" />
+            <span>Registrar Negocio</span>
+          </Link>
+        </div>
+      )}
 
       {/* Alerta de notificación a turistas afectados por cambio en itinerario (US-GIT-02) */}
       {touristAlert && (
@@ -426,7 +464,11 @@ export default function BusinessSchedules() {
                     <span>{editingScheduleId ? 'Modificar días y horarios' : 'Cargar días y horarios de atención'}</span>
                   </h4>
                   <p className="text-xs text-textDark/60 mt-0.5">
-                    Configurando horarios para: <strong className="text-fillPrimary font-bold">{selectedPoi?.name}</strong>
+                    {hasValidPoi ? (
+                      <>Configurando horarios para: <strong className="text-fillPrimary font-bold">{selectedPoi?.name}</strong></>
+                    ) : (
+                      <span className="text-amber-700 font-semibold">Sin negocio seleccionado</span>
+                    )}
                   </p>
                 </div>
                 {editingScheduleId && (
@@ -456,11 +498,14 @@ export default function BusinessSchedules() {
                       <button
                         key={day.value}
                         type="button"
+                        disabled={!hasValidPoi}
                         onClick={() => handleToggleDay(day.value)}
-                        className={`h-11 px-4 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center justify-center space-x-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 ${
-                          isSelected
-                            ? 'bg-fillPrimary text-white border-fillPrimary shadow-2xs scale-105'
-                            : 'bg-bgPrimary text-textDark/70 border-black/10 hover:bg-black/5 hover:text-textDark'
+                        className={`h-11 px-4 rounded-lg text-xs font-bold transition-all border flex items-center justify-center space-x-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 ${
+                          !hasValidPoi
+                            ? 'bg-black/5 text-textDark/30 border-black/5 cursor-not-allowed'
+                            : isSelected
+                            ? 'bg-fillPrimary text-white border-fillPrimary shadow-2xs scale-105 cursor-pointer'
+                            : 'bg-bgPrimary text-textDark/70 border-black/10 hover:bg-black/5 hover:text-textDark cursor-pointer'
                         }`}
                         title={day.name}
                       >
@@ -485,8 +530,13 @@ export default function BusinessSchedules() {
                       <button
                         key={preset.name}
                         type="button"
+                        disabled={!hasValidPoi}
                         onClick={() => handleApplyPreset(preset)}
-                        className="px-3 py-1.5 bg-white hover:bg-fillPrimary/10 border border-black/10 rounded-lg text-xs font-semibold text-textDark/80 hover:text-fillPrimary transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary"
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border flex items-center space-x-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary ${
+                          !hasValidPoi
+                            ? 'bg-white/50 text-textDark/30 border-black/5 cursor-not-allowed'
+                            : 'bg-white hover:bg-fillPrimary/10 border-black/10 text-textDark/80 hover:text-fillPrimary cursor-pointer shadow-2xs'
+                        }`}
                       >
                         <PresetIcon className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" />
                         <span>{preset.name} ({preset.start} a {preset.end} h)</span>
@@ -502,7 +552,7 @@ export default function BusinessSchedules() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70">
                     Franjas horarias ({timeRanges.length} / {generalParams.maxTimeRangesPerDay})
                   </label>
-                  {timeRanges.length < generalParams.maxTimeRangesPerDay && (
+                  {timeRanges.length < generalParams.maxTimeRangesPerDay && hasValidPoi && (
                     <button
                       type="button"
                       onClick={handleAddTimeRange}
@@ -527,9 +577,10 @@ export default function BusinessSchedules() {
                             id={`start-time-${idx}`}
                             type="time"
                             required
+                            disabled={!hasValidPoi}
                             value={range.start}
                             onChange={(e) => handleTimeChange(idx, 'start', e.target.value)}
-                            className="px-3 py-1.5 bg-white rounded-lg border border-black/10 text-xs font-bold text-textDark focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary"
+                            className="px-3 py-1.5 bg-white rounded-lg border border-black/10 text-xs font-bold text-textDark focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary disabled:bg-gray-100 disabled:text-textDark/40"
                           />
                         </div>
                         <span className="text-xs font-semibold text-textDark/60 pt-4">a</span>
@@ -539,14 +590,15 @@ export default function BusinessSchedules() {
                             id={`end-time-${idx}`}
                             type="time"
                             required
+                            disabled={!hasValidPoi}
                             value={range.end}
                             onChange={(e) => handleTimeChange(idx, 'end', e.target.value)}
-                            className="px-3 py-1.5 bg-white rounded-lg border border-black/10 text-xs font-bold text-textDark focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary"
+                            className="px-3 py-1.5 bg-white rounded-lg border border-black/10 text-xs font-bold text-textDark focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary disabled:bg-gray-100 disabled:text-textDark/40"
                           />
                         </div>
                       </div>
 
-                      {timeRanges.length > 1 && (
+                      {timeRanges.length > 1 && hasValidPoi && (
                         <button
                           type="button"
                           onClick={() => handleRemoveTimeRange(idx)}
@@ -571,8 +623,9 @@ export default function BusinessSchedules() {
                   <select
                     id="season-select"
                     value={season}
+                    disabled={!hasValidPoi}
                     onChange={(e) => setSeason(e.target.value as SeasonType)}
-                    className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary transition-all text-sm font-semibold text-textDark"
+                    className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary transition-all text-sm font-semibold text-textDark disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="all">Todas las temporadas (Todo el año)</option>
                     <option value="high">Temporada alta (Noviembre a abril)</option>
@@ -586,8 +639,9 @@ export default function BusinessSchedules() {
                     type="checkbox"
                     id="isHoliday"
                     checked={isHoliday}
+                    disabled={!hasValidPoi}
                     onChange={(e) => setIsHoliday(e.target.checked)}
-                    className="h-4.5 w-4.5 rounded text-fillPrimary border-black/20 focus:ring-fillPrimary focus:ring-opacity-25 focus-visible:ring-2 focus-visible:ring-fillPrimary"
+                    className="h-4.5 w-4.5 rounded text-fillPrimary border-black/20 focus:ring-fillPrimary focus:ring-opacity-25 focus-visible:ring-2 focus-visible:ring-fillPrimary disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <label htmlFor="isHoliday" className="ml-2.5 text-sm font-semibold text-textDark/80 cursor-pointer select-none">
                     Aplica únicamente para feriados y festivos
@@ -604,9 +658,10 @@ export default function BusinessSchedules() {
                   id="schedule-desc"
                   type="text"
                   value={description}
+                  disabled={!hasValidPoi}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Ej: Visitas guiadas a cava privada y degustación..."
-                  className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary transition-all text-sm"
+                  className="w-full px-4 py-2.5 rounded-lg border border-black/10 bg-bgPrimary focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -622,9 +677,21 @@ export default function BusinessSchedules() {
               <div className="flex space-x-3 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 flex items-center justify-center space-x-2 py-3.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-lg text-sm shadow-md transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 cursor-pointer"
+                  disabled={!hasValidPoi || isSaving}
+                  title={!hasValidPoi ? 'Debes seleccionar un POI antes de guardar horarios' : undefined}
+                  className={`flex-1 flex items-center justify-center space-x-2 py-3.5 font-bold rounded-lg text-sm shadow-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 ${
+                    !hasValidPoi 
+                      ? 'bg-black/10 text-textDark/40 cursor-not-allowed shadow-none' 
+                      : 'bg-fillPrimary hover:bg-fillPrimary/95 text-white cursor-pointer hover:-translate-y-0.5'
+                  }`}
                 >
-                  {editingScheduleId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {isSaving ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : editingScheduleId ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
                   <span>{editingScheduleId ? 'Guardar cambios' : 'Guardar horarios'}</span>
                 </button>
                 {editingScheduleId && (
@@ -648,8 +715,10 @@ export default function BusinessSchedules() {
               <h4 className="font-wixDisplay text-sm font-bold text-textDark uppercase tracking-wider">
                 Horarios activos ({mySchedules.length})
               </h4>
-              <span className="text-[10px] font-bold bg-fillPrimary/10 text-fillPrimary px-2.5 py-0.5 rounded-full">
-                {selectedPoi?.name}
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                hasValidPoi ? 'bg-fillPrimary/10 text-fillPrimary' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {hasValidPoi ? selectedPoi?.name : 'Sin negocio'}
               </span>
             </div>
 
@@ -721,9 +790,13 @@ export default function BusinessSchedules() {
               {mySchedules.length === 0 && (
                 <div className="border border-dashed border-black/10 rounded-xl py-12 flex flex-col items-center justify-center text-textDark/50 text-xs space-y-2">
                   <Info className="h-6 w-6 text-textDark/40" />
-                  <span className="font-semibold text-center text-textDark/70">No hay horarios cargados para este POI.</span>
+                  <span className="font-semibold text-center text-textDark/70">
+                    {hasValidPoi ? 'No hay horarios cargados para este POI.' : 'No hay ningún negocio seleccionado.'}
+                  </span>
                   <span className="text-[11px] text-textDark/50 text-center px-4">
-                    Los turistas verán este lugar como "Horario no disponible" y no será recomendado en itinerarios.
+                    {hasValidPoi 
+                      ? 'Los turistas verán este lugar como "Horario no disponible" y no será recomendado en itinerarios.'
+                      : 'Registra tu primer negocio para empezar a administrar sus días y horarios de atención.'}
                   </span>
                 </div>
               )}

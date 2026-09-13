@@ -3,6 +3,8 @@ export type UserRole = 'admin' | 'provider' | 'tourist';
 export interface User {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   role: UserRole;
   businessName?: string; // Solo para Prestadores
@@ -19,33 +21,34 @@ export interface POI {
   name: string;
   description: string;
   category: string;
+  categoriaIds?: string[];
   address: string;
   location: {
     lat: number;
     lng: number;
   };
+  regionId?: string;
+  departamentoId?: string;
+  zonaId?: string;
+  precioMin?: number;
+  precioMax?: number;
+  website?: string;
+  phone?: string;
+  instagram?: string;
+  duracionEstimada?: number;
+  imagenPrincipalUrl?: string;
   images: string[];
   status: POIStatus;
   feedback?: string; // Comentarios de rechazo o solicitud de corrección
   createdBy: string; // ID del prestador
   updatedAt: string;
   email?: string;
-  phone?: string;
   clicksCount?: number;  // Cantidad de clics / vistas del negocio en la app
   rating?: number;       // Calificación promedio (1 a 5)
   reviewsCount?: number; // Total de valoraciones recibidas
 
   // Campos extendidos de negocio y trazabilidad (CYN-02 & CYN-05)
   organizacionId?: string;
-  categoriaIds?: string[];
-  departamentoId?: string;
-  regionId?: string;
-  zonaId?: string;
-  website?: string;
-  instagram?: string;
-  duracionEstimada?: number;
-  precioMin?: number;
-  precioMax?: number;
   fuente?: 'prestador' | 'turista' | string;
   horarios?: any[];
   departamentoNombre?: string;
@@ -58,6 +61,26 @@ export interface POI {
   reportesCount?: number;
   validaciones?: any[];
   revisiones?: any[];
+}
+
+export interface Region {
+  id: string;
+  nombre: string;
+  activo?: boolean;
+}
+
+export interface Departamento {
+  id: string;
+  nombre: string;
+  regionId: string;
+  activo?: boolean;
+}
+
+export interface Zona {
+  id: string;
+  nombre: string;
+  departamentoId: string;
+  activo?: boolean;
 }
 
 export interface ReviewReply {
