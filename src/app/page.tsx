@@ -20,10 +20,9 @@ import {
   FileText,
   Key
 } from 'lucide-react';
+import { api } from '@/utils/api';
 
 type SubView = 'login' | 'register' | 'forgot_password' | 'recovery_sent' | 'reset_password' | 'registration_pending';
-
-import { api } from '@/utils/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -196,7 +195,7 @@ export default function LoginPage() {
     }
   };
 
-  // 3. RECOVERY HANDLER — llama al backend real
+  // 3. RECOVERY HANDLER
   const handleRecoverySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRecoveryError('');
@@ -210,18 +209,16 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      await api.requestPasswordRecovery(recoveryEmail.trim());
-      setRecoveryUserEmail(recoveryEmail.trim());
+      await api.requestPasswordRecovery(recoveryEmail.trim().toLowerCase());
       setIsLoading(false);
+      setRecoveryUserEmail(recoveryEmail.trim());
       changeView('recovery_sent');
       setCooldown(30);
     } catch (err: any) {
       setIsLoading(false);
-      // Por seguridad el backend siempre responde 200 aunque el email no exista,
-      // así que mostramos el mensaje de enviado igual
-      setRecoveryUserEmail(recoveryEmail.trim());
-      changeView('recovery_sent');
-      setCooldown(30);
+      setRecoveryError(err.message || 'Error al procesar la solicitud de recuperación.');
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
     }
   };
 
@@ -256,7 +253,7 @@ export default function LoginPage() {
     if (cooldown > 0) return;
     setCooldown(30);
     try {
-      await api.requestPasswordRecovery(recoveryUserEmail);
+      await api.requestPasswordRecovery(recoveryUserEmail.trim().toLowerCase());
     } catch (err) {
       // Silencioso — el backend responde 200 siempre por seguridad
     }
@@ -264,9 +261,12 @@ export default function LoginPage() {
 
   // Developer quick-approve for testing registration (solo se muestra en development)
   const handleSimulatedApproval = () => {
-    // En producción, el administrador aprueba manualmente el registro del prestador
-    changeView('login');
-    setLoginEmail(newlyRegisteredEmail);
+    const targetUser = users.find(u => u.email.toLowerCase() === newlyRegisteredEmail.toLowerCase());
+    if (targetUser) {
+      targetUser.status = 'active';
+      loginWithCredentials(targetUser.email, targetUser.password || '');
+      router.push('/provider/dashboard');
+    }
   };
 
   // Real-time checks for register password
@@ -770,9 +770,9 @@ export default function LoginPage() {
               </div>
               
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-accentWine font-wixDisplay">¡Correo Enviado!</h3>
-                <p className="text-xs text-textDark/60 leading-relaxed max-w-xs mx-auto">
-                  Hemos enviado un enlace temporal de restablecimiento a <strong className="text-textDark">{recoveryUserEmail}</strong>.
+                <h3 className="text-xl font-bold text-accentWine font-wixDisplay">Revisá tu casilla</h3>
+                <p className="text-xs text-textDark/70 leading-relaxed max-w-xs mx-auto">
+                  Si la cuenta <strong className="text-textDark">{recoveryUserEmail}</strong> se encuentra registrada en Ando, recibirás un enlace con las instrucciones para restablecer tu contraseña.
                 </p>
                 <div className="text-[10px] text-textDark/50 bg-bgPrimary/60 p-3 rounded-2xl border border-black/5 mt-2 text-left">
                   Si no visualizas el mensaje en unos minutos, revisá la carpeta de <strong>SPAM</strong> o promociones.

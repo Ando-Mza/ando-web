@@ -17,11 +17,24 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${ENV.API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    response = await fetch(`${ENV.API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Tiempo de espera agotado al conectar con el servidor.');
+    }
+    throw new Error('No se pudo conectar con el servidor backend.');
+  }
 
   if (!response.ok) {
     let errorMessage = `Error HTTP: ${response.status}`;
@@ -50,15 +63,16 @@ export const api = {
   login: (body: any) => request<any>('/auth/login', 'POST', body),
   logout: (body?: any) => request<any>('/auth/logout', 'POST', body),
   registerPrestador: (body: any) => request<any>('/auth/register/prestador', 'POST', body),
-  getProfile: () => request<any>('/user/profile', 'GET'),
-
-  // Password Recovery (US-ACC-03)
+  getProfile: () => request<any>('/auth/profile', 'GET'),
   requestPasswordRecovery: (email: string) =>
-    request<any>('/auth/password-recovery/request', 'POST', { email }),
-  validateRecoveryToken: (token: string) =>
-    request<any>(`/auth/password-recovery/validate?token=${encodeURIComponent(token)}`, 'GET'),
-  resetPassword: (body: { token: string; newPassword: string; confirmPassword: string }) =>
-    request<any>('/auth/password-recovery/reset', 'POST', body),
+    request<{ message: string }>('/auth/password-recovery/request', 'POST', { email }),
+  validatePasswordRecoveryToken: (token: string) =>
+    request<{ valid: boolean; message: string }>(
+      `/auth/password-recovery/validate?token=${encodeURIComponent(token)}`,
+      'GET',
+    ),
+  resetPasswordWithToken: (body: { token: string; passwordNueva: string; confirmPassword: string }) =>
+    request<{ message: string }>('/auth/password-recovery/reset', 'POST', body),
 
   // Users & Profiles
   getUsers: (params?: { search?: string; rol?: string }) => {
