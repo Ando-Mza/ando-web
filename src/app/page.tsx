@@ -26,7 +26,7 @@ type SubView = 'login' | 'register' | 'forgot_password' | 'recovery_sent' | 'res
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginWithCredentials, registerProvider } = useApp();
+  const { loginWithCredentials, registerProvider, users } = useApp();
   
   // Navigation & Subview
   const [subView, setSubView] = useState<SubView>('login');

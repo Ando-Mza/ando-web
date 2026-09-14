@@ -242,6 +242,15 @@ export default function ContentValidation() {
     }
   };
 
+  const handleSetUserPending = async (id: string, name: string) => {
+    const res = await updateProviderProfile(id, { status: 'pending' });
+    if (res.success) {
+      triggerToast(`La cuenta de "${name}" se ha movido a estado pendiente.`);
+    } else {
+      triggerToast(res.error || 'No se pudo actualizar el estado.');
+    }
+  };
+
   const handleToggleUserStatus = async (id: string, name: string, currentStatus?: 'active' | 'pending' | 'inactive') => {
     const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
     const res = await updateProviderProfile(id, { status: nextStatus });
@@ -997,13 +1006,20 @@ export default function ContentValidation() {
                           {u.status === 'active' ? 'Activo' : 'Inactivo'}
                         </span>
                         <button
+                          onClick={() => handleSetUserPending(u.id, u.name)}
+                          className="p-1.5 rounded-lg border text-xs font-bold transition-colors cursor-pointer bg-white hover:bg-amber-50 text-amber-700 border-amber-200"
+                          title="Pasar a pendiente de validación"
+                        >
+                          <Clock className="h-3.5 w-3.5" />
+                        </button>
+                        <button
                           onClick={() => handleToggleUserStatus(u.id, u.name, u.status)}
                           className={`p-1.5 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
                             u.status === 'active'
                               ? 'bg-white hover:bg-red-50 text-red-600 border-red-200'
                               : 'bg-white hover:bg-green-50 text-green-600 border-green-200'
                           }`}
-                          title={u.status === 'active' ? 'Desactivar prestador' : 'Activar prestador'}
+                          title={u.status === 'active' ? 'Desactivar / Rechazar prestador' : 'Activar / Aprobar prestador'}
                         >
                           {u.status === 'active' ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
                         </button>

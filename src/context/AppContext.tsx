@@ -243,6 +243,42 @@ function mapBackendPoi(p: any): POI {
 function mapBackendUser(u: any): User {
   const roleObj = u.usuarioRoles?.[0]?.rol || u.role;
   const mappedRole = mapBackendRoleToFrontend(roleObj?.nombre || roleObj);
+  const org = u.usuarioOrganizaciones?.[0]?.organizacion || u.organizacion;
+  const orgNombre = org?.nombre || u.nombreEmpresa || u.nombreOrganizacion || '';
+  const orgCuit = org?.cuit || u.cuit || u.cuitEmpresa || '';
+  // Extraer estado de la organización (para prestadores)
+  const orgEstado = org?.organizacionEstados?.find((oe: any) => !oe.fechaHoraHasta)?.estadoOrganizacion?.nombre
+    || org?.organizacionEstados?.[0]?.estadoOrganizacion?.nombre;
+  const orgEstadoLower = (orgEstado || '').toLowerCase().trim();
+
+  let calculatedStatus: 'active' | 'pending' | 'inactive' = 'active';
+  if (u.fechaBaja) {
+    calculatedStatus = 'inactive';
+  } else if (
+    orgEstadoLower === 'pendiente' ||
+    u.estado === 'pendiente' ||
+    u.status === 'pending'
+  ) {
+    calculatedStatus = 'pending';
+  } else if (
+    orgEstadoLower === 'aprobado' ||
+    orgEstadoLower === 'aceptado' ||
+    orgEstadoLower === 'activo' ||
+    u.estado === 'activo' ||
+    u.estado === 'active'
+  ) {
+    calculatedStatus = 'active';
+  } else if (
+    orgEstadoLower === 'inactivo' ||
+    orgEstadoLower === 'rechazado' ||
+    u.estado === 'inactivo' ||
+    u.status === 'inactive'
+  ) {
+    calculatedStatus = 'inactive';
+  } else {
+    calculatedStatus = 'active';
+  }
+
   return {
     id: u.id,
     name: `${u.nombre || ''} ${u.apellido || ''}`.trim() || u.email,
@@ -251,11 +287,9 @@ function mapBackendUser(u: any): User {
     email: u.email,
     role: mappedRole,
     phone: u.telefono || '',
-    businessName: u.usuarioOrganizaciones?.[0]?.organizacion?.nombre || '',
-    cuit: u.usuarioOrganizaciones?.[0]?.organizacion?.cuit || '',
-    status: u.fechaBaja
-      ? 'inactive'
-      : (u.estado === 'pendiente' || u.status === 'pending' ? 'pending' : 'active'),
+    businessName: orgNombre,
+    cuit: orgCuit,
+    status: calculatedStatus,
   };
 }
 
@@ -307,9 +341,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const allAdminPois: POI[] = [];
           const seenIds = new Set<string>();
 
-          // 1. POIs en revisión formal y estados del backend
+          // 1. Obtener TODOS los POIs del sistema para el panel de administración
           try {
-            const revisionData = await api.getAdminRevisionPois({ limit: 500 });
+            const revisionData = await api.getAdminRevisionPois({ incluirTodos: true, limit: 1000 });
             const poisArray = Array.isArray(revisionData)
               ? revisionData
               : (revisionData?.data || revisionData?.items || []);
@@ -325,7 +359,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             console.warn('Nota al cargar POIs de revisión admin:', eRev);
           }
 
-          // 2. POIs en validación comunitaria
+          // 2. Obtener POIs públicos aprobados (respaldo adicional)
+          try {
+            const publicData: any = await api.getAllPublicPois();
+            const publicArray = Array.isArray(publicData)
+              ? publicData
+              : (publicData?.data || publicData?.items || []);
+            if (Array.isArray(publicArray)) {
+              for (const p of publicArray) {
+                if (p?.id && !seenIds.has(p.id)) {
+                  seenIds.add(p.id);
+                  allAdminPois.push(mapBackendPoi(p));
+                }
+              }
+            }
+          } catch (ePub) {
+            console.warn('Nota al cargar POIs públicos:', ePub);
+          }
+
+          // 3. POIs en validación comunitaria
           try {
             const comunitariaData: any = await api.getValidacionComunitariaPois();
             const comArray: any[] = Array.isArray(comunitariaData)
@@ -343,49 +395,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             console.warn('Nota al cargar POIs comunitarios:', eCom);
           }
 
-          // 3. POIs del prestador/organización del usuario si existen
-          try {
-            const myPoisData: any = await api.getMyPois();
-            const myPoisArray = Array.isArray(myPoisData)
-              ? myPoisData
-              : (myPoisData?.data || myPoisData?.items || myPoisData?.pois || []);
-            if (Array.isArray(myPoisArray)) {
-              for (const p of myPoisArray) {
-                if (p?.id && !seenIds.has(p.id)) {
-                  seenIds.add(p.id);
-                  allAdminPois.push(mapBackendPoi(p));
-                }
-              }
-            }
-          } catch (eMy) {
-            // Usuario sin organización, se omite
-          }
-
-          // 4. Intentar consultar POIs aprobados con el estadoId si se conoce
-          try {
-            let estadoAprobadoId: string | null = null;
-            if (typeof window !== 'undefined') {
-              estadoAprobadoId = localStorage.getItem('ando_estado_aprobado_id');
-            }
-            if (estadoAprobadoId) {
-              const approvedData = await api.getAdminRevisionPois({ estadoId: estadoAprobadoId, limit: 500 });
-              const appArray = Array.isArray(approvedData)
-                ? approvedData
-                : (approvedData?.data || approvedData?.items || []);
-              if (Array.isArray(appArray)) {
-                for (const p of appArray) {
-                  if (p?.id && !seenIds.has(p.id)) {
-                    seenIds.add(p.id);
-                    allAdminPois.push(mapBackendPoi(p));
-                  }
-                }
-              }
-            }
-          } catch (eApp) {
-            console.warn('Nota al cargar POIs aprobados con estadoId:', eApp);
-          }
-
-          // 5. Cargar POIs reales del sistema persistidos (por ejemplo, Bodega Los Andes del prestador)
+          // 4. Cargar POIs reales del sistema persistidos en local storage si existen
           if (typeof window !== 'undefined') {
             try {
               const cachedRealPois: POI[] = JSON.parse(localStorage.getItem('ando_real_pois') || '[]');
@@ -400,18 +410,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             } catch {}
           }
 
-          // Establecer únicamente los POIs reales recuperados del backend y del sistema
-          setPois((prev) => {
-            const merged = [...allAdminPois];
-            const seen = new Set(merged.map((p) => p.id));
-            for (const p of prev) {
-              if (p?.id && !seen.has(p.id) && !p.id.startsWith('poi-')) {
-                seen.add(p.id);
-                merged.push(p);
-              }
-            }
-            return merged;
-          });
+          // Establecer todos los POIs reales recuperados del backend
+          setPois(allAdminPois);
         } catch (e) {
           console.warn('No se pudieron cargar POIs admin:', e);
         }
@@ -733,11 +733,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           payload.apellido = parts.slice(1).join(' ') || undefined;
         }
         if (updatedData.phone !== undefined) payload.telefono = updatedData.phone;
+        if (updatedData.businessName !== undefined) {
+          payload.nombreEmpresa = updatedData.businessName;
+          payload.nombreOrganizacion = updatedData.businessName;
+        }
+        if (updatedData.cuit !== undefined) {
+          payload.cuit = updatedData.cuit;
+          payload.cuitEmpresa = updatedData.cuit;
+        }
+        if (updatedData.role !== undefined) {
+          payload.rol = updatedData.role === 'admin' ? 'administrador' : (updatedData.role === 'provider' ? 'prestador' : 'turista');
+        }
         if (updatedData.status !== undefined) {
           payload.estado = updatedData.status;
+          payload.status = updatedData.status;
           if (updatedData.status === 'inactive') {
             payload.fechaBaja = new Date().toISOString().slice(0, 10);
-          } else if (updatedData.status === 'active') {
+          } else if (updatedData.status === 'active' || updatedData.status === 'pending') {
             payload.fechaBaja = null;
           }
         }
@@ -769,12 +781,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, ...updatedData } : u))
+      prev.map((u) => {
+        if (u.id === id) {
+          const newFirstName = updatedData.firstName !== undefined ? updatedData.firstName : u.firstName;
+          const newLastName = updatedData.lastName !== undefined ? updatedData.lastName : u.lastName;
+          const newName = updatedData.name || ((newFirstName || newLastName) ? `${newFirstName || ''} ${newLastName || ''}`.trim() : u.name);
+          return {
+            ...u,
+            ...updatedData,
+            firstName: newFirstName,
+            lastName: newLastName,
+            name: newName,
+          };
+        }
+        return u;
+      })
     );
     
     setCurrentUser((prev) => {
       if (prev && prev.id === id) {
-        return { ...prev, ...updatedData };
+        const newFirstName = updatedData.firstName !== undefined ? updatedData.firstName : prev.firstName;
+        const newLastName = updatedData.lastName !== undefined ? updatedData.lastName : prev.lastName;
+        const newName = updatedData.name || ((newFirstName || newLastName) ? `${newFirstName || ''} ${newLastName || ''}`.trim() : prev.name);
+        return {
+          ...prev,
+          ...updatedData,
+          firstName: newFirstName,
+          lastName: newLastName,
+          name: newName,
+        };
       }
       return prev;
     });
@@ -833,10 +868,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const nameParts = userData.name.trim().split(' ');
+      const nameParts = (userData.name || '').trim().split(' ');
+      const userFirstName = userData.firstName || nameParts[0] || userData.name;
+      const userLastName = userData.lastName !== undefined ? userData.lastName : (nameParts.slice(1).join(' ') || '');
       const payload: any = {
-        nombre: nameParts[0] || userData.name,
-        apellido: nameParts.slice(1).join(' ') || '',
+        nombre: userFirstName,
+        apellido: userLastName,
         email: userData.email,
         password: userData.password || '123456',
         telefono: userData.phone || '',
@@ -845,13 +882,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       if (userData.role === 'provider' && userData.businessName) {
         payload.nombreEmpresa = userData.businessName;
+        payload.nombreOrganizacion = userData.businessName;
         payload.cuitEmpresa = userData.cuit || '';
+        payload.cuit = userData.cuit || '';
       }
 
       const created = await api.createUser(payload);
       const newUser: User = {
         id: created.id || `usr-${Date.now()}`,
-        name: userData.name,
+        name: userData.name || `${userFirstName} ${userLastName}`.trim(),
+        firstName: userFirstName,
+        lastName: userLastName,
         email: userData.email,
         role: userData.role,
         phone: userData.phone,
