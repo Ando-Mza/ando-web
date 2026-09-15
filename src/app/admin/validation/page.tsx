@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { POI, User } from '@/types';
 import {
@@ -55,8 +55,13 @@ export default function ContentValidation() {
     currentUser,
     users,
     updateProviderProfile,
-    categories
+    categories,
+    refreshPois,
   } = useApp();
+
+  useEffect(() => {
+    refreshPois();
+  }, []);
 
   // Active validation tab: 'catalog' for all POIs, 'pending' for moderation queue, 'users' for provider accounts
   const [activeSection, setActiveSection] = useState<'catalog' | 'pending' | 'users'>('catalog');

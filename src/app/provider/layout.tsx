@@ -59,7 +59,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       desc: 'Resumen e interacciones'
     },
     {
-      name: 'Mi Establecimiento',
+      name: 'Mis Negocios',
       path: '/provider/business',
       icon: Store,
       desc: 'Información y fotos del local'
