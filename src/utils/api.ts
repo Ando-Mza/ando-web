@@ -201,14 +201,21 @@ export const api = {
   // Servicios (Catálogo y Negocios - US-CYN-03)
   getCatalogoServicios: (soloActivos?: boolean) =>
     request<any>(`/poi/servicios/catalogo${soloActivos ? '?soloActivos=true' : ''}`, 'GET'),
-  getServiciosByPoi: (poiId: string) =>
-    request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'GET'),
+  getServiciosByPoi: async (poiId: string) => {
+    try {
+      return await request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'GET');
+    } catch {
+      return await request<any>(`/poi/${poiId}/servicios`, 'GET');
+    }
+  },
   createServicioPoi: (poiId: string, body: any) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'POST', body),
   updateServicioPoi: (poiId: string, servicioId: string, body: any) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}`, 'PATCH', body),
   toggleEstadoServicioPoi: (poiId: string, servicioId: string, activo: boolean) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}/estado`, 'PATCH', { activo }),
+  deleteServicioPoi: (poiId: string, servicioId: string) =>
+    request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}`, 'DELETE'),
 
   // Reportes y Soporte (US-CYN-08, US-AYS-05)
   createReporteContenido: (body: {

@@ -187,7 +187,7 @@ export default function ProviderDashboard() {
             >
               {providerPois.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.category})
+                  {p.name}
                 </option>
               ))}
             </select>

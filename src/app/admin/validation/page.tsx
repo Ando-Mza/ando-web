@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { POI, User } from '@/types';
 import {
@@ -55,8 +55,15 @@ export default function ContentValidation() {
     currentUser,
     users,
     updateProviderProfile,
-    categories
+    categories,
+    refreshPois,
+    services,
+    loadServicesForPoi,
   } = useApp();
+
+  useEffect(() => {
+    refreshPois();
+  }, []);
 
   // Active validation tab: 'catalog' for all POIs, 'pending' for moderation queue, 'users' for provider accounts
   const [activeSection, setActiveSection] = useState<'catalog' | 'pending' | 'users'>('catalog');
@@ -68,7 +75,31 @@ export default function ContentValidation() {
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
 
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
+
+  useEffect(() => {
+    if (selectedPoi?.id) {
+      loadServicesForPoi(selectedPoi.id);
+    }
+  }, [selectedPoi?.id]);
+
+  const poiServices = useMemo(() => {
+    if (!selectedPoi) return [];
+    const embedded = (selectedPoi as any).servicios || (selectedPoi as any).serviciosPoi;
+    if (Array.isArray(embedded) && embedded.length > 0) {
+      return embedded.map((s: any) => ({
+        id: s.id,
+        name: s.nombre || s.servicio?.nombre || 'Servicio',
+        price: s.precio ?? s.price ?? 0,
+        durationMinutes: s.duracionMinutos ?? s.durationMinutes,
+        category: s.categoriaServicio || s.category,
+        description: s.descripcion || s.description,
+        isAvailable: s.disponible ?? s.isAvailable ?? true,
+      }));
+    }
+    return services.filter((s) => s.poiId === selectedPoi.id);
+  }, [selectedPoi, services]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -116,6 +147,27 @@ export default function ContentValidation() {
   };
 
   // 2. POI CONTENT HANDLERS
+  const openApproveModal = (poi: POI) => {
+    setSelectedPoi(poi);
+    setShowApproveModal(true);
+  };
+
+  const handleConfirmApprove = async () => {
+    if (selectedPoi) {
+      const adminName = currentUser?.name || 'Administrador';
+      const result = await approvePOI(selectedPoi.id, adminName);
+      if (result && !result.success) {
+        triggerToast(result.error || 'No se puede aprobar un registro con información obligatoria incompleta');
+        setShowApproveModal(false);
+        return;
+      }
+      setShowApproveModal(false);
+      triggerToast(`"${selectedPoi.name}" ha sido aprobado exitosamente.`);
+      setSelectedPoi(null);
+      setShowDetailModal(false);
+    }
+  };
+
   const handleApprovePOI = async (id: string, name: string) => {
     const adminName = currentUser?.name || 'Administrador';
     const result = await approvePOI(id, adminName);
@@ -604,7 +656,7 @@ export default function ContentValidation() {
                     <div className="flex items-center space-x-1.5">
                       {poi.status !== 'approved' && (
                         <button
-                          onClick={() => handleApprovePOI(poi.id, poi.name)}
+                          onClick={() => openApproveModal(poi)}
                           className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-xs transition-colors inline-flex items-center space-x-1 cursor-pointer shadow-2xs"
                           title="Aprobar POI"
                         >
@@ -705,7 +757,7 @@ export default function ContentValidation() {
                             </button>
                             {poi.status !== 'approved' && (
                               <button
-                                onClick={() => handleApprovePOI(poi.id, poi.name)}
+                                onClick={() => openApproveModal(poi)}
                                 className="p-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg transition-colors cursor-pointer"
                                 title="Aprobar"
                               >
@@ -820,7 +872,7 @@ export default function ContentValidation() {
                           <span>Rechazar</span>
                         </button>
                         <button
-                          onClick={() => handleApprovePOI(poi.id, poi.name)}
+                          onClick={() => openApproveModal(poi)}
                           className="px-3.5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm hover:shadow cursor-pointer flex items-center space-x-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
                         >
                           <Check className="h-3.5 w-3.5" />
@@ -1211,27 +1263,100 @@ export default function ContentValidation() {
               </div>
 
               {/* Horarios de atención */}
-              {selectedPoi.horarios && selectedPoi.horarios.length > 0 && (
-                <div className="bg-bgPrimary/40 p-4 rounded-xl border border-black/5 space-y-2">
-                  <span className="block text-xs font-bold text-textDark/70 uppercase tracking-wider flex items-center space-x-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-accentWine" />
-                    <span>Horarios de Atención Configurados</span>
-                  </span>
+              <div className="bg-bgPrimary/40 p-4 rounded-xl border border-black/5 space-y-2">
+                <span className="block text-xs font-bold text-textDark/70 uppercase tracking-wider flex items-center space-x-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-accentWine" />
+                  <span>Horarios de Atención Configurados {selectedPoi.horarios?.length ? `(${selectedPoi.horarios.length})` : ''}</span>
+                </span>
+                {selectedPoi.horarios && selectedPoi.horarios.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     {selectedPoi.horarios.map((h: any, idx: number) => {
-                      const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+                      const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                      let dayLabel = '';
+                      if (h.diaNombre) {
+                        dayLabel = h.diaNombre;
+                      } else if (h.diaSemanaDesde != null) {
+                        const desdeIndex = h.diaSemanaDesde;
+                        const hastaIndex = h.diaSemanaHasta ?? desdeIndex;
+                        const desdeName = dayNames[desdeIndex] || `Día ${desdeIndex}`;
+                        const hastaName = dayNames[hastaIndex] || `Día ${hastaIndex}`;
+                        dayLabel = desdeIndex === hastaIndex ? desdeName : `${desdeName} a ${hastaName}`;
+                      } else if (h.diaSemana != null) {
+                        dayLabel = dayNames[h.diaSemana] || `Día ${h.diaSemana}`;
+                      } else {
+                        dayLabel = `Franja #${idx + 1}`;
+                      }
+
+                      const horaApertura = h.horaDesde || h.horaApertura || h.apertura;
+                      const horaCierre = h.horaHasta || h.horaCierre || h.cierre;
+                      const isClosed = h.abierto === false || h.esAbierto === false;
+
                       return (
-                        <div key={idx} className="bg-white p-2 rounded-lg border border-black/5">
-                          <p className="font-bold text-textDark">{dayNames[h.diaSemana] || `Día ${h.diaSemana}`}</p>
-                          <p className="text-[11px] text-textDark/70">
-                            {h.abierto ? `${h.horaApertura?.slice(0, 5)} - ${h.horaCierre?.slice(0, 5)}` : 'Cerrado'}
+                        <div key={idx} className="bg-white p-2.5 rounded-lg border border-black/10 shadow-xs space-y-0.5">
+                          <p className="font-bold text-textDark text-xs">{dayLabel}</p>
+                          <p className="text-[11px] text-textDark/70 font-mono">
+                            {isClosed ? (
+                              <span className="text-red-600 font-semibold">Cerrado</span>
+                            ) : horaApertura && horaCierre ? (
+                              `${String(horaApertura).slice(0, 5)} - ${String(horaCierre).slice(0, 5)} hs`
+                            ) : (
+                              'Abierto'
+                            )}
                           </p>
                         </div>
                       );
                     })}
                   </div>
+                ) : (
+                  <p className="text-xs text-textDark/60 italic">No hay horarios específicos de atención configurados.</p>
+                )}
+              </div>
+
+              {/* Servicios asociados al POI */}
+              <div className="bg-bgPrimary/40 p-4 rounded-xl border border-black/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="block text-xs font-bold text-textDark/70 uppercase tracking-wider flex items-center space-x-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-accentWine" />
+                    <span>Servicios del Negocio ({poiServices.length})</span>
+                  </span>
+                  {poiServices.length > 0 && (
+                    <span className="text-[10px] bg-accentWine/10 text-accentWine font-bold px-2 py-0.5 rounded-md">
+                      {poiServices.filter((s: any) => s.isAvailable).length} disponibles
+                    </span>
+                  )}
                 </div>
-              )}
+
+                {poiServices.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                    {poiServices.map((s: any, idx: number) => (
+                      <div key={s.id || idx} className="bg-white p-3 rounded-xl border border-black/10 shadow-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold text-textDark text-xs truncate mr-2">{s.name}</p>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            s.isAvailable !== false ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {s.isAvailable !== false ? 'Disponible' : 'No disponible'}
+                          </span>
+                        </div>
+                        {s.category && (
+                          <span className="inline-block text-[10px] bg-bgPrimary px-2 py-0.5 rounded text-textDark/70 font-medium">
+                            {s.category}
+                          </span>
+                        )}
+                        {s.description && (
+                          <p className="text-[11px] text-textDark/70 line-clamp-2">{s.description}</p>
+                        )}
+                        <div className="pt-1.5 flex items-center justify-between text-[11px] text-textDark/80 font-mono border-t border-black/5">
+                          <span className="font-semibold text-green-700">${s.price ?? 0}</span>
+                          <span className="text-textDark/60">{s.durationMinutes ? `${s.durationMinutes} min` : 'Sin duración'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-textDark/60 italic">Este negocio no posee servicios cargados por el momento.</p>
+                )}
+              </div>
 
               {/* Auditing Criteria: Validaciones Comunitarias (Criterion 36) & Reportes (Criterion 37) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1330,7 +1455,7 @@ export default function ContentValidation() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleApprovePOI(selectedPoi.id, selectedPoi.name)}
+                    onClick={() => openApproveModal(selectedPoi)}
                     className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center space-x-1.5"
                   >
                     <Check className="h-4 w-4" />
@@ -1338,6 +1463,45 @@ export default function ContentValidation() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== MODAL: APPROVE POI CONFIRMATION ==================== */}
+      {showApproveModal && selectedPoi && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-black/5 space-y-4 animate-scale-up">
+            <div className="flex items-center space-x-2.5 text-green-600">
+              <ShieldCheck className="h-6 w-6 flex-shrink-0" />
+              <h4 className="font-wixDisplay text-lg font-bold text-textDark">Confirmar Aprobación</h4>
+            </div>
+            <p className="text-xs text-textDark/80 leading-relaxed">
+              ¿Está seguro que desea aprobar el atractivo <strong>&quot;{selectedPoi.name}&quot;</strong>?
+            </p>
+            <p className="text-[11px] text-textDark/60 bg-green-50 p-3 rounded-xl border border-green-100">
+              Al aprobar este registro, cambiará su estado a <strong>Aprobado</strong> y pasará a estar visible públicamente para búsquedas, mapas y recomendaciones de usuarios.
+            </p>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApproveModal(false);
+                  triggerToast('Operación cancelada');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-textDark/70 hover:bg-black/5 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmApprove}
+                className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center space-x-1.5"
+              >
+                <Check className="h-4 w-4" />
+                <span>Confirmar Aprobación</span>
+              </button>
             </div>
           </div>
         </div>

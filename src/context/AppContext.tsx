@@ -33,6 +33,7 @@ import { mapBackendRoleToFrontend, mapBackendStatusToFrontend } from '../utils/r
 
 interface AppContextProps {
   currentUser: User | null;
+  isAuthLoading: boolean;
   users: User[];
   pois: POI[];
   schedules: Schedule[];
@@ -67,6 +68,7 @@ interface AppContextProps {
   updateTranslation: (lang: string, key: string, value: string) => void;
   addPOI: (poi: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => Promise<{ success: boolean; id?: string; error?: string }>;
   updatePOI: (poi: POI) => Promise<{ success: boolean; error?: string }>;
+  refreshPois: () => Promise<void>;
   loadSchedulesForPoi: (poiId: string) => Promise<void>;
   saveSchedules: (poiId: string, newSchedules: Schedule[]) => Promise<{ success: boolean; error?: string }>;
   addCategory: (category: Omit<Category, 'id'>) => void;
@@ -104,7 +106,7 @@ interface AppContextProps {
 const AppContext = createContext<AppContextProps | undefined>(undefined);
 
 // Helper para decodificar JWT sin librerías externas de forma segura
-function decodeJwt(token: string): { userId?: string; email?: string; role?: string } | null {
+function decodeJwt(token: string): { userId?: string; email?: string; role?: string; exp?: number } | null {
   try {
     const parts = token.split('.');
     if (parts.length < 2) return null;
@@ -121,6 +123,7 @@ function decodeJwt(token: string): { userId?: string; email?: string; role?: str
       userId: parsed.sub || parsed.userId || parsed.id,
       email: parsed.email,
       role: parsed.role || parsed.roleName || (typeof parsed.role === 'object' ? parsed.role?.nombre : undefined),
+      exp: parsed.exp,
     };
   } catch {
     return null;
@@ -131,22 +134,27 @@ function decodeJwt(token: string): { userId?: string; email?: string; role?: str
 function mapBackendPoi(p: any): POI {
   if (!p) return {} as POI;
 
-  // Extracción robusta de nombre de categoría
+  // Extracción robusta de nombre de categoría y IDs
   let catName = 'General';
   let catIds: string[] = [];
-  if (Array.isArray(p.categorias) && p.categorias.length > 0) {
-    const firstCat = p.categorias[0];
-    catName = typeof firstCat === 'string' ? firstCat : (firstCat?.nombre || firstCat?.categoria?.nombre || 'General');
-    catIds = p.categorias.map((c: any) => (typeof c === 'string' ? c : (c.id || c.categoriaId))).filter(Boolean);
-  } else if (Array.isArray(p.categoriaPois) && p.categoriaPois.length > 0) {
-    catName = p.categoriaPois[0]?.categoria?.nombre || 'General';
-    catIds = p.categoriaPois.map((cp: any) => cp.categoriaId || cp.categoria?.id).filter(Boolean);
+
+  const rawCats = p.categorias || p.categoriasPoi || p.categoriaPois;
+  if (Array.isArray(rawCats) && rawCats.length > 0) {
+    const firstCat = rawCats[0];
+    catName = typeof firstCat === 'string'
+      ? firstCat
+      : (firstCat?.nombre || firstCat?.categoria?.nombre || 'General');
+
+    catIds = rawCats
+      .map((c: any) => (typeof c === 'string' ? c : (c.id || c.categoriaId || c.categoria?.id)))
+      .filter(Boolean);
   } else if (p.categoria) {
     catName = typeof p.categoria === 'object' ? (p.categoria?.nombre || 'General') : String(p.categoria);
     if (typeof p.categoria === 'object' && p.categoria.id) catIds = [p.categoria.id];
   } else if (p.categoriaNombre) {
     catName = p.categoriaNombre;
   }
+
   if (Array.isArray(p.categoriaIds) && p.categoriaIds.length > 0) {
     catIds = p.categoriaIds;
   }
@@ -294,7 +302,25 @@ function mapBackendUser(u: any): User {
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ando_user');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return !!localStorage.getItem('accessToken');
+    }
+    return false;
+  });
   const [users, setUsers] = useState<User[]>([]);
   const [pois, setPois] = useState<POI[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -306,6 +332,71 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [translations, setTranslations] = useState<TranslationDict>(mockTranslations);
   const [currentLanguage, setCurrentLanguage] = useState<'es' | 'en' | 'pt'>('es');
+
+  const refreshPois = async () => {
+    try {
+      const allAdminPois: POI[] = [];
+      const seenIds = new Set<string>();
+
+      // 1. Obtener TODOS los POIs desde la API de revisión del administrador (sin filtrar por estado)
+      try {
+        const revisionData = await api.getAdminRevisionPois({ incluirTodos: true, limit: 1000 });
+        const poisArray = Array.isArray(revisionData)
+          ? revisionData
+          : (revisionData?.data || revisionData?.items || []);
+        if (Array.isArray(poisArray)) {
+          for (const p of poisArray) {
+            if (p?.id && !seenIds.has(p.id)) {
+              seenIds.add(p.id);
+              allAdminPois.push(mapBackendPoi(p));
+            }
+          }
+        }
+      } catch (eRev) {
+        console.warn('Error al cargar POIs de revisión admin:', eRev);
+      }
+
+      // 2. Obtener POIs públicos aprobados
+      try {
+        const publicData: any = await api.getAllPublicPois();
+        const publicArray = Array.isArray(publicData)
+          ? publicData
+          : (publicData?.data || publicData?.items || []);
+        if (Array.isArray(publicArray)) {
+          for (const p of publicArray) {
+            if (p?.id && !seenIds.has(p.id)) {
+              seenIds.add(p.id);
+              allAdminPois.push(mapBackendPoi(p));
+            }
+          }
+        }
+      } catch (ePub) {
+        console.warn('Error al cargar POIs públicos:', ePub);
+      }
+
+      // 3. Obtener POIs comunitarios
+      try {
+        const comunitariaData: any = await api.getValidacionComunitariaPois();
+        const comArray: any[] = Array.isArray(comunitariaData)
+          ? comunitariaData
+          : (comunitariaData?.data || comunitariaData?.items || []);
+        if (Array.isArray(comArray)) {
+          for (const p of comArray) {
+            if (p?.id && !seenIds.has(p.id)) {
+              seenIds.add(p.id);
+              allAdminPois.push(mapBackendPoi(p));
+            }
+          }
+        }
+      } catch (eCom) {
+        console.warn('Error al cargar POIs comunitarios:', eCom);
+      }
+
+      setPois(allAdminPois);
+    } catch (e) {
+      console.error('Error al refrescar POIs desde la base de datos:', e);
+    }
+  };
 
   const loadBackendData = async (role: string, userId?: string) => {
     try {
@@ -336,85 +427,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           console.warn('No se pudieron cargar usuarios:', e);
         }
 
-        // Cargar POIs para revisión y catálogo admin
-        try {
-          const allAdminPois: POI[] = [];
-          const seenIds = new Set<string>();
-
-          // 1. Obtener TODOS los POIs del sistema para el panel de administración
-          try {
-            const revisionData = await api.getAdminRevisionPois({ incluirTodos: true, limit: 1000 });
-            const poisArray = Array.isArray(revisionData)
-              ? revisionData
-              : (revisionData?.data || revisionData?.items || []);
-            if (Array.isArray(poisArray)) {
-              for (const p of poisArray) {
-                if (p?.id && !seenIds.has(p.id)) {
-                  seenIds.add(p.id);
-                  allAdminPois.push(mapBackendPoi(p));
-                }
-              }
-            }
-          } catch (eRev) {
-            console.warn('Nota al cargar POIs de revisión admin:', eRev);
-          }
-
-          // 2. Obtener POIs públicos aprobados (respaldo adicional)
-          try {
-            const publicData: any = await api.getAllPublicPois();
-            const publicArray = Array.isArray(publicData)
-              ? publicData
-              : (publicData?.data || publicData?.items || []);
-            if (Array.isArray(publicArray)) {
-              for (const p of publicArray) {
-                if (p?.id && !seenIds.has(p.id)) {
-                  seenIds.add(p.id);
-                  allAdminPois.push(mapBackendPoi(p));
-                }
-              }
-            }
-          } catch (ePub) {
-            console.warn('Nota al cargar POIs públicos:', ePub);
-          }
-
-          // 3. POIs en validación comunitaria
-          try {
-            const comunitariaData: any = await api.getValidacionComunitariaPois();
-            const comArray: any[] = Array.isArray(comunitariaData)
-              ? comunitariaData
-              : (comunitariaData?.data || comunitariaData?.items || []);
-            if (Array.isArray(comArray)) {
-              for (const p of comArray) {
-                if (p?.id && !seenIds.has(p.id)) {
-                  seenIds.add(p.id);
-                  allAdminPois.push(mapBackendPoi(p));
-                }
-              }
-            }
-          } catch (eCom) {
-            console.warn('Nota al cargar POIs comunitarios:', eCom);
-          }
-
-          // 4. Cargar POIs reales del sistema persistidos en local storage si existen
-          if (typeof window !== 'undefined') {
-            try {
-              const cachedRealPois: POI[] = JSON.parse(localStorage.getItem('ando_real_pois') || '[]');
-              if (Array.isArray(cachedRealPois)) {
-                for (const p of cachedRealPois) {
-                  if (p?.id && !seenIds.has(p.id)) {
-                    seenIds.add(p.id);
-                    allAdminPois.push(p);
-                  }
-                }
-              }
-            } catch {}
-          }
-
-          // Establecer todos los POIs reales recuperados del backend
-          setPois(allAdminPois);
-        } catch (e) {
-          console.warn('No se pudieron cargar POIs admin:', e);
-        }
+        // Cargar POIs reales desde la base de datos
+        await refreshPois();
       }
 
       if (role === 'provider') {
@@ -423,31 +437,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const dbPois: any = await api.getMyPois();
           const poisArray: any[] = Array.isArray(dbPois) ? dbPois : (dbPois?.pois || dbPois?.data || dbPois?.items || []);
           if (Array.isArray(poisArray)) {
+            // Actualizar estado de POIs en memoria
             const mappedPois: POI[] = poisArray.map(mapBackendPoi);
             setPois(mappedPois);
 
-            // Persistir POIs reales del prestador en el almacenamiento local para que el Admin los pueda ver
-            if (typeof window !== 'undefined') {
-              try {
-                const existing: POI[] = JSON.parse(localStorage.getItem('ando_real_pois') || '[]');
-                const combined = [...mappedPois];
-                const seenMap = new Set(combined.map((p) => p.id));
-                for (const p of existing) {
-                  if (p?.id && !seenMap.has(p.id)) {
-                    seenMap.add(p.id);
-                    combined.push(p);
-                  }
+            // Guardar el ID de estado de cada POI para futuras consultas administrativas
+            for (const p of poisArray) {
+              const st = p.estado?.nombre || p.estadoNombre || (typeof p.estado === 'string' ? p.estado : '');
+              if (st.toLowerCase() === 'aprobado' && (p.estadoId || p.estado?.id)) {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('ando_estado_aprobado_id', p.estadoId || p.estado?.id);
                 }
-                localStorage.setItem('ando_real_pois', JSON.stringify(combined));
-
-                // Guardar el ID de estado de cada POI para futuras consultas administrativas
-                for (const p of poisArray) {
-                  const st = p.estado?.nombre || p.estadoNombre || (typeof p.estado === 'string' ? p.estado : '');
-                  if (st.toLowerCase() === 'aprobado' && (p.estadoId || p.estado?.id)) {
-                    localStorage.setItem('ando_estado_aprobado_id', p.estadoId || p.estado?.id);
-                  }
-                }
-              } catch {}
+              }
             }
 
             // Cargar horarios del primer POI del prestador al arrancar
@@ -495,11 +496,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const restoreSession = async () => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-      if (!token) return;
+      if (!token) {
+        setIsAuthLoading(false);
+        return;
+      }
 
       const jwtData = decodeJwt(token);
       let detectedRole: UserRole | null = jwtData?.role ? mapBackendRoleToFrontend(jwtData.role) : null;
       let targetUserId = jwtData?.userId || '';
+
+      if (jwtData?.exp && jwtData.exp * 1000 < Date.now()) {
+        console.warn('El token de sesión ha expirado.');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('ando_user');
+        setCurrentUser(null);
+        setIsAuthLoading(false);
+        return;
+      }
 
       try {
         const profile = await api.getProfile();
@@ -527,7 +541,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             console.warn('Acceso denegado: El rol no está autorizado para acceder a este portal.');
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
+            localStorage.removeItem('ando_user');
             setCurrentUser(null);
+            setIsAuthLoading(false);
             return;
           }
 
@@ -573,13 +589,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           };
 
           setCurrentUser(loggedUser);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('ando_user', JSON.stringify(loggedUser));
+          }
           await loadBackendData(detectedRole, profileId);
         }
-      } catch (err) {
-        console.error('Sesión expirada o inválida:', err);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        setCurrentUser(null);
+      } catch (err: any) {
+        console.error('Error al restaurar sesión backend:', err);
+        const errMsg = String(err?.message || '');
+        if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('Unauthorized') || errMsg.includes('jwt')) {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('ando_user');
+          setCurrentUser(null);
+        }
+      } finally {
+        setIsAuthLoading(false);
       }
     };
     restoreSession();
@@ -649,6 +674,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
         
         setCurrentUser(loggedUser);
+        localStorage.setItem('ando_user', JSON.stringify(loggedUser));
+        setIsAuthLoading(false);
         await loadBackendData(mappedRole, data.user.id);
         
         return { success: true, role: mappedRole };
@@ -667,11 +694,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('ando_user');
       localStorage.removeItem('ando_real_pois');
       localStorage.removeItem('selectedProviderPoiId');
       localStorage.removeItem('ando_estado_aprobado_id');
     }
     setCurrentUser(null);
+    setIsAuthLoading(false);
     setPois([]);
     setUsers([]);
     setSchedules([]);
@@ -956,15 +985,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    setPois((prev) => {
-      const updated = prev.map((poi) => (poi.id === id ? { ...poi, status: 'approved' as const, feedback: undefined } : poi));
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('ando_real_pois', JSON.stringify(updated));
-        } catch {}
-      }
-      return updated;
-    });
+    setPois((prev) =>
+      prev.map((poi) => (poi.id === id ? { ...poi, status: 'approved' as const, feedback: undefined } : poi))
+    );
 
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
@@ -1001,15 +1024,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    setPois((prev) => {
-      const updated = prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected' as const, feedback: feedback.trim() } : poi));
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('ando_real_pois', JSON.stringify(updated));
-        } catch {}
-      }
-      return updated;
-    });
+    setPois((prev) =>
+      prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected' as const, feedback: feedback.trim() } : poi))
+    );
 
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
@@ -1046,15 +1063,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    setPois((prev) => {
-      const updated = prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction' as const, feedback: feedback.trim() } : poi));
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('ando_real_pois', JSON.stringify(updated));
-        } catch {}
-      }
-      return updated;
-    });
+    setPois((prev) =>
+      prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction' as const, feedback: feedback.trim() } : poi))
+    );
 
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
@@ -1272,6 +1283,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
 
       const updated = await api.updatePoi(updatedPoi.id, payload);
+
+      if (Array.isArray(updatedPoi.horarios)) {
+        try {
+          await api.deleteAllHorarios(updatedPoi.id).catch(() => {});
+          if (updatedPoi.horarios.length > 0) {
+            const batchHorarios = updatedPoi.horarios.map((h: any) => ({
+              diaSemanaDesde: Number(h.diaSemanaDesde ?? 1),
+              horaDesde: String(h.horaDesde || h.horaApertura || '09:00').slice(0, 5),
+              diaSemanaHasta: Number(h.diaSemanaHasta ?? h.diaSemanaDesde ?? 1),
+              horaHasta: String(h.horaHasta || h.horaCierre || '18:00').slice(0, 5),
+            }));
+            await api.createMultipleHorarios(updatedPoi.id, batchHorarios);
+          }
+        } catch (errHorarios) {
+          console.warn('Nota al guardar horarios durante actualización de POI:', errHorarios);
+        }
+      }
+
       const mapped = mapBackendPoi(updated);
       setPois((prev) => prev.map((p) => (p.id === updatedPoi.id ? mapped : p)));
       return { success: true };
@@ -1291,14 +1320,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const horariosList: any[] = Array.isArray(horarios) ? horarios : (horarios?.data || []);
       if (Array.isArray(horariosList)) {
         const mappedSchedules: Schedule[] = horariosList.map((h: any) => {
-          const days = h.diaSemanaDesde !== undefined
-            ? (h.diaSemanaDesde === h.diaSemanaHasta ? [h.diaSemanaDesde] : [h.diaSemanaDesde, h.diaSemanaHasta])
-            : (Array.isArray(h.diasSemana) ? h.diasSemana : [1]);
+          let days: number[] = [];
+          if (h.diaSemanaDesde !== undefined && h.diaSemanaHasta !== undefined) {
+            const start = Number(h.diaSemanaDesde);
+            const end = Number(h.diaSemanaHasta);
+            if (start <= end) {
+              for (let d = start; d <= end; d++) days.push(d);
+            } else {
+              for (let d = start; d <= 6; d++) days.push(d);
+              for (let d = 0; d <= end; d++) days.push(d);
+            }
+          } else if (Array.isArray(h.daysOfWeek)) {
+            days = h.daysOfWeek;
+          } else {
+            days = [h.diaSemanaDesde ?? 1];
+          }
+
           return {
-            id: h.id || `sch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: String(h.id || `sch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
             poiId: poiId,
             daysOfWeek: days,
-            timeRanges: [{ start: h.horaDesde || h.horaApertura || '09:00', end: h.horaHasta || h.horaCierre || '18:00' }],
+            timeRanges: [{ start: String(h.horaDesde || h.horaApertura || '09:00').slice(0, 5), end: String(h.horaHasta || h.horaCierre || '18:00').slice(0, 5) }],
             season: h.temporada || 'all',
             isHoliday: h.esFeriado || false,
             description: h.descripcion || '',
@@ -1335,9 +1377,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               for (const range of ranges) {
                 batchHorarios.push({
                   diaSemanaDesde: Number(day),
-                  horaDesde: range.start || '09:00',
+                  horaDesde: String(range.start || '09:00').slice(0, 5),
                   diaSemanaHasta: Number(day),
-                  horaHasta: range.end || '18:00',
+                  horaHasta: String(range.end || '18:00').slice(0, 5),
                 });
               }
             }
@@ -1347,6 +1389,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             await api.createMultipleHorarios(poiId, batchHorarios);
           }
         }
+        await loadSchedulesForPoi(poiId);
         return { success: true };
       } catch (err: any) {
         console.warn('Nota de guardado backend horarios:', err);
@@ -1680,53 +1723,103 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // 3. GESTIÓN DE SERVICIOS DEL POI (US-CYN-03)
   const loadServicesForPoi = async (poiId: string) => {
-    if (!poiId || poiId.startsWith('poi-')) return;
+    if (!poiId) return;
     try {
       const data: any = await api.getServiciosByPoi(poiId);
       const list: any[] = Array.isArray(data) ? data : (data?.servicios || data?.data || []);
-      if (Array.isArray(list) && list.length > 0) {
+      if (Array.isArray(list)) {
         const mapped: ServiceItem[] = list.map((sp: any) => ({
           id: sp.id,
           poiId: sp.poiId || poiId,
-          name: sp.servicio?.nombre || sp.nombre || 'Servicio',
-          category: sp.servicio?.categoria || sp.categoria || 'Comodidad',
-          description: sp.notas || sp.servicio?.descripcion || '',
+          name: sp.nombre || sp.servicio?.nombre || 'Servicio',
+          category: sp.categoriaServicio || sp.servicio?.categoria || 'General',
+          description: sp.descripcion || sp.servicio?.descripcion || '',
           price: sp.precio !== null && sp.precio !== undefined ? Number(sp.precio) : 0,
           durationMinutes: sp.duracionMinutos || 60,
+          maxCapacity: sp.capacidadMaxima,
+          terms: sp.condicionesContratacion,
           isAvailable: sp.disponible ?? sp.activo ?? true,
         }));
         setServices(mapped);
       }
     } catch (e) {
-      console.warn('Nota al cargar servicios del POI:', e);
+      console.warn('Nota al cargar servicios del POI desde la base de datos:', e);
+      setServices([]);
     }
   };
 
   const saveService = async (serviceData: Omit<ServiceItem, 'id'> & { id?: string }): Promise<{ success: boolean; error?: string }> => {
-    if (serviceData.id) {
-      setServices((prev) =>
-        prev.map((s) => (s.id === serviceData.id ? ({ ...s, ...serviceData } as ServiceItem) : s))
-      );
-    } else {
-      const newService: ServiceItem = {
-        ...serviceData,
-        id: `srv-${Date.now()}`,
-      };
-      setServices((prev) => [...prev, newService]);
+    try {
+      if (serviceData.id) {
+        await api.updateServicioPoi(serviceData.poiId, serviceData.id, {
+          nombre: serviceData.name,
+          descripcion: serviceData.description,
+          categoriaServicio: serviceData.category,
+          precio: serviceData.price,
+          duracionMinutos: serviceData.durationMinutes,
+          capacidadMaxima: serviceData.maxCapacity,
+          condicionesContratacion: serviceData.terms,
+          disponible: serviceData.isAvailable,
+        });
+      } else {
+        let catalogId: string | undefined = undefined;
+        try {
+          const catalogo = await api.getCatalogoServicios(true);
+          const list = Array.isArray(catalogo) ? catalogo : [];
+          const matched = list.find(
+            (c: any) => c.nombre.toLowerCase().trim() === serviceData.name.toLowerCase().trim()
+          );
+          if (matched) {
+            catalogId = matched.id;
+          }
+        } catch {}
+
+        await api.createServicioPoi(serviceData.poiId, {
+          servicioId: catalogId,
+          nombre: serviceData.name,
+          descripcion: serviceData.description,
+          categoriaServicio: serviceData.category,
+          precio: serviceData.price,
+          duracionMinutos: serviceData.durationMinutes,
+          capacidadMaxima: serviceData.maxCapacity,
+          condicionesContratacion: serviceData.terms,
+          disponible: serviceData.isAvailable,
+        });
+      }
+      await loadServicesForPoi(serviceData.poiId);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al guardar el servicio en la base de datos.' };
     }
-    return { success: true };
   };
 
   const deleteService = async (serviceId: string): Promise<{ success: boolean; error?: string }> => {
-    setServices((prev) => prev.filter((s) => s.id !== serviceId));
-    return { success: true };
+    try {
+      const target = services.find((s) => s.id === serviceId);
+      if (target) {
+        await api.deleteServicioPoi(target.poiId, serviceId);
+        setServices((prev) => prev.filter((s) => s.id !== serviceId));
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al eliminar el servicio de la base de datos.' };
+    }
   };
 
   const toggleServiceAvailability = async (serviceId: string): Promise<{ success: boolean; error?: string }> => {
-    setServices((prev) =>
-      prev.map((s) => (s.id === serviceId ? { ...s, isAvailable: !s.isAvailable } : s))
-    );
-    return { success: true };
+    try {
+      const target = services.find((s) => s.id === serviceId);
+      if (target) {
+        const nextState = !target.isAvailable;
+        await api.toggleEstadoServicioPoi(target.poiId, serviceId, nextState);
+        setServices((prev) =>
+          prev.map((s) => (s.id === serviceId ? { ...s, isAvailable: nextState } : s))
+        );
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al cambiar el estado del servicio.' };
+    }
   };
 
   // 4. CENTRO DE NOTIFICACIONES (US-NYA-07)
@@ -1771,6 +1864,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         currentUser,
+        isAuthLoading,
         users,
         pois,
         schedules,
@@ -1805,6 +1899,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateTranslation,
         addPOI,
         updatePOI,
+        refreshPois,
         loadSchedulesForPoi,
         saveSchedules,
         addCategory,

@@ -26,8 +26,18 @@ type SubView = 'login' | 'register' | 'forgot_password' | 'recovery_sent' | 'res
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginWithCredentials, registerProvider, users } = useApp();
-  
+  const { currentUser, isAuthLoading, loginWithCredentials, registerProvider, users } = useApp();
+
+  useEffect(() => {
+    if (!isAuthLoading && currentUser) {
+      if (currentUser.role === 'admin') {
+        router.push('/admin/dashboard');
+      } else if (currentUser.role === 'provider') {
+        router.push('/provider/dashboard');
+      }
+    }
+  }, [currentUser, isAuthLoading, router]);
+
   // Navigation & Subview
   const [subView, setSubView] = useState<SubView>('login');
   const [isTransitioning, setIsTransitioning] = useState(false);
