@@ -21,26 +21,25 @@ import NotificationCenter from '@/components/NotificationCenter';
 export default function ProviderLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, logout } = useApp();
+  const { currentUser, isAuthLoading, logout } = useApp();
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Verificar autenticación real — sin auto-login mock
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setMounted(true);
-      if (!currentUser) {
-        router.push('/');
-      } else if (currentUser.role !== 'provider') {
-        router.push('/');
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [currentUser, router]);
+    setMounted(true);
+  }, []);
 
-  if (!mounted || !currentUser) {
+  useEffect(() => {
+    if (!mounted || isAuthLoading) return;
+
+    if (!currentUser || currentUser.role !== 'provider') {
+      router.push('/');
+    }
+  }, [mounted, isAuthLoading, currentUser, router]);
+
+  if (!mounted || isAuthLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-bgPrimary text-textDark">
         <div className="flex flex-col items-center space-y-4">
@@ -49,6 +48,10 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
         </div>
       </div>
     );
+  }
+
+  if (!currentUser || currentUser.role !== 'provider') {
+    return null;
   }
 
   const menuItems = [

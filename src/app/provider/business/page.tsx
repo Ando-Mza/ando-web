@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { api, uploadFileToR2 } from '@/utils/api';
 import { POI } from '@/types';
@@ -22,7 +23,11 @@ import {
   Globe,
   DollarSign,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles,
+  RefreshCw,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 const InstagramIcon = ({ className }: { className?: string }) => (
@@ -44,19 +49,20 @@ interface ScheduleEntry {
 }
 
 const DIAS_SEMANA = [
-  { id: 0, nombre: 'Domingo' },
-  { id: 1, nombre: 'Lunes' },
-  { id: 2, nombre: 'Martes' },
-  { id: 3, nombre: 'Miércoles' },
-  { id: 4, nombre: 'Jueves' },
-  { id: 5, nombre: 'Viernes' },
-  { id: 6, nombre: 'Sábado' },
+  { id: 1, nombre: 'Lunes', corto: 'Lun' },
+  { id: 2, nombre: 'Martes', corto: 'Mar' },
+  { id: 3, nombre: 'Miércoles', corto: 'Mié' },
+  { id: 4, nombre: 'Jueves', corto: 'Jue' },
+  { id: 5, nombre: 'Viernes', corto: 'Vie' },
+  { id: 6, nombre: 'Sábado', corto: 'Sáb' },
+  { id: 0, nombre: 'Domingo', corto: 'Dom' },
 ];
 
 const MAX_FILE_SIZE_MB = 30;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024; // 30 MB (Regla de negocio US-CYN-02)
 
 export default function BusinessProfile() {
+  const router = useRouter();
   const { pois, addPOI, updatePOI, generalParams, categories, currentUser } = useApp();
   
   const providerId = currentUser?.id || '';
@@ -78,8 +84,8 @@ export default function BusinessProfile() {
   const [regionId, setRegionId] = useState('');
   const [departamentoId, setDepartamentoId] = useState('');
   const [zonaId, setZonaId] = useState('');
-  const [lat, setLat] = useState('-32.8900');
-  const [lng, setLng] = useState('-68.8400');
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
 
   // Step 3: Contacto
   const [phone, setPhone] = useState('');
@@ -87,19 +93,42 @@ export default function BusinessProfile() {
   const [website, setWebsite] = useState('');
   const [instagram, setInstagram] = useState('');
 
-  // Step 4: Horarios
+  // Step 4: Horarios (multiselección de días como en Ando App)
   const [horariosList, setHorariosList] = useState<ScheduleEntry[]>([]);
-  const [nuevoDia, setNuevoDia] = useState<number>(1);
+  const [selectedDraftDias, setSelectedDraftDias] = useState<number[]>([1, 2, 3, 4, 5]); // Lunes a Viernes por defecto
   const [nuevaHoraDesde, setNuevaHoraDesde] = useState('09:00');
   const [nuevaHoraHasta, setNuevaHoraHasta] = useState('18:00');
   const [horarioError, setHorarioError] = useState<string | null>(null);
+  const [horarioToDelete, setHorarioToDelete] = useState<ScheduleEntry | null>(null);
 
-  // Step 5: Fotos
+  const toggleDraftDia = (diaNum: number) => {
+    if (selectedDraftDias.includes(diaNum)) {
+      if (selectedDraftDias.length > 1) {
+        setSelectedDraftDias(selectedDraftDias.filter((d) => d !== diaNum));
+      }
+    } else {
+      setSelectedDraftDias([...selectedDraftDias, diaNum]);
+    }
+  };
+
+  // Step 5: Fotos (Gestión Multimedia US-GIT-07)
   const [images, setImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [fileSizeError, setFileSizeError] = useState<string | null>(null);
+  
+  // Selección múltiple, reemplazo y eliminación masiva (US-GIT-07)
+  const [selectedImageIndices, setSelectedImageIndices] = useState<number[]>([]);
+  const [replaceImageIdx, setReplaceImageIdx] = useState<number | null>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
+  const [deleteImageConfirmConfig, setDeleteImageConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    isBulk: boolean;
+    targetIdx?: number;
+  } | null>(null);
 
   // Step 6: Información adicional
   const [precioMin, setPrecioMin] = useState<string>('');
@@ -203,10 +232,18 @@ export default function BusinessProfile() {
       else if (address.trim().length < 5) errors.push('La dirección debe tener al menos 5 caracteres.');
       if (!regionId) errors.push('Debe seleccionar una región.');
       if (!departamentoId) errors.push('Debe seleccionar un departamento.');
-      const latNum = parseFloat(lat);
-      if (isNaN(latNum) || latNum < -90 || latNum > 90) errors.push('La latitud debe estar entre -90 y 90.');
-      const lngNum = parseFloat(lng);
-      if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) errors.push('La longitud debe estar entre -180 y 180.');
+      if (!lat.trim()) {
+        errors.push('La latitud es obligatoria.');
+      } else {
+        const latNum = parseFloat(lat);
+        if (isNaN(latNum) || latNum < -90 || latNum > 90) errors.push('La latitud debe estar entre -90 y 90.');
+      }
+      if (!lng.trim()) {
+        errors.push('La longitud es obligatoria.');
+      } else {
+        const lngNum = parseFloat(lng);
+        if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) errors.push('La longitud debe estar entre -180 y 180.');
+      }
     } else if (step === 3) {
       if (email.trim()) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -262,40 +299,67 @@ export default function BusinessProfile() {
     }
   };
 
-  // Agregar horario con validación de superposición
+  // Agregar horario con selección múltiple de días y validación de superposición (igual a Ando App)
   const handleAddHorario = () => {
     setHorarioError(null);
     if (nuevaHoraHasta <= nuevaHoraDesde) {
       setHorarioError('La hora de cierre debe ser posterior a la de apertura.');
       return;
     }
-
-    // Comprobar superposición en el mismo día
-    const solapado = horariosList.some((h) => {
-      if (h.diaSemanaDesde === nuevoDia) {
-        return nuevaHoraDesde < h.horaHasta && nuevaHoraHasta > h.horaDesde;
-      }
-      return false;
-    });
-
-    if (solapado) {
-      setHorarioError('El rango horario se superpone con otro horario existente para ese mismo día.');
+    if (selectedDraftDias.length === 0) {
+      setHorarioError('Seleccioná al menos un día de la semana.');
       return;
     }
 
-    const entry: ScheduleEntry = {
-      id: `sch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      diaSemanaDesde: nuevoDia,
-      horaDesde: nuevaHoraDesde,
-      diaSemanaHasta: nuevoDia,
-      horaHasta: nuevaHoraHasta,
-    };
+    const newEntries: ScheduleEntry[] = [];
+    let overlapCount = 0;
 
-    setHorariosList((prev) => [...prev, entry]);
+    for (const diaNum of selectedDraftDias) {
+      const solapado = horariosList.some(
+        (h) => h.diaSemanaDesde === diaNum && nuevaHoraDesde < h.horaHasta && nuevaHoraHasta > h.horaDesde
+      );
+      if (solapado) {
+        overlapCount++;
+      } else {
+        newEntries.push({
+          id: `sch-${Date.now()}-${diaNum}-${Math.random().toString(36).slice(2, 6)}`,
+          diaSemanaDesde: diaNum,
+          horaDesde: nuevaHoraDesde,
+          diaSemanaHasta: diaNum,
+          horaHasta: nuevaHoraHasta,
+        });
+      }
+    }
+
+    if (newEntries.length > 0) {
+      setHorariosList((prev) => [...prev, ...newEntries]);
+    }
+
+    if (overlapCount > 0 && newEntries.length === 0) {
+      setHorarioError('Los días seleccionados ya tienen horarios que se superponen.');
+    } else if (overlapCount > 0) {
+      setHorarioError('Se agregaron algunos días, pero otros tenían horarios superpuestos.');
+    }
   };
 
   const handleRemoveHorario = (id: string) => {
     setHorariosList((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  const handleRequestRemoveHorario = (h: ScheduleEntry) => {
+    setHorarioToDelete(h);
+  };
+
+  const handleConfirmRemoveHorario = () => {
+    if (!horarioToDelete) return;
+    handleRemoveHorario(horarioToDelete.id);
+    setHorarioToDelete(null);
+    triggerToast('Horario eliminado exitosamente', 'success');
+  };
+
+  const handleCancelRemoveHorario = () => {
+    setHorarioToDelete(null);
+    triggerToast('Operación cancelada', 'warning');
   };
 
   const handleAddPresetHorarios = (presetType: 'semana' | 'completo' | 'finde') => {
@@ -329,23 +393,41 @@ export default function BusinessProfile() {
     }
   };
 
-  // Manejo de fotos con límite de 30 MB (US-CYN-02 Criterio 43)
-  const handleDeviceImageUpload = async (fileList: FileList | File[]) => {
+  // Manejo de fotos con validaciones y acciones US-GIT-07
+  const handleDeviceImageUpload = async (fileList: FileList | File[], replaceTargetIdx?: number) => {
     setFileSizeError(null);
-    const files = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
+    const files = Array.from(fileList);
     if (files.length === 0) return;
 
-    // Verificar límite <= 30 MB por archivo
-    const oversized = files.find((f) => f.size > MAX_FILE_SIZE_BYTES);
-    if (oversized) {
-      const sizeMb = (oversized.size / (1024 * 1024)).toFixed(1);
-      const msg = `El archivo "${oversized.name}" pesa ${sizeMb} MB. El límite máximo permitido es de ${MAX_FILE_SIZE_MB} MB por foto.`;
+    const validExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+    const validMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+    // Validar formato (JPG, PNG, WEBP) - US-GIT-07 Criterio 34
+    const invalidFormat = files.find((f) => {
+      const ext = f.name.split('.').pop()?.toLowerCase() || '';
+      const mime = f.type.toLowerCase();
+      const isMimeValid = mime && validMimeTypes.includes(mime);
+      const isExtValid = validExtensions.includes(ext);
+      return !isMimeValid && !isExtValid;
+    });
+
+    if (invalidFormat) {
+      const msg = 'El archivo debe ser una imagen en formato JPG, PNG o WEBP';
       setFileSizeError(msg);
       triggerToast(msg, 'warning');
       return;
     }
 
-    if (images.length + files.length > generalParams.maxImagesPerPOI) {
+    // Validar tamaño máximo (30 MB) - US-GIT-07 Criterio 35
+    const oversized = files.find((f) => f.size > MAX_FILE_SIZE_BYTES);
+    if (oversized) {
+      const msg = 'La imagen no puede superar los 30 MB';
+      setFileSizeError(msg);
+      triggerToast(msg, 'warning');
+      return;
+    }
+
+    if (replaceTargetIdx === undefined && images.length + files.length > generalParams.maxImagesPerPOI) {
       triggerToast(`Límite superado. Máximo configurado: ${generalParams.maxImagesPerPOI} fotos.`, 'warning');
       return;
     }
@@ -354,20 +436,111 @@ export default function BusinessProfile() {
     setUploadProgress(10);
 
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      if (replaceTargetIdx !== undefined) {
+        // Reemplazar imagen existente (US-GIT-07 Criterio 38)
+        const file = files[0];
         const uploadedUrl = await uploadFileToR2(file, (prog) => {
-          const overallProgress = Math.round(((i + prog / 100) / files.length) * 100);
-          setUploadProgress(overallProgress);
+          setUploadProgress(prog);
         });
-        setImages((prev) => [...prev, uploadedUrl]);
+        setImages((prev) => prev.map((url, i) => (i === replaceTargetIdx ? uploadedUrl : url)));
+        triggerToast('Ha actualizado una de las imágenes de su POI', 'success');
+      } else {
+        // Subir nueva(s) imagen(es)
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const uploadedUrl = await uploadFileToR2(file, (prog) => {
+            const overallProgress = Math.round(((i + prog / 100) / files.length) * 100);
+            setUploadProgress(overallProgress);
+          });
+          setImages((prev) => [...prev, uploadedUrl]);
+        }
+        triggerToast('Imagen cargada y procesada exitosamente', 'success');
       }
     } catch (err) {
       console.error('Error al subir imágenes:', err);
+      triggerToast('No fue posible subir la imagen en este momento. Intentá más tarde.', 'warning');
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+      setReplaceImageIdx(null);
     }
+  };
+
+  // Selección individual e integral de imágenes (US-GIT-07)
+  const toggleSelectImageIdx = (idx: number) => {
+    setSelectedImageIndices((prev) =>
+      prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
+    );
+  };
+
+  const isAllImagesSelected = images.length > 0 && selectedImageIndices.length === images.length;
+
+  const toggleSelectAllImages = () => {
+    if (isAllImagesSelected) {
+      setSelectedImageIndices([]);
+    } else {
+      setSelectedImageIndices(images.map((_, i) => i));
+    }
+  };
+
+  // Solicitud de eliminación individual de imagen (US-GIT-07 Criterio 36 y 37)
+  const handleRequestDeleteImageIdx = (idx: number) => {
+    const isLastImage = images.length === 1;
+    setDeleteImageConfirmConfig({
+      isOpen: true,
+      title: isLastImage ? 'Eliminar Única Imagen' : 'Confirmar Eliminación',
+      message: isLastImage
+        ? 'Tu POI quedará sin imágenes. ¿Confirmás la eliminación?'
+        : '¿Estás seguro de que deseas eliminar esta imagen de tu establecimiento?',
+      isBulk: false,
+      targetIdx: idx,
+    });
+  };
+
+  // Solicitud de eliminación masiva de imágenes (US-GIT-07)
+  const handleRequestBulkDeleteImages = () => {
+    if (selectedImageIndices.length === 0) return;
+    const isDeletingAll = selectedImageIndices.length === images.length;
+    const count = selectedImageIndices.length;
+
+    setDeleteImageConfirmConfig({
+      isOpen: true,
+      title: 'Eliminación Masiva',
+      message: isDeletingAll
+        ? `Tu POI quedará sin imágenes. ¿Confirmás la eliminación masiva de las ${count} fotos seleccionadas?`
+        : `¿Estás seguro de que deseas eliminar las ${count} fotos seleccionadas? Esta acción no se puede deshacer.`,
+      isBulk: true,
+    });
+  };
+
+  // Ejecución confirmada de eliminación
+  const handleConfirmDeleteImageAction = () => {
+    if (!deleteImageConfirmConfig) return;
+    const { isBulk, targetIdx } = deleteImageConfirmConfig;
+    setDeleteImageConfirmConfig(null);
+
+    const indicesToRemove = isBulk ? selectedImageIndices : targetIdx !== undefined ? [targetIdx] : [];
+    if (indicesToRemove.length === 0) return;
+
+    setImages((prev) => prev.filter((_, i) => !indicesToRemove.includes(i)));
+    setSelectedImageIndices((prev) => prev.filter((i) => !indicesToRemove.includes(i)));
+
+    if (isBulk) {
+      triggerToast(`${indicesToRemove.length} fotos eliminadas exitosamente`, 'success');
+    } else {
+      triggerToast('Su imagen fue eliminada exitosamente', 'success');
+    }
+  };
+
+  const handleCancelDeleteImageAction = () => {
+    setDeleteImageConfirmConfig(null);
+    triggerToast('Operación cancelada', 'warning');
+  };
+
+  // Iniciar reemplazo de imagen (US-GIT-07 Criterio 38)
+  const handleInitiateReplaceImage = (idx: number) => {
+    setReplaceImageIdx(idx);
+    replaceFileInputRef.current?.click();
   };
 
   const handleStartCreate = () => {
@@ -379,8 +552,8 @@ export default function BusinessProfile() {
     if (regiones.length > 0) setRegionId(regiones[0].id);
     if (departamentos.length > 0) setDepartamentoId(departamentos[0].id);
     setZonaId('');
-    setLat('-32.8900');
-    setLng('-68.8400');
+    setLat('');
+    setLng('');
     setPhone('');
     setEmail('');
     setWebsite('');
@@ -413,8 +586,8 @@ export default function BusinessProfile() {
     if (poi.regionId) setRegionId(poi.regionId);
     if (poi.departamentoId) setDepartamentoId(poi.departamentoId);
     if (poi.zonaId) setZonaId(poi.zonaId);
-    setLat(poi.location?.lat?.toString() || '-32.8900');
-    setLng(poi.location?.lng?.toString() || '-68.8400');
+    setLat(poi.location?.lat !== undefined && poi.location?.lat !== null ? String(poi.location.lat) : '');
+    setLng(poi.location?.lng !== undefined && poi.location?.lng !== null ? String(poi.location.lng) : '');
     setPhone(poi.phone || '');
     setEmail(poi.email || '');
     setWebsite(poi.website || '');
@@ -696,13 +869,28 @@ export default function BusinessProfile() {
                     </div>
                   )}
 
-                  <button
-                    onClick={() => handleStartEdit(poi)}
-                    className="w-full py-2 bg-bgPrimary hover:bg-black/5 border border-black/5 text-textDark hover:text-accentWine font-bold rounded-lg text-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                    <span>Administrar Perfil</span>
-                  </button>
+                  <div className="space-y-2 pt-1">
+                    <button
+                      onClick={() => handleStartEdit(poi)}
+                      className="w-full py-2 bg-bgPrimary hover:bg-black/5 border border-black/5 text-textDark hover:text-accentWine font-bold rounded-lg text-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      <span>Administrar Perfil</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('selectedProviderPoiId', poi.id);
+                        }
+                        router.push('/provider/services');
+                      }}
+                      className="w-full py-2 bg-accentWine/5 hover:bg-accentWine/10 border border-accentWine/20 text-accentWine font-bold rounded-lg text-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-accentWine" />
+                      <span>Servicios del negocio</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -743,7 +931,7 @@ export default function BusinessProfile() {
               </button>
               <div>
                 <h3 className="font-wixDisplay text-xl font-bold text-accentWine">
-                  {viewMode === 'create' ? 'Crear Nuevo Negocio Turístico (CYN-02)' : `Editar Negocio: ${selectedPoi?.name}`}
+                  {viewMode === 'create' ? 'Crear nuevo negocio' : `Editar Negocio: ${selectedPoi?.name}`}
                 </h3>
                 <p className="text-xs text-textDark/55 mt-0.5">
                   Asistente interactivo de 6 pasos con validación progresiva y persistencia directa.
@@ -760,15 +948,16 @@ export default function BusinessProfile() {
           </div>
 
           {/* Stepper Navigation Indicator */}
-          <div className="bg-white rounded-2xl border border-black/5 p-4 shadow-xs">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <div className="bg-white rounded-2xl border border-black/5 p-4 sm:p-5 shadow-xs space-y-4">
+            {/* Step Pills Navigation */}
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2 overflow-x-auto pb-1">
               {[
-                { step: 1, title: 'Básica', subtitle: 'Nombre y rubro' },
-                { step: 2, title: 'Ubicación', subtitle: 'Cascada y mapa' },
-                { step: 3, title: 'Contacto', subtitle: 'Email, tel y redes' },
-                { step: 4, title: 'Horarios', subtitle: 'Atención semanal' },
-                { step: 5, title: 'Fotos', subtitle: 'Galería (<= 30 MB)' },
-                { step: 6, title: 'Adicional', subtitle: 'Precios y tiempo' },
+                { step: 1, title: '1. Básica', label: 'Información básica', desc: 'Nombre comercial del establecimiento, descripción corta y categorías de la actividad.' },
+                { step: 2, title: '2. Ubicación', label: 'Ubicación y mapa', desc: 'Dirección física completa, región, departamento, zona y coordenadas GPS.' },
+                { step: 3, title: '3. Contacto', label: 'Contacto y redes', desc: 'Teléfono comercial, correo electrónico de atención, sitio web e Instagram.' },
+                { step: 4, title: '4. Horarios', label: 'Horarios de atención', desc: 'Días de apertura y franjas de atención semanal para los visitantes.' },
+                { step: 5, title: '5. Fotos', label: 'Galería de fotos', desc: 'Fotografías del establecimiento y sus instalaciones (máximo 30 MB por foto).' },
+                { step: 6, title: '6. Adicional', label: 'Precios y tiempo', desc: 'Rango estimado de precios ($ ARS) y duración recomendada de la visita.' },
               ].map((item) => {
                 const isCurrent = currentStep === item.step;
                 const isPassed = currentStep > item.step;
@@ -780,37 +969,61 @@ export default function BusinessProfile() {
                     type="button"
                     disabled={!isAccessible}
                     onClick={() => handleJumpToStep(item.step)}
-                    className={`flex items-center space-x-2.5 p-2.5 rounded-xl border text-left transition-all ${
+                    className={`flex items-center space-x-2 px-3 sm:px-4 py-3 rounded-xl border text-xs transition-all flex-1 justify-center min-w-[70px] sm:min-w-0 ${
                       isCurrent
-                        ? 'border-accentWine bg-accentWine/5 ring-1 ring-accentWine shadow-2xs'
+                        ? 'border-accentWine bg-accentWine text-white shadow-md font-extrabold scale-[1.03] ring-2 ring-accentWine/30 cursor-default'
                         : isPassed
-                        ? 'border-green-200 bg-green-50/50 hover:bg-green-50 text-green-900 cursor-pointer'
+                        ? 'border-green-200 bg-green-50 text-green-900 font-semibold hover:bg-green-100 cursor-pointer'
                         : isAccessible
-                        ? 'border-black/5 bg-bgPrimary/40 hover:bg-bgPrimary text-textDark/70 cursor-pointer'
-                        : 'border-black/5 bg-black/2 text-textDark/30 cursor-not-allowed opacity-50'
+                        ? 'border-black/10 bg-bgPrimary/60 text-textDark/70 hover:bg-bgPrimary font-medium cursor-pointer'
+                        : 'border-black/5 bg-black/2 text-textDark/30 cursor-not-allowed opacity-40'
                     }`}
+                    title={`${item.step}. ${item.label}`}
                   >
-                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 ${
                       isCurrent
-                        ? 'bg-accentWine text-white'
+                        ? 'bg-white text-accentWine'
                         : isPassed
                         ? 'bg-green-600 text-white'
                         : 'bg-black/10 text-textDark/60'
                     }`}>
                       {isPassed ? <Check className="h-3.5 w-3.5" /> : item.step}
                     </div>
-                    <div className="truncate">
-                      <span className={`block text-[11px] font-bold ${isCurrent ? 'text-accentWine' : 'text-textDark'}`}>
-                        {item.title}
-                      </span>
-                      <span className="block text-[9px] text-textDark/45 truncate">
-                        {item.subtitle}
-                      </span>
-                    </div>
+                    <span className="hidden sm:inline font-bold truncate">
+                      {item.title.replace(/^[0-9]+\.\s*/, '')}
+                    </span>
                   </button>
                 );
               })}
             </div>
+
+            {/* Active Step Highlight Banner */}
+            {(() => {
+              const currentItem = [
+                { step: 1, label: 'Paso 1: Información básica del negocio', desc: 'Indica el nombre comercial del establecimiento, descripción detallada y rubro/categorías de tu actividad.' },
+                { step: 2, label: 'Paso 2: Ubicación física y coordenadas GPS', desc: 'Indica la dirección física completa, región, departamento, zona y las coordenadas GPS exactas.' },
+                { step: 3, label: 'Paso 3: Canales de contacto y redes sociales', desc: 'Registra el teléfono de atención comercial, email de contacto, sitio web oficial y usuario de Instagram.' },
+                { step: 4, label: 'Paso 4: Días y horarios de atención semanal', desc: 'Configura los días de apertura y rangos horarios de atención para que los turistas sepan cuándo visitarte.' },
+                { step: 5, label: 'Paso 5: Galería de fotos del negocio', desc: 'Sube fotografías de tu local e instalaciones (límite máximo de 30 MB por foto en JPG, PNG o WEBP).' },
+                { step: 6, label: 'Paso 6: Información adicional y estimación de costos', desc: 'Establece los precios estimados mínimo y máximo ($ ARS) y la duración promedio recomendada de la visita.' },
+              ].find((s) => s.step === currentStep);
+
+              if (!currentItem) return null;
+
+              return (
+                <div className="bg-accentWine/5 border border-accentWine/20 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-fade-in">
+                  <div className="flex items-center space-x-3">
+                    <span className="bg-accentWine text-white text-xs font-black px-3 py-1 rounded-lg shadow-2xs flex-shrink-0">
+                      PASO {currentItem.step} DE 6
+                    </span>
+                    <div>
+                      <h4 className="font-wixDisplay text-sm font-bold text-accentWine">{currentItem.label}</h4>
+                      <p className="text-xs text-textDark/70">{currentItem.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Validation Warning Alert */}
@@ -856,7 +1069,7 @@ export default function BusinessProfile() {
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-2">
-                      Categorías de servicio * (Seleccione al menos una)
+                      Categorías del negocio * (Seleccione al menos una)
                     </label>
                     <div className="flex flex-wrap gap-2 pt-1">
                       {categories.map((cat) => {
@@ -1013,31 +1226,7 @@ export default function BusinessProfile() {
                   </div>
                 </div>
 
-                {/* Preajustes rápidos */}
-                <div className="flex items-center space-x-2 text-xs pt-1">
-                  <span className="text-textDark/50 font-bold">Puntos de muestra:</span>
-                  <button
-                    type="button"
-                    onClick={() => { setLat('-32.8894'); setLng('-68.8681'); }}
-                    className="px-2.5 py-1 bg-bgPrimary hover:bg-black/5 rounded-md text-[11px] font-semibold text-accentWine"
-                  >
-                    Ciudad Mendoza
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setLat('-33.0039'); setLng('-68.8785'); }}
-                    className="px-2.5 py-1 bg-bgPrimary hover:bg-black/5 rounded-md text-[11px] font-semibold text-accentWine"
-                  >
-                    Luján de Cuyo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setLat('-32.9781'); setLng('-68.7852'); }}
-                    className="px-2.5 py-1 bg-bgPrimary hover:bg-black/5 rounded-md text-[11px] font-semibold text-accentWine"
-                  >
-                    Maipú
-                  </button>
-                </div>
+
               </div>
             )}
 
@@ -1111,151 +1300,267 @@ export default function BusinessProfile() {
               </div>
             )}
 
-            {/* PASO 4: HORARIOS DE ATENCIÓN */}
+            {/* PASO 4: HORARIOS DE ATENCIÓN (Adaptado de Ando App) */}
             {currentStep === 4 && (
               <div className="space-y-6 animate-fade-in max-w-3xl">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <h4 className="font-wixDisplay text-lg font-bold text-textDark">Paso 4: Horarios de atención</h4>
                     <p className="text-xs text-textDark/60 mt-1">
-                      Carga dinámica de rangos horarios por día con validación de superposición.
+                      Seleccioná uno o más días y asigná su rango horario de apertura y cierre.
                     </p>
                   </div>
-                  {/* Presets */}
-                  <div className="flex items-center space-x-1.5">
+                  {/* Presets rápidos de carga completa */}
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => handleAddPresetHorarios('semana')}
-                      className="px-2.5 py-1 text-[11px] font-bold bg-bgPrimary hover:bg-black/5 text-accentWine rounded-lg border border-black/5"
+                      className="px-3 py-1.5 text-xs font-bold bg-bgPrimary hover:bg-black/5 text-accentWine rounded-xl border border-black/10 transition-colors cursor-pointer"
                     >
-                      Lun-Vie 9-18
+                      Preset: Lun-Vie 9-18
                     </button>
                     <button
                       type="button"
                       onClick={() => handleAddPresetHorarios('completo')}
-                      className="px-2.5 py-1 text-[11px] font-bold bg-bgPrimary hover:bg-black/5 text-accentWine rounded-lg border border-black/5"
+                      className="px-3 py-1.5 text-xs font-bold bg-bgPrimary hover:bg-black/5 text-accentWine rounded-xl border border-black/10 transition-colors cursor-pointer"
                     >
-                      Todos los días 9-20
+                      Preset: Todos 9-20
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddPresetHorarios('finde')}
+                      className="px-3 py-1.5 text-xs font-bold bg-bgPrimary hover:bg-black/5 text-accentWine rounded-xl border border-black/10 transition-colors cursor-pointer"
+                    >
+                      Preset: Sáb-Dom 10-19
                     </button>
                   </div>
                 </div>
 
-                {/* Formulario de franja */}
-                <div className="p-4 bg-bgPrimary/50 rounded-xl border border-black/5 space-y-3">
-                  <span className="text-xs font-bold text-textDark/70 block">Agregar nueva franja horaria:</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-textDark/60 mb-1">Día</label>
-                      <select
-                        value={nuevoDia}
-                        onChange={(e) => setNuevoDia(parseInt(e.target.value, 10))}
-                        className="w-full px-3 py-2 rounded-lg border border-black/10 bg-white text-xs font-bold"
+                {/* Formulario de franja con chips multiselección */}
+                <div className="p-5 bg-bgPrimary/50 rounded-2xl border border-black/5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-textDark/80">
+                      Seleccioná los días para aplicar la franja:
+                    </span>
+                    <div className="flex items-center space-x-1.5 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDraftDias([0, 1, 2, 3, 4, 5, 6])}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-black/10 text-textDark/70 hover:text-accentWine font-bold cursor-pointer transition-colors"
                       >
-                        {DIAS_SEMANA.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.nombre}
-                          </option>
-                        ))}
-                      </select>
+                        Todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDraftDias([1, 2, 3, 4, 5])}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-black/10 text-textDark/70 hover:text-accentWine font-bold cursor-pointer transition-colors"
+                      >
+                        Lun-Vie
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDraftDias([6, 0])}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-black/10 text-textDark/70 hover:text-accentWine font-bold cursor-pointer transition-colors"
+                      >
+                        Sáb-Dom
+                      </button>
                     </div>
+                  </div>
 
+                  {/* Chips de Días (Multiselección) */}
+                  <div className="flex flex-wrap gap-2">
+                    {DIAS_SEMANA.map((item) => {
+                      const active = selectedDraftDias.includes(item.id);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => toggleDraftDia(item.id)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center space-x-1 ${
+                            active
+                              ? 'bg-accentWine text-white border-accentWine shadow-2xs scale-[1.02]'
+                              : 'bg-white text-textDark/80 border-black/10 hover:border-black/20 hover:bg-black/5'
+                          }`}
+                        >
+                          {active && <Check className="h-3 w-3 mr-0.5" />}
+                          <span>{item.nombre} ({item.corto})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Entradas de Hora Desde y Hasta */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end pt-1">
                     <div>
-                      <label className="block text-[10px] font-bold uppercase text-textDark/60 mb-1">Apertura</label>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-textDark/60 mb-1.5">
+                        Apertura (Desde)
+                      </label>
                       <input
                         type="time"
                         value={nuevaHoraDesde}
                         onChange={(e) => setNuevaHoraDesde(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-lg border border-black/10 bg-white text-xs font-semibold"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-bold text-textDark focus:ring-2 focus:ring-accentWine focus:outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold uppercase text-textDark/60 mb-1">Cierre</label>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-textDark/60 mb-1.5">
+                        Cierre (Hasta)
+                      </label>
                       <input
                         type="time"
                         value={nuevaHoraHasta}
                         onChange={(e) => setNuevaHoraHasta(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-lg border border-black/10 bg-white text-xs font-semibold"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 bg-white text-xs font-bold text-textDark focus:ring-2 focus:ring-accentWine focus:outline-none"
                       />
                     </div>
 
-                    <div className="flex items-end">
+                    <div>
                       <button
                         type="button"
                         onClick={handleAddHorario}
-                        className="w-full py-2 bg-fillPrimary hover:bg-fillPrimary/90 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-2xs"
+                        className="w-full py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white rounded-xl text-xs font-extrabold cursor-pointer transition-all shadow-md flex items-center justify-center space-x-1.5"
                       >
-                        + Agregar
+                        <Plus className="h-4 w-4" />
+                        <span>Agregar horario</span>
                       </button>
                     </div>
                   </div>
 
                   {horarioError && (
                     <p className="text-xs font-bold text-red-600 flex items-center space-x-1 pt-1">
-                      <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                      <AlertTriangle className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
                       <span>{horarioError}</span>
                     </p>
                   )}
                 </div>
 
-                {/* Lista de franjas */}
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-textDark/70 block">
-                    Franjas configuradas ({horariosList.length}):
-                  </span>
+                {/* Lista de franjas configuradas ordenadas por día de la semana */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-textDark/80">
+                      Franjas configuradas ({horariosList.length}):
+                    </span>
+                    {horariosList.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setHorariosList([])}
+                        className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
+                      >
+                        Limpiar todos
+                      </button>
+                    )}
+                  </div>
+
                   {horariosList.length === 0 ? (
-                    <p className="text-xs text-textDark/45 italic p-3 bg-bgPrimary/20 rounded-lg">
-                      No hay horarios cargados aún. Puedes agregarlos individualmente o usar los preajustes arriba.
+                    <p className="text-xs text-textDark/45 italic p-4 bg-bgPrimary/20 rounded-xl border border-black/5 text-center">
+                      No hay horarios cargados aún. Seleccioná los días arriba y hacé clic en "+ Agregar horario".
                     </p>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {horariosList.map((h) => {
-                        const diaObj = DIAS_SEMANA.find((d) => d.id === h.diaSemanaDesde);
-                        return (
-                          <div
-                            key={h.id}
-                            className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-black/10 shadow-2xs text-xs"
-                          >
-                            <div className="flex items-center space-x-2">
-                              <Clock className="h-3.5 w-3.5 text-accentWine" />
-                              <span className="font-bold text-textDark">{diaObj?.nombre}:</span>
-                              <span className="text-textDark/70">{h.horaDesde} a {h.horaHasta} hs</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveHorario(h.id)}
-                              className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
-                              title="Eliminar franja"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                      {[...horariosList]
+                        .sort((a, b) => {
+                          const dayA = a.diaSemanaDesde === 0 ? 7 : a.diaSemanaDesde;
+                          const dayB = b.diaSemanaDesde === 0 ? 7 : b.diaSemanaDesde;
+                          if (dayA !== dayB) return dayA - dayB;
+                          return a.horaDesde.localeCompare(b.horaDesde);
+                        })
+                        .map((h) => {
+                          const diaObj = DIAS_SEMANA.find((d) => d.id === h.diaSemanaDesde);
+                          return (
+                            <div
+                              key={h.id}
+                              className="flex items-center justify-between p-3 bg-white rounded-xl border border-black/10 shadow-2xs text-xs group hover:border-accentWine/30 transition-all"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
+                              <div className="flex items-center space-x-2">
+                                <Clock className="h-3.5 w-3.5 text-accentWine flex-shrink-0" />
+                                <span className="font-bold text-textDark">{diaObj?.nombre}:</span>
+                                <span className="text-textDark/70 font-semibold">{h.horaDesde} a {h.horaHasta} hs</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRequestRemoveHorario(h)}
+                                className="text-red-400 hover:text-red-700 p-1 cursor-pointer transition-colors"
+                                title="Eliminar franja"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* PASO 5: FOTOS DEL NEGOCIO (LÍMITE 30 MB - US-CYN-02 Criterio 43) */}
+            {/* PASO 5: FOTOS DEL NEGOCIO (GESTIÓN MULTIMEDIA - US-GIT-07) */}
             {currentStep === 5 && (
               <div className="space-y-6 animate-fade-in max-w-3xl">
-                <div>
-                  <h4 className="font-wixDisplay text-lg font-bold text-textDark">Paso 5: Galería de fotos del negocio</h4>
-                  <p className="text-xs text-textDark/60 mt-1">
-                    Carga fotografías de tu local (límite máximo de 30 MB por archivo). Puedes visualizarlas o eliminarlas antes de guardar.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-black/5">
+                  <div>
+                    <h4 className="font-wixDisplay text-lg font-bold text-textDark flex items-center space-x-2">
+                      <ImageIcon className="h-5 w-5 text-fillPrimary" />
+                      <span>Gestión Multimedia de Fotos ({images.length} / {generalParams.maxImagesPerPOI})</span>
+                    </h4>
+                    <p className="text-xs text-textDark/60 mt-0.5">
+                      Sube, reemplaza, visualiza y administra las imágenes oficiales de tu establecimiento.
+                    </p>
+                  </div>
+
+                  {images.length > 0 && (
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAllImages}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-black/10 bg-white hover:bg-bgPrimary text-xs font-bold text-textDark transition-all cursor-pointer shadow-2xs"
+                      >
+                        {isAllImagesSelected ? (
+                          <CheckSquare className="h-4 w-4 text-fillPrimary" />
+                        ) : (
+                          <Square className="h-4 w-4 text-textDark/40" />
+                        )}
+                        <span>{isAllImagesSelected ? 'Deseleccionar todas' : 'Select All'}</span>
+                      </button>
+
+                      {selectedImageIndices.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleRequestBulkDeleteImages}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Eliminar ({selectedImageIndices.length})</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
+                {/* Input oculto para subida normal */}
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   multiple
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files) handleDeviceImageUpload(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+
+                {/* Input oculto para reemplazo de foto */}
+                <input
+                  ref={replaceFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && replaceImageIdx !== null) {
+                      handleDeviceImageUpload(e.target.files, replaceImageIdx);
+                    }
+                    e.target.value = '';
                   }}
                 />
 
@@ -1269,7 +1574,7 @@ export default function BusinessProfile() {
                     if (e.dataTransfer.files) handleDeviceImageUpload(e.dataTransfer.files);
                   }}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer flex flex-col items-center justify-center space-y-2.5 ${
+                  className={`border-2 border-dashed rounded-2xl p-7 text-center transition-all cursor-pointer flex flex-col items-center justify-center space-y-2.5 ${
                     dragActive
                       ? 'border-fillPrimary bg-fillPrimary/5 scale-[1.01]'
                       : 'border-black/10 hover:border-fillPrimary/60 bg-bgPrimary/40 hover:bg-bgPrimary/70'
@@ -1280,14 +1585,14 @@ export default function BusinessProfile() {
                     <p className="text-xs font-bold text-textDark">
                       Arrastra tus fotos aquí o haz clic para explorar desde tu dispositivo
                     </p>
-                    <p className="text-[11px] text-textDark/50 mt-1">
-                      PNG, JPG, WEBP • <strong>Límite estricto: hasta 30 MB por archivo</strong> • Máx. {generalParams.maxImagesPerPOI} fotos
+                    <p className="text-[11px] text-textDark/60 mt-1">
+                      Formatos válidos: <strong>JPG, PNG, WEBP</strong> • Límite estricto: <strong>30 MB por imagen</strong> • Máx. {generalParams.maxImagesPerPOI} fotos
                     </p>
                   </div>
                 </div>
 
                 {fileSizeError && (
-                  <div className="p-3 bg-red-50 rounded-xl border border-red-200 text-xs text-red-800 flex items-center space-x-2">
+                  <div className="p-3.5 bg-red-50 rounded-xl border border-red-200 text-xs font-bold text-red-800 flex items-center space-x-2 animate-fadeIn">
                     <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
                     <span>{fileSizeError}</span>
                   </div>
@@ -1298,7 +1603,7 @@ export default function BusinessProfile() {
                     <div className="flex justify-between items-center text-xs font-bold">
                       <span className="flex items-center text-textDark/70">
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-fillPrimary mr-2" />
-                        Subiendo fotos...
+                        Procesando imagen...
                       </span>
                       <span className="text-fillPrimary">{uploadProgress}%</span>
                     </div>
@@ -1309,37 +1614,83 @@ export default function BusinessProfile() {
                 )}
 
                 <div className="space-y-3">
-                  <span className="text-xs font-bold text-textDark/70 block">
-                    Fotos cargadas ({images.length} / {generalParams.maxImagesPerPOI})
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {images.map((imgUrl, idx) => (
-                      <div key={idx} className="group relative h-28 rounded-xl overflow-hidden border border-black/10 bg-bgPrimary">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={imgUrl} alt={`Foto ${idx + 1}`} className="h-full w-full object-cover" />
-                        {idx === 0 && (
-                          <span className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                            Portada
-                          </span>
-                        )}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-textDark/70 uppercase tracking-wider">
+                      Galería de Fotos ({images.length} / {generalParams.maxImagesPerPOI})
+                    </span>
+                    {selectedImageIndices.length > 0 && (
+                      <span className="text-xs font-semibold text-fillPrimary">
+                        {selectedImageIndices.length} seleccionada(s)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {images.map((imgUrl, idx) => {
+                      const isSelected = selectedImageIndices.includes(idx);
+                      return (
+                        <div
+                          key={idx}
+                          className={`group relative h-36 rounded-xl overflow-hidden border transition-all bg-bgPrimary ${
+                            isSelected
+                              ? 'border-fillPrimary ring-2 ring-fillPrimary/30 shadow-md scale-[1.02]'
+                              : 'border-black/10 hover:border-black/20 hover:shadow-xs'
+                          }`}
+                        >
+                          {/* Checkbox de Selección Individual */}
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setImages((prev) => prev.filter((_, i) => i !== idx));
-                            }}
-                            className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg cursor-pointer"
-                            title="Eliminar foto"
+                            onClick={() => toggleSelectImageIdx(idx)}
+                            className={`absolute top-2 left-2 z-10 p-1 rounded-md transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-fillPrimary text-white shadow-md'
+                                : 'bg-black/40 text-white/80 hover:bg-black/60 opacity-80 group-hover:opacity-100'
+                            }`}
+                            title={isSelected ? 'Deseleccionar foto' : 'Seleccionar foto'}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                           </button>
+
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={imgUrl} alt={`Foto ${idx + 1}`} className="h-full w-full object-cover" />
+
+                          {idx === 0 && (
+                            <span className="absolute bottom-2 left-2 z-10 bg-black/70 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-md">
+                              Portada
+                            </span>
+                          )}
+
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2 p-2">
+                            <button
+                              type="button"
+                              onClick={() => handleInitiateReplaceImage(idx)}
+                              className="p-2 bg-white/90 hover:bg-white text-textDark hover:text-fillPrimary rounded-lg text-xs font-bold transition-all shadow-md cursor-pointer flex items-center space-x-1"
+                              title="Reemplazar esta imagen por una nueva"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline text-[10px]">Reemplazar</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRequestDeleteImageIdx(idx)}
+                              className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all shadow-md cursor-pointer"
+                              title="Eliminar foto"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+
                     {images.length === 0 && (
-                      <div className="col-span-2 sm:col-span-4 border border-black/5 rounded-xl py-6 text-center text-xs text-textDark/40">
-                        No has cargado ninguna fotografía todavía.
+                      <div className="col-span-2 sm:col-span-3 md:col-span-4 border border-dashed border-black/10 rounded-2xl py-10 flex flex-col items-center justify-center text-xs text-textDark/50 space-y-1.5 bg-bgPrimary/20">
+                        <ImageIcon className="h-6 w-6 text-textDark/40" />
+                        <span className="font-bold text-textDark/70">No has cargado ninguna fotografía todavía</span>
+                        <span className="text-[11px] text-textDark/50">
+                          Sube fotos en formato JPG, PNG o WEBP (máx 30 MB) para dar a conocer tu local.
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1366,7 +1717,7 @@ export default function BusinessProfile() {
                     <input
                       type="number"
                       min="0"
-                      step="100"
+                      step="any"
                       placeholder="Ej. 2000"
                       value={precioMin}
                       onChange={(e) => setPrecioMin(e.target.value)}
@@ -1382,7 +1733,7 @@ export default function BusinessProfile() {
                     <input
                       type="number"
                       min="0"
-                      step="100"
+                      step="any"
                       placeholder="Ej. 10000"
                       value={precioMax}
                       onChange={(e) => setPrecioMax(e.target.value)}
@@ -1398,8 +1749,8 @@ export default function BusinessProfile() {
                     <div className="flex items-center space-x-3">
                       <input
                         type="number"
-                        min="15"
-                        step="15"
+                        min="0"
+                        step="1"
                         placeholder="60"
                         value={duracionEstimada}
                         onChange={(e) => setDuracionEstimada(e.target.value)}
@@ -1420,7 +1771,7 @@ export default function BusinessProfile() {
                 type="button"
                 disabled={currentStep === 1}
                 onClick={handlePrevStep}
-                className="px-5 py-2.5 border border-black/10 hover:bg-black/5 text-textDark/75 font-semibold rounded-xl text-xs transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-7 py-3.5 border border-black/15 hover:bg-black/5 text-textDark font-bold rounded-xl text-sm transition-all cursor-pointer shadow-xs disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 ← Anterior
               </button>
@@ -1428,10 +1779,10 @@ export default function BusinessProfile() {
               <button
                 type="button"
                 onClick={handleNextStep}
-                className="px-6 py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all cursor-pointer flex items-center space-x-1.5"
+                className="px-8 py-3.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-extrabold rounded-xl text-sm shadow-lg shadow-fillPrimary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer flex items-center space-x-2"
               >
                 <span>{currentStep === 6 ? 'Ver Resumen y Vista Previa' : 'Continuar al Paso ' + (currentStep + 1)}</span>
-                <span className="text-sm">→</span>
+                <span className="text-base font-bold">→</span>
               </button>
             </div>
           </div>
@@ -1445,7 +1796,7 @@ export default function BusinessProfile() {
             {/* Modal Header */}
             <div className="sticky top-0 bg-white/95 backdrop-blur-md px-6 py-4 border-b border-black/5 flex items-center justify-between z-10">
               <div>
-                <h4 className="font-wixDisplay text-lg font-bold text-textDark">Vista Previa de la Ficha del Negocio</h4>
+                <h4 className="font-wixDisplay text-lg font-bold text-textDark">Vista previa de la ficha del negocio</h4>
                 <p className="text-[11px] text-textDark/60">Revisa la información consolidada antes de enviar la propuesta formal.</p>
               </div>
               <button
@@ -1468,14 +1819,6 @@ export default function BusinessProfile() {
                     <ImageIcon className="h-8 w-8 mr-2" /> Sin foto de portada
                   </div>
                 )}
-
-                {/* State Badge: Pendiente de validación (Criterio 44 & 46) */}
-                <div className="absolute top-3 right-3">
-                  <span className="bg-amber-400 text-amber-950 font-black text-[11px] uppercase tracking-wider px-3 py-1 rounded-full shadow-md border border-amber-300 flex items-center space-x-1">
-                    <Clock className="h-3.5 w-3.5 mr-1" />
-                    <span>Pendiente de validación</span>
-                  </span>
-                </div>
 
                 <div className="absolute top-3 left-3 flex flex-wrap gap-1">
                   {selectedCategoryNames.map((cat, i) => (
@@ -1547,25 +1890,34 @@ export default function BusinessProfile() {
                 <div className="p-4 bg-bgPrimary/40 rounded-xl border border-black/5 space-y-1.5 text-xs">
                   <span className="font-bold text-textDark uppercase text-[10px] tracking-wider block">Horarios de atención</span>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                    {horariosList.map((h) => {
-                      const diaObj = DIAS_SEMANA.find((d) => d.id === h.diaSemanaDesde);
-                      return (
-                        <div key={h.id} className="bg-white p-2 rounded-lg border border-black/5 text-[11px]">
-                          <strong>{diaObj?.nombre}:</strong> {h.horaDesde} - {h.horaHasta} hs
-                        </div>
-                      );
-                    })}
+                    {[...horariosList]
+                      .sort((a, b) => {
+                        const dayA = a.diaSemanaDesde === 0 ? 7 : a.diaSemanaDesde;
+                        const dayB = b.diaSemanaDesde === 0 ? 7 : b.diaSemanaDesde;
+                        if (dayA !== dayB) return dayA - dayB;
+                        return a.horaDesde.localeCompare(b.horaDesde);
+                      })
+                      .map((h) => {
+                        const diaObj = DIAS_SEMANA.find((d) => d.id === h.diaSemanaDesde);
+                        const hDesde = h.horaDesde ? h.horaDesde.slice(0, 5) : '';
+                        const hHasta = h.horaHasta ? h.horaHasta.slice(0, 5) : '';
+                        return (
+                          <div key={h.id} className="bg-white p-2 rounded-lg border border-black/5 text-[11px]">
+                            <strong>{diaObj?.nombre}:</strong> {hDesde} - {hHasta} hs
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               )}
             </div>
 
             {/* Modal Actions (Criterios 45 y 46) */}
-            <div className="sticky bottom-0 bg-white/95 backdrop-blur-md px-6 py-4 border-t border-black/5 flex items-center justify-end space-x-3 z-10">
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur-md px-6 py-5 border-t border-black/5 flex items-center justify-end space-x-3 z-10">
               <button
                 type="button"
                 onClick={() => setShowPreviewModal(false)}
-                className="px-5 py-2.5 border border-black/10 hover:bg-black/5 text-textDark font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                className="px-7 py-3.5 border border-black/15 hover:bg-black/5 text-textDark font-bold rounded-xl text-sm transition-all cursor-pointer shadow-xs"
               >
                 Editar
               </button>
@@ -1574,19 +1926,84 @@ export default function BusinessProfile() {
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleConfirmSaveBusiness}
-                className="px-6 py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/15 hover:shadow-lg transition-all cursor-pointer flex items-center space-x-2 disabled:opacity-50"
+                className="px-8 py-3.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-extrabold rounded-xl text-sm shadow-lg shadow-fillPrimary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer flex items-center space-x-2.5 disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Guardando en el servidor...</span>
+                    <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                    <span>Guardando...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="h-4 w-4" />
+                    <CheckCircle2 className="h-4.5 w-4.5" />
                     <span>Guardar Negocio</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación de eliminación de horario (US-GIT-03) */}
+      {horarioToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-black/10">
+            <div className="flex items-center space-x-3 text-red-600">
+              <AlertTriangle className="h-6 w-6 flex-shrink-0" />
+              <h3 className="text-lg font-bold text-textDark">Confirmar eliminación</h3>
+            </div>
+            <p className="text-sm font-semibold text-textDark/80">
+              ¿Confirmás la eliminación del rango de atención seleccionado?
+            </p>
+            <div className="p-3 bg-red-50 rounded-xl border border-red-200 text-xs font-bold text-red-900">
+              {DIAS_SEMANA.find((d) => d.id === horarioToDelete.diaSemanaDesde)?.nombre}: {horarioToDelete.horaDesde} a {horarioToDelete.horaHasta} hs
+            </div>
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelRemoveHorario}
+                className="px-4 py-2 bg-bgPrimary hover:bg-black/5 text-textDark/80 font-bold rounded-xl text-xs transition-all border border-black/10 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemoveHorario}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
+              >
+                Confirmar eliminación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación de eliminación de imagen (US-GIT-07) */}
+      {deleteImageConfirmConfig && deleteImageConfirmConfig.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-black/10">
+            <div className="flex items-center space-x-3 text-red-600">
+              <AlertTriangle className="h-6 w-6 flex-shrink-0" />
+              <h3 className="text-lg font-bold text-textDark">{deleteImageConfirmConfig.title}</h3>
+            </div>
+            <p className="text-sm font-semibold text-textDark/80">
+              {deleteImageConfirmConfig.message}
+            </p>
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelDeleteImageAction}
+                className="px-4 py-2 bg-bgPrimary hover:bg-black/5 text-textDark/80 font-bold rounded-xl text-xs transition-all border border-black/10 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteImageAction}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
+              >
+                Confirmar
               </button>
             </div>
           </div>
