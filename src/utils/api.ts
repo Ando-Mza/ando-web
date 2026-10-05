@@ -146,6 +146,15 @@ export const api = {
     request<any>(`/poi/etiquetas/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteEtiqueta: (id: string) => request<any>(`/poi/etiquetas/${id}`, 'DELETE'),
 
+  // Validation States (Admin - US-CYP-04)
+  getValidationStates: (soloActivos?: boolean) =>
+    request<any[]>(`/admin/estados-validacion${soloActivos ? '?soloActivos=true' : ''}`, 'GET'),
+  createValidationState: (body: any) => request<any>('/admin/estados-validacion', 'POST', body),
+  updateValidationState: (id: string, body: any) => request<any>(`/admin/estados-validacion/${id}`, 'PATCH', body),
+  toggleValidationState: (id: string, activa: boolean) =>
+    request<any>(`/admin/estados-validacion/${id}/estado?activa=${activa}`, 'PATCH'),
+  deleteValidationState: (id: string) => request<any>(`/admin/estados-validacion/${id}`, 'DELETE'),
+
   // Ubicaciones (Regiones, Departamentos, Zonas - US-CYN-02)
   getRegiones: (includeAll?: boolean) =>
     request<any[]>(`/ubicaciones/regiones${includeAll ? '?includeAll=true' : ''}`, 'GET'),
@@ -228,6 +237,12 @@ export const api = {
   // Storage / Cloudflare R2 Uploads
   getPresignedUrl: (fileName: string, contentType: string) =>
     request<{ uploadUrl: string; key: string }>('/storage/presigned-url', 'POST', { fileName, contentType }),
+
+  // Parámetros Generales (US-CYP-01)
+  getParametrosGenerales: () => request<any[]>('/parametros', 'GET'),
+  updateParametro: (identifier: string, valor: string) =>
+    request<any>(`/parametros/${identifier}`, 'PATCH', { valor }),
+  resetParametro: (identifier: string) => request<any>(`/parametros/${identifier}/reset`, 'POST'),
 };
 
 /**

@@ -60,8 +60,8 @@ interface AppContextProps {
   rejectPOI: (id: string, adminName: string, feedback: string) => Promise<{ success: boolean; error?: string }>;
   requestCorrectionPOI: (id: string, adminName: string, feedback: string) => Promise<{ success: boolean; error?: string }>;
   deletePOIImage: (poiId: string, imageUrl: string, adminName: string) => void;
-  updateGeneralParams: (params: GeneralParams) => void;
-  resetGeneralParams: () => void;
+  updateGeneralParams: (params: GeneralParams) => Promise<void>;
+  resetGeneralParams: () => Promise<void>;
   toggleIntegration: (id: string) => void;
   updateIntegration: (integration: Integration) => void;
   testIntegrationConnection: (id: string) => Promise<boolean>;
@@ -74,9 +74,10 @@ interface AppContextProps {
   addCategory: (category: Omit<Category, 'id'>) => void;
   updateCategory: (category: Category) => void;
   deleteCategory: (id: string) => boolean;
-  addValidationState: (state: Omit<ValidationState, 'id'>) => void;
-  updateValidationState: (state: ValidationState) => void;
-  deleteValidationState: (id: string) => boolean;
+  addValidationState: (state: Omit<ValidationState, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  updateValidationState: (state: ValidationState) => Promise<{ success: boolean; error?: string }>;
+  deleteValidationState: (id: string) => Promise<{ success: boolean; error?: string }>;
+  loadValidationStates: () => Promise<void>;
 
   // Nuevas capacidades (Etiquetas, Reseñas del prestador, Servicios, Notificaciones)
   etiquetas: Etiqueta[];
@@ -417,6 +418,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (role === 'admin') {
+        // Cargar parámetros generales
+        try {
+          const params = await api.getParametrosGenerales();
+          if (Array.isArray(params)) {
+            const mappedParams = { ...DEFAULT_GENERAL_PARAMS };
+            for (const param of params) {
+              if (param.clave === 'POI_MAX_IMAGES') mappedParams.maxImagesPerPOI = Number(param.valor);
+              if (param.clave === 'POI_MAX_TIME_RANGES_PER_DAY') mappedParams.maxTimeRangesPerDay = Number(param.valor);
+              if (param.clave === 'VALIDATION_GRACE_PERIOD_DAYS') mappedParams.validationGracePeriodDays = Number(param.valor);
+              if (param.clave === 'POI_REQUIRE_REVIEW_FOR_EDITS') mappedParams.requireReviewForEdits = param.valor === 'true';
+            }
+            setGeneralParams(mappedParams);
+          }
+        } catch (e) {
+          console.warn('No se pudieron cargar los parámetros generales:', e);
+        }
+
         // Cargar lista de usuarios
         try {
           const dbUsers = await api.getUsers();
@@ -429,6 +447,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // Cargar POIs reales desde la base de datos
         await refreshPois();
+
+        // Cargar estados de validación
+        await loadValidationStates();
       }
 
       if (role === 'provider') {
@@ -1122,32 +1143,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLogs((prev) => [newLog, ...prev]);
   };
 
-  const updateGeneralParams = (params: GeneralParams) => {
-    setGeneralParams(params);
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'param_change',
-      adminName: currentUser?.name || 'Administrador',
-      comment: `Modificados límites globales (Imágenes: ${params.maxImagesPerPOI}, Franjas: ${params.maxTimeRangesPerDay}, Gracia: ${params.validationGracePeriodDays} días).`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const updateGeneralParams = async (params: GeneralParams) => {
+    try {
+      await api.updateParametro('POI_MAX_IMAGES', String(params.maxImagesPerPOI));
+      await api.updateParametro('POI_MAX_TIME_RANGES_PER_DAY', String(params.maxTimeRangesPerDay));
+      await api.updateParametro('VALIDATION_GRACE_PERIOD_DAYS', String(params.validationGracePeriodDays));
+      await api.updateParametro('POI_REQUIRE_REVIEW_FOR_EDITS', String(params.requireReviewForEdits));
+      
+      setGeneralParams(params);
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'param_change',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Modificados límites globales (Imágenes: ${params.maxImagesPerPOI}, Franjas: ${params.maxTimeRangesPerDay}, Gracia: ${params.validationGracePeriodDays} días).`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+    } catch (e) {
+      console.error('Error al actualizar parámetros generales', e);
+      throw e;
+    }
   };
 
-  const resetGeneralParams = () => {
-    setGeneralParams({ ...DEFAULT_GENERAL_PARAMS });
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'param_reset',
-      adminName: currentUser?.name || 'Administrador',
-      comment: 'Restablecidos parámetros generales a valores por defecto.',
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const resetGeneralParams = async () => {
+    try {
+      await api.resetParametro('POI_MAX_IMAGES');
+      await api.resetParametro('POI_MAX_TIME_RANGES_PER_DAY');
+      await api.resetParametro('VALIDATION_GRACE_PERIOD_DAYS');
+      await api.resetParametro('POI_REQUIRE_REVIEW_FOR_EDITS');
+      
+      setGeneralParams({ ...DEFAULT_GENERAL_PARAMS });
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'param_reset',
+        adminName: currentUser?.name || 'Administrador',
+        comment: 'Restablecidos parámetros generales a valores por defecto.',
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+    } catch (e) {
+      console.error('Error al restablecer parámetros generales', e);
+      throw e;
+    }
   };
 
   const toggleIntegration = (id: string) => {
@@ -1473,65 +1514,103 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // CRUD Estados de Validación (US-CYP-04)
-  const addValidationState = (stateData: Omit<ValidationState, 'id'>) => {
-    const newState: ValidationState = {
-      ...stateData,
-      id: `state-${Date.now()}`,
-    };
-    setValidationStates((prev) => [...prev, newState]);
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'state_create',
-      adminName: currentUser?.name || 'Administrador',
-      comment: `Creado estado de validación: "${newState.name}"`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const loadValidationStates = async () => {
+    try {
+      const data = await api.getValidationStates();
+      if (Array.isArray(data)) {
+        setValidationStates(
+          data.map((s: any) => ({
+            id: s.id,
+            name: s.nombre,
+            description: s.descripcion || '',
+            enabled: s.activo !== undefined ? s.activo : true,
+            allowedTransitions: [], // No lo usamos actualmente en el mock
+          }))
+        );
+      }
+    } catch (e) {
+      console.warn('Nota al cargar estados de validación:', e);
+    }
   };
 
-  const updateValidationState = (updatedState: ValidationState) => {
-    setValidationStates((prev) =>
-      prev.map((s) => (s.id === updatedState.id ? updatedState : s))
-    );
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'state_toggle',
-      adminName: currentUser?.name || 'Administrador',
-      comment: `Modificado estado de validación: "${updatedState.name}" (${updatedState.enabled ? 'Activa' : 'Inactiva'})`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const addValidationState = async (stateData: Omit<ValidationState, 'id'>): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const created = await api.createValidationState({
+        nombre: stateData.name,
+        descripcion: stateData.description,
+        activo: stateData.enabled,
+      });
+      const newState: ValidationState = {
+        id: created.id || `state-${Date.now()}`,
+        name: created.nombre || stateData.name,
+        description: created.descripcion || stateData.description,
+        enabled: created.activo !== undefined ? created.activo : stateData.enabled,
+        allowedTransitions: stateData.allowedTransitions || [],
+      };
+      setValidationStates((prev) => [...prev, newState]);
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'state_create',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Creado estado de validación: "${newState.name}"`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al crear estado de validación' };
+    }
   };
 
-  const deleteValidationState = (id: string): boolean => {
+  const updateValidationState = async (updatedState: ValidationState): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.updateValidationState(updatedState.id, {
+        nombre: updatedState.name,
+        descripcion: updatedState.description,
+        activo: updatedState.enabled,
+      });
+      setValidationStates((prev) =>
+        prev.map((s) => (s.id === updatedState.id ? updatedState : s))
+      );
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'state_toggle',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Modificado estado de validación: "${updatedState.name}" (${updatedState.enabled ? 'Activa' : 'Inactiva'})`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al actualizar estado de validación' };
+    }
+  };
+
+  const deleteValidationState = async (id: string): Promise<{ success: boolean; error?: string }> => {
     const target = validationStates.find((s) => s.id === id);
-    if (!target) return false;
+    if (!target) return { success: false, error: 'Estado no encontrado' };
 
-    let mappedStatus: POIStatus | null = null;
-    if (id === 'state-pending') mappedStatus = 'pending';
-    else if (id === 'state-approved') mappedStatus = 'approved';
-    else if (id === 'state-rejected') mappedStatus = 'rejected';
-    else if (id === 'state-correction') mappedStatus = 'correction';
-
-    const isUsed = pois.some((p) => p.status === mappedStatus || p.status.toLowerCase() === target.name.toLowerCase());
-    if (isUsed) return false;
-
-    setValidationStates((prev) => prev.filter((s) => s.id !== id));
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'state_delete',
-      adminName: currentUser?.name || 'Administrador',
-      comment: `Eliminado estado de validación: "${target.name}"`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
-    return true;
+    try {
+      await api.deleteValidationState(id);
+      setValidationStates((prev) => prev.filter((s) => s.id !== id));
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'state_delete',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Eliminado estado de validación: "${target.name}"`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al eliminar estado de validación' };
+    }
   };
 
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);

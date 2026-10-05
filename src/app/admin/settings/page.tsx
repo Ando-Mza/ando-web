@@ -108,7 +108,7 @@ export default function AdminSettings() {
   };
 
   // Guardar Parámetros
-  const handleSaveParams = (e: React.FormEvent) => {
+  const handleSaveParams = async (e: React.FormEvent) => {
     e.preventDefault();
     setParamError('');
 
@@ -125,25 +125,33 @@ export default function AdminSettings() {
       return;
     }
 
-    updateGeneralParams({
-      maxImagesPerPOI: maxImages,
-      maxTimeRangesPerDay: maxSlots,
-      validationGracePeriodDays: gracePeriod,
-      requireReviewForEdits: requireReview,
-    });
-    triggerToast('Límites globales actualizados con éxito');
+    try {
+      await updateGeneralParams({
+        maxImagesPerPOI: maxImages,
+        maxTimeRangesPerDay: maxSlots,
+        validationGracePeriodDays: gracePeriod,
+        requireReviewForEdits: requireReview,
+      });
+      triggerToast('Límites globales actualizados con éxito');
+    } catch (err: any) {
+      setParamError(err.message || 'Error al guardar los parámetros');
+    }
   };
 
   // Restablecer Parámetros
-  const handleResetParams = () => {
+  const handleResetParams = async () => {
     if (confirm('¿Restablecer los parámetros del sistema a los valores por defecto?')) {
-      resetGeneralParams();
-      setMaxImages(8);
-      setMaxSlots(3);
-      setGracePeriod(5);
-      setRequireReview(true);
-      setParamError('');
-      triggerToast('Valores restablecidos a los valores por defecto');
+      try {
+        await resetGeneralParams();
+        setMaxImages(8);
+        setMaxSlots(3);
+        setGracePeriod(5);
+        setRequireReview(true);
+        setParamError('');
+        triggerToast('Valores restablecidos a los valores por defecto');
+      } catch (err: any) {
+        setParamError(err.message || 'Error al restablecer los parámetros');
+      }
     }
   };
 
@@ -279,7 +287,7 @@ export default function AdminSettings() {
   };
 
   // CRUD Estados de Validación
-  const handleSaveState = (e: React.FormEvent) => {
+  const handleSaveState = async (e: React.FormEvent) => {
     e.preventDefault();
     setStateError('');
 
@@ -297,22 +305,32 @@ export default function AdminSettings() {
     }
 
     if (editingState) {
-      updateValidationState({
+      const res = await updateValidationState({
         ...editingState,
         name: stateName.trim(),
         description: stateDesc.trim(),
         enabled: stateEnabled,
         allowedTransitions: stateTransitions,
       });
-      triggerToast(`Estado "${stateName}" modificado con éxito`);
+      if (res.success) {
+        triggerToast(`Estado "${stateName}" modificado con éxito`);
+      } else {
+        setStateError(res.error || 'Error al actualizar el estado de validación');
+        return;
+      }
     } else {
-      addValidationState({
+      const res = await addValidationState({
         name: stateName.trim(),
         description: stateDesc.trim(),
         enabled: stateEnabled,
         allowedTransitions: stateTransitions,
       });
-      triggerToast(`Estado "${stateName}" agregado con éxito`);
+      if (res.success) {
+        triggerToast(`Estado "${stateName}" agregado con éxito`);
+      } else {
+        setStateError(res.error || 'Error al crear el estado de validación');
+        return;
+      }
     }
 
     setIsAddingState(false);
@@ -332,13 +350,13 @@ export default function AdminSettings() {
     setIsAddingState(true);
   };
 
-  const handleDeleteState = (id: string) => {
+  const handleDeleteState = async (id: string) => {
     if (confirm('¿Está seguro de que desea eliminar este estado de validación?')) {
-      const success = deleteValidationState(id);
-      if (success) {
+      const res = await deleteValidationState(id);
+      if (res.success) {
         triggerToast('Estado de validación eliminado con éxito');
       } else {
-        triggerToast('No se puede eliminar el estado porque está siendo utilizado por registros activos.', 'warning');
+        triggerToast(res.error || 'No se puede eliminar el estado porque está siendo utilizado por registros activos.', 'warning');
       }
     }
   };
