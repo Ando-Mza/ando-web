@@ -1,4 +1,5 @@
 import { ENV } from '../config/env';
+import type { GeneralDashboardResponse, ProviderDashboardResponse } from '@/types/dashboard';
 
 async function request<T>(
   path: string,
@@ -95,6 +96,27 @@ export const api = {
     request<{ success: boolean }>('/user/profile/verify-password', 'POST', { password }),
   deleteMyAccount: (body: { userId: string; passwordActual: string; motivo: string; detalle?: string }) =>
     request<any>('/user/profile', 'DELETE', body),
+
+  // Dashboard (US-PAD-01)
+  getGeneralDashboard: (params?: { periodo?: string; fechaDesde?: string; fechaHasta?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.periodo) qs.set('periodo', params.periodo);
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    const queryString = qs.toString();
+    return request<GeneralDashboardResponse>(`/dashboard/general${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
+
+  // Dashboard del Prestador (US-PAD-02)
+  getProviderDashboard: (params?: { poiId?: string; periodo?: string; fechaDesde?: string; fechaHasta?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.poiId) qs.set('poiId', params.poiId);
+    if (params?.periodo) qs.set('periodo', params.periodo);
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    const queryString = qs.toString();
+    return request<ProviderDashboardResponse>(`/dashboard/prestador${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
 
   // POI Status — Admin (endpoint genérico, se mantiene para compatibilidad)
   updatePoiStatus: (id: string, estado: string) =>
