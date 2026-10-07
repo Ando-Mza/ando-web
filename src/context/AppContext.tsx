@@ -618,7 +618,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } catch (err: any) {
         console.error('Error al restaurar sesión backend:', err);
         const errMsg = String(err?.message || '');
-        if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('Unauthorized') || errMsg.includes('jwt')) {
+        if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('Unauthorized') || errMsg.includes('jwt') || errMsg.includes('Session expired')) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('ando_user');
