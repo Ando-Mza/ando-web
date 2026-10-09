@@ -2,7 +2,7 @@ import { ENV } from '../config/env';
 
 async function request<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT' = 'GET',
   body?: any,
   customHeaders: Record<string, string> = {}
 ): Promise<T> {
@@ -131,8 +131,8 @@ export const api = {
 
   // POI Categories (Admin)
   getCategories: () => request<any[]>('/poi/categorias/all', 'GET'),
-  createCategory: (nombre: string) => request<any>('/poi/categorias', 'POST', { nombre }),
-  updateCategory: (id: string, nombre: string) => request<any>(`/poi/categorias/${id}`, 'PATCH', { nombre }),
+  createCategory: (data: { nombre: string; descripcion?: string; activa?: boolean }) => request<any>('/poi/categorias', 'POST', data),
+  updateCategory: (id: string, data: { nombre?: string; descripcion?: string; activa?: boolean }) => request<any>(`/poi/categorias/${id}`, 'PATCH', data),
   toggleCategoryActiva: (id: string, activa: boolean) =>
     request<any>(`/poi/categorias/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteCategory: (id: string) => request<any>(`/poi/categorias/${id}`, 'DELETE'),
@@ -145,6 +145,15 @@ export const api = {
   toggleEtiquetaActiva: (id: string, activa: boolean) =>
     request<any>(`/poi/etiquetas/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteEtiqueta: (id: string) => request<any>(`/poi/etiquetas/${id}`, 'DELETE'),
+
+  // Validation States (Admin - US-CYP-04)
+  getValidationStates: (soloActivos?: boolean) =>
+    request<any[]>(`/admin/estados-validacion${soloActivos ? '?soloActivos=true' : ''}`, 'GET'),
+  createValidationState: (body: any) => request<any>('/admin/estados-validacion', 'POST', body),
+  updateValidationState: (id: string, body: any) => request<any>(`/admin/estados-validacion/${id}`, 'PATCH', body),
+  toggleValidationState: (id: string, activa: boolean) =>
+    request<any>(`/admin/estados-validacion/${id}/estado?activa=${activa}`, 'PATCH'),
+  deleteValidationState: (id: string) => request<any>(`/admin/estados-validacion/${id}`, 'DELETE'),
 
   // Ubicaciones (Regiones, Departamentos, Zonas - US-CYN-02)
   getRegiones: (includeAll?: boolean) =>
@@ -217,17 +226,48 @@ export const api = {
   deleteServicioPoi: (poiId: string, servicioId: string) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}`, 'DELETE'),
 
-  // Reportes y Soporte (US-CYN-08, US-AYS-05)
+  // Reportes y Soporte (US-CYN-08, US-AYS-03, US-AYS-05)
   createReporteContenido: (body: {
     poiId?: string;
     reviewId?: string;
     motivo: string;
     descripcion?: string;
   }) => request<any>('/reportes', 'POST', body),
+  createConsultaSoporte: (body: { asunto: string; descripcion: string; evidencia?: string }) => 
+    request<any>('/soporte/consultas', 'POST', body),
+  createReporteError: (body: { asunto: string; descripcion: string; evidencias?: string[] }) =>
+    request<any>('/soporte/reportes-error', 'POST', body),
 
   // Storage / Cloudflare R2 Uploads
   getPresignedUrl: (fileName: string, contentType: string) =>
     request<{ uploadUrl: string; key: string }>('/storage/presigned-url', 'POST', { fileName, contentType }),
+
+  // Parámetros Generales (US-CYP-01)
+  getParametrosGenerales: () => request<any[]>('/parametros', 'GET'),
+  updateParametro: (identifier: string, valor: string) =>
+    request<any>(`/parametros/${identifier}`, 'PATCH', { valor }),
+  resetParametro: (identifier: string) => request<any>(`/parametros/${identifier}/reset`, 'POST'),
+
+  // Integraciones (US-CYP-07)
+  getIntegraciones: () => request<any[]>('/integraciones', 'GET'),
+  updateIntegracion: (id: string, body: any) =>
+    request<any>(`/integraciones/${id}`, 'PATCH', body),
+  toggleIntegracion: (id: string, habilitada: boolean) =>
+    request<any>(`/integraciones/${id}/estado`, 'PATCH', { habilitada }),
+  testIntegracion: (id: string, confirmarConsumo?: boolean) =>
+    request<any>(`/integraciones/${id}/prueba-conexion`, 'POST', { confirmarConsumo }),
+
+  // Notifications (US-NYA-04, 05, 07)
+  getNotifications: () => request<any[]>('/notifications', 'GET'),
+  getUnreadNotificationsCount: () => request<number>('/notifications/unread-count', 'GET'),
+  markNotificationAsRead: (id: string) => request<any>(`/notifications/${id}/read`, 'PATCH'),
+  markAllNotificationsAsRead: () => request<any>('/notifications/read-all', 'PATCH'),
+  getNotificationPreferences: () => request<any>('/notifications/preferences', 'GET'),
+  updateNotificationPreferences: (preferencias: any[]) => request<any>('/notifications/preferences', 'PUT', { preferencias }),
+  
+  // Platform Updates (US-NYA-06)
+  publishPlatformUpdate: (body: { titulo: string; mensaje: string; urlAccion?: string }) =>
+    request<any>('/notifications/platform-update', 'POST', body),
 };
 
 /**

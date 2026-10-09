@@ -14,9 +14,11 @@ import {
   ExternalLink 
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function NotificationCenter() {
   const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useApp();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -32,6 +34,30 @@ export default function NotificationCenter() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleNotificationClick = (id: string, actionUrl?: string | null) => {
+    markNotificationAsRead(id);
+    if (actionUrl) {
+      setIsOpen(false);
+      
+      let finalUrl = actionUrl;
+      // Handle legacy integration URL
+      if (finalUrl === '/admin/integraciones') {
+        finalUrl = '/admin/settings';
+      }
+      
+      if (finalUrl.startsWith('http') || finalUrl.startsWith('/api')) {
+        // Build absolute url for backend API if it's a relative /api route
+        const targetUrl = finalUrl.startsWith('/api') 
+          ? `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}${finalUrl}`
+          : finalUrl;
+        
+        window.open(targetUrl, '_blank');
+      } else {
+        router.push(finalUrl);
+      }
+    }
+  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -67,72 +93,121 @@ export default function NotificationCenter() {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-80 sm:w-96 rounded-2xl bg-white border border-black/10 shadow-2xl z-50 overflow-hidden animate-fade-in font-wixText">
+        <div className="absolute right-0 mt-3 w-80 sm:w-96 rounded-2xl bg-white border border-black/10 shadow-2xl z-50 overflow-hidden animate-fade-in font-wixText flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3.5 border-b border-black/5 bg-bgPrimary/30">
-            <div className="flex items-center space-x-2">
-              <Bell className="h-4 w-4 text-textDark/80" />
-              <h4 className="text-xs font-bold text-textDark font-wixDisplay">Notificaciones</h4>
+          <div className="relative flex items-center justify-between px-5 py-3.5 overflow-hidden border-b border-black/5">
+            <div className="absolute inset-0 bg-gradient-to-r from-accentWine/5 to-transparent pointer-events-none" />
+            
+            {/* Espaciador invisible para centrar exactamente el contenido con la X de la derecha */}
+            <div className="w-7 h-7" />
+            
+            <div className="relative flex flex-col items-center justify-center text-center">
+              <div className="flex items-center gap-1.5">
+                <Bell className="h-3.5 w-3.5 text-accentWine" />
+                <h4 className="text-sm font-bold text-textDark font-wixDisplay leading-tight">Notificaciones</h4>
+              </div>
               {unreadCount > 0 && (
-                <span className="text-[10px] bg-accentWine/10 text-accentWine font-bold px-2 py-0.5 rounded-full">
-                  {unreadCount} nuevas
-                </span>
+                <p className="text-[11px] font-medium mt-1">
+                  <span className="text-accentWine font-bold">{unreadCount} nuevas</span>
+                </p>
               )}
             </div>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllNotificationsAsRead}
-                className="text-[11px] font-semibold text-fillPrimary hover:underline flex items-center space-x-1 cursor-pointer"
-              >
-                <CheckCheck className="h-3.5 w-3.5 mr-0.5" />
-                <span>Marcar todas</span>
-              </button>
-            )}
+
+            <button
+              onClick={() => setIsOpen(false)}
+              className="relative p-1.5 rounded-lg text-textDark/40 hover:text-textDark hover:bg-black/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine"
+              aria-label="Cerrar notificaciones"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           {/* List */}
-          <div className="max-h-80 overflow-y-auto divide-y divide-black/5">
+          <div className="max-h-[calc(100vh-200px)] overflow-y-auto divide-y divide-black/5">
             {notifications.length === 0 ? (
-              <div className="p-8 text-center space-y-2">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-bgPrimary text-textDark/40">
+              <div className="px-8 py-10 text-center space-y-3">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-bgPrimary text-textDark/40">
                   <Bell className="h-5 w-5" />
                 </div>
-                <p className="text-xs font-medium text-textDark/60">No tenés notificaciones pendientes.</p>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-textDark/80">Por acá todo tranquilo</p>
+                  <p className="text-xs text-textDark/55">No tenés notificaciones pendientes.</p>
+                </div>
               </div>
             ) : (
               notifications.map((notif) => (
                 <div
                   key={notif.id}
-                  onClick={() => markNotificationAsRead(notif.id)}
-                  className={`p-4 transition-colors flex items-start space-x-3 cursor-pointer hover:bg-bgPrimary/40 ${
-                    !notif.isRead ? 'bg-accentWine/[0.02] border-l-2 border-accentWine' : 'opacity-75'
+                  onClick={() => handleNotificationClick(notif.id, notif.actionUrl)}
+                  className={`relative px-5 py-4 transition-colors flex items-start gap-3 cursor-pointer ${
+                    !notif.isRead ? 'bg-accentWine/[0.04] hover:bg-accentWine/[0.07]' : 'hover:bg-bgPrimary/40'
                   }`}
                 >
-                  <div className="mt-0.5 p-1.5 rounded-lg bg-bgPrimary flex-shrink-0 border border-black/5">
+                  <div
+                    className={`mt-0.5 h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 border border-black/5 ${
+                      notif.isRead ? 'bg-bgPrimary/60 opacity-70' : 'bg-white'
+                    }`}
+                  >
                     {getNotificationIcon(notif.type)}
                   </div>
                   <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-bold text-textDark truncate">{notif.title}</h5>
-                      <span className="text-[10px] text-textDark/50">
-                        {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p className="text-xs text-textDark/70 leading-relaxed line-clamp-2">{notif.message}</p>
-                    {notif.actionUrl && (
-                      <Link
-                        href={notif.actionUrl}
-                        className="inline-flex items-center text-[11px] font-bold text-accentWine hover:underline pt-1"
+                    <div className="flex items-start justify-between gap-2">
+                      <h5
+                        className={`text-xs truncate ${
+                          notif.isRead ? 'font-semibold text-textDark/70' : 'font-bold text-textDark'
+                        }`}
                       >
-                        <span>Ver detalles</span>
-                        <ExternalLink className="h-3 w-3 ml-1" />
-                      </Link>
+                        {notif.title}
+                      </h5>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[10px] text-textDark/45 tabular-nums">
+                          {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {!notif.isRead && (
+                          <span className="h-2 w-2 rounded-full bg-accentWine" aria-label="No leída" />
+                        )}
+                      </div>
+                    </div>
+                    <p
+                      className={`text-xs leading-relaxed line-clamp-2 ${
+                        notif.isRead ? 'text-textDark/50' : 'text-textDark/70'
+                      }`}
+                    >
+                      {notif.message}
+                    </p>
+                    {notif.actionUrl && (
+                      <div className="flex justify-end pt-1.5">
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNotificationClick(notif.id, notif.actionUrl);
+                          }}
+                          className="inline-flex items-center text-[11px] font-bold text-accentWine hover:text-accentWine/80 hover:underline transition-colors cursor-pointer"
+                        >
+                          <span>Ver detalles</span>
+                          <ExternalLink className="h-3 w-3 ml-1" />
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
               ))
             )}
           </div>
+
+          {/* Footer */}
+          {notifications.length > 0 && (
+            <div className="border-t border-black/5 p-2 bg-bgPrimary/20">
+              <button
+                onClick={markAllNotificationsAsRead}
+                disabled={unreadCount === 0}
+                className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold text-fillPrimary hover:bg-black/5 transition-colors cursor-pointer disabled:cursor-default disabled:text-textDark/40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine"
+              >
+                <CheckCheck className="h-4 w-4" />
+                <span>{unreadCount > 0 ? 'Marcar todas como leídas' : 'Todas leídas'}</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -60,11 +60,11 @@ interface AppContextProps {
   rejectPOI: (id: string, adminName: string, feedback: string) => Promise<{ success: boolean; error?: string }>;
   requestCorrectionPOI: (id: string, adminName: string, feedback: string) => Promise<{ success: boolean; error?: string }>;
   deletePOIImage: (poiId: string, imageUrl: string, adminName: string) => void;
-  updateGeneralParams: (params: GeneralParams) => void;
-  resetGeneralParams: () => void;
+  updateGeneralParams: (params: GeneralParams) => Promise<void>;
+  resetGeneralParams: () => Promise<void>;
   toggleIntegration: (id: string) => void;
   updateIntegration: (integration: Integration) => void;
-  testIntegrationConnection: (id: string) => Promise<boolean>;
+  testIntegrationConnection: (id: string, confirmarConsumo?: boolean) => Promise<{ success: boolean; requiresConfirmation?: boolean; warning?: string }>;
   updateTranslation: (lang: string, key: string, value: string) => void;
   addPOI: (poi: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => Promise<{ success: boolean; id?: string; error?: string }>;
   updatePOI: (poi: POI) => Promise<{ success: boolean; error?: string }>;
@@ -74,9 +74,10 @@ interface AppContextProps {
   addCategory: (category: Omit<Category, 'id'>) => void;
   updateCategory: (category: Category) => void;
   deleteCategory: (id: string) => boolean;
-  addValidationState: (state: Omit<ValidationState, 'id'>) => void;
-  updateValidationState: (state: ValidationState) => void;
-  deleteValidationState: (id: string) => boolean;
+  addValidationState: (state: Omit<ValidationState, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  updateValidationState: (state: ValidationState) => Promise<{ success: boolean; error?: string }>;
+  deleteValidationState: (id: string) => Promise<{ success: boolean; error?: string }>;
+  loadValidationStates: () => Promise<void>;
 
   // Nuevas capacidades (Etiquetas, Reseñas del prestador, Servicios, Notificaciones)
   etiquetas: Etiqueta[];
@@ -98,6 +99,7 @@ interface AppContextProps {
   toggleServiceAvailability: (serviceId: string) => Promise<{ success: boolean; error?: string }>;
 
   notifications: NotificationItem[];
+  loadNotifications: () => Promise<void>;
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   addNotification: (notification: Omit<NotificationItem, 'id' | 'createdAt' | 'isRead'>) => void;
@@ -416,7 +418,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         console.warn('No se pudieron cargar categorías desde el backend:', e);
       }
 
+      // Cargar notificaciones para el usuario autenticado
+      await loadNotifications();
+
       if (role === 'admin') {
+        // Cargar parámetros generales
+        try {
+          const params = await api.getParametrosGenerales();
+          if (Array.isArray(params)) {
+            const mappedParams = { ...DEFAULT_GENERAL_PARAMS };
+            for (const param of params) {
+              if (param.clave === 'POI_MAX_IMAGES') mappedParams.maxImagesPerPOI = Number(param.valor);
+              if (param.clave === 'POI_MAX_TIME_RANGES_PER_DAY') mappedParams.maxTimeRangesPerDay = Number(param.valor);
+              if (param.clave === 'VALIDATION_GRACE_PERIOD_DAYS') mappedParams.validationGracePeriodDays = Number(param.valor);
+              if (param.clave === 'POI_REQUIRE_REVIEW_FOR_EDITS') mappedParams.requireReviewForEdits = param.valor === 'true';
+            }
+            setGeneralParams(mappedParams);
+          }
+        } catch (e) {
+          console.warn('No se pudieron cargar los parámetros generales:', e);
+        }
+
         // Cargar lista de usuarios
         try {
           const dbUsers = await api.getUsers();
@@ -429,6 +451,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // Cargar POIs reales desde la base de datos
         await refreshPois();
+
+        // Cargar estados de validación
+        await loadValidationStates();
+        // Cargar integraciones reales
+        await loadIntegrations();
       }
 
       if (role === 'provider') {
@@ -458,15 +485,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 const horarios: any = await api.getHorariosByPoi(firstPoiId);
                 const horariosArray: any[] = Array.isArray(horarios) ? horarios : (horarios?.data || []);
                 if (Array.isArray(horariosArray)) {
-                  const mappedSchedules: Schedule[] = horariosArray.map((h: any) => ({
-                    id: h.id,
-                    poiId: firstPoiId,
-                    daysOfWeek: Array.isArray(h.diasSemana) ? h.diasSemana : [],
-                    timeRanges: [{ start: h.horaApertura || '09:00', end: h.horaCierre || '18:00' }],
-                    season: h.temporada || 'all',
-                    isHoliday: h.esFeriado || false,
-                    description: h.descripcion || '',
-                  }));
+                  const mappedSchedules: Schedule[] = horariosArray.map((h: any) => {
+                    let days: number[] = [];
+                    if (h.diaSemanaDesde !== undefined && h.diaSemanaHasta !== undefined) {
+                      const start = Number(h.diaSemanaDesde);
+                      const end = Number(h.diaSemanaHasta);
+                      if (start <= end) {
+                        for (let d = start; d <= end; d++) days.push(d);
+                      } else {
+                        for (let d = start; d <= 6; d++) days.push(d);
+                        for (let d = 0; d <= end; d++) days.push(d);
+                      }
+                    } else if (Array.isArray(h.daysOfWeek)) {
+                      days = h.daysOfWeek;
+                    } else {
+                      days = [h.diaSemanaDesde ?? 1];
+                    }
+                    
+                    return {
+                      id: String(h.id || `sch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+                      poiId: firstPoiId,
+                      daysOfWeek: days,
+                      timeRanges: [{ start: String(h.horaDesde || h.horaApertura || '09:00').slice(0, 5), end: String(h.horaHasta || h.horaCierre || '18:00').slice(0, 5) }],
+                      season: h.temporada || 'all',
+                      isHoliday: h.esFeriado || false,
+                      description: h.descripcion || '',
+                    };
+                  });
                   setSchedules(mappedSchedules);
                 }
               } catch (e) {
@@ -597,7 +642,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } catch (err: any) {
         console.error('Error al restaurar sesión backend:', err);
         const errMsg = String(err?.message || '');
-        if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('Unauthorized') || errMsg.includes('jwt')) {
+        if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('Unauthorized') || errMsg.includes('jwt') || errMsg.includes('Session expired')) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('ando_user');
@@ -1122,65 +1167,138 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLogs((prev) => [newLog, ...prev]);
   };
 
-  const updateGeneralParams = (params: GeneralParams) => {
-    setGeneralParams(params);
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'param_change',
-      adminName: currentUser?.name || 'Administrador',
-      comment: `Modificados límites globales (Imágenes: ${params.maxImagesPerPOI}, Franjas: ${params.maxTimeRangesPerDay}, Gracia: ${params.validationGracePeriodDays} días).`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const updateGeneralParams = async (params: GeneralParams) => {
+    try {
+      await api.updateParametro('POI_MAX_IMAGES', String(params.maxImagesPerPOI));
+      await api.updateParametro('POI_MAX_TIME_RANGES_PER_DAY', String(params.maxTimeRangesPerDay));
+      await api.updateParametro('VALIDATION_GRACE_PERIOD_DAYS', String(params.validationGracePeriodDays));
+      await api.updateParametro('POI_REQUIRE_REVIEW_FOR_EDITS', String(params.requireReviewForEdits));
+      
+      setGeneralParams(params);
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'param_change',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Modificados límites globales (Imágenes: ${params.maxImagesPerPOI}, Franjas: ${params.maxTimeRangesPerDay}, Gracia: ${params.validationGracePeriodDays} días).`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+    } catch (e) {
+      console.error('Error al actualizar parámetros generales', e);
+      throw e;
+    }
   };
 
-  const resetGeneralParams = () => {
-    setGeneralParams({ ...DEFAULT_GENERAL_PARAMS });
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'param_reset',
-      adminName: currentUser?.name || 'Administrador',
-      comment: 'Restablecidos parámetros generales a valores por defecto.',
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const resetGeneralParams = async () => {
+    try {
+      await api.resetParametro('POI_MAX_IMAGES');
+      await api.resetParametro('POI_MAX_TIME_RANGES_PER_DAY');
+      await api.resetParametro('VALIDATION_GRACE_PERIOD_DAYS');
+      await api.resetParametro('POI_REQUIRE_REVIEW_FOR_EDITS');
+      
+      setGeneralParams({ ...DEFAULT_GENERAL_PARAMS });
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'param_reset',
+        adminName: currentUser?.name || 'Administrador',
+        comment: 'Restablecidos parámetros generales a valores por defecto.',
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+    } catch (e) {
+      console.error('Error al restablecer parámetros generales', e);
+      throw e;
+    }
   };
 
-  const toggleIntegration = (id: string) => {
-    setIntegrations((prev) =>
-      prev.map((integ) => (integ.id === id ? { ...integ, enabled: !integ.enabled } : integ))
-    );
+  const loadIntegrations = async () => {
+    try {
+      const ints = await api.getIntegraciones();
+      if (Array.isArray(ints)) {
+        setIntegrations(ints.map((i: any) => ({
+          id: i.id,
+          nombre: i.nombre,
+          proveedor: i.proveedor,
+          urlBase: i.urlBase || null,
+          limiteConsumo: i.limiteConsumo || null,
+          habilitada: i.habilitada,
+          estadoConexion: i.estadoConexion,
+          ultimaPruebaConexion: i.ultimaPruebaConexion || null,
+          ultimoError: i.ultimoError || null,
+        })));
+      }
+    } catch (e) {
+      console.warn('No se pudieron cargar las integraciones:', e);
+    }
   };
 
-  const updateIntegration = (updatedInteg: Integration) => {
-    setIntegrations((prev) =>
-      prev.map((integ) => (integ.id === updatedInteg.id ? updatedInteg : integ))
-    );
+  const toggleIntegration = async (id: string) => {
+    const target = integrations.find(i => i.id === id);
+    if (!target) return;
+    try {
+      const res = await api.toggleIntegracion(id, !target.habilitada);
+      setIntegrations((prev) =>
+        prev.map((integ) => (integ.id === id ? { ...integ, habilitada: res.habilitada } : integ))
+      );
+    } catch (e) {
+      console.error('Error al cambiar estado de integracion', e);
+    }
   };
 
-  const testIntegrationConnection = (id: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const target = integrations.find((i) => i.id === id);
-        const success = !!(target && target.apiKey && target.apiKey.length > 5);
+  const updateIntegration = async (updatedInteg: Integration) => {
+    try {
+      const body = {
+        nombre: updatedInteg.nombre,
+        urlBase: updatedInteg.urlBase || null,
+        limiteConsumo: updatedInteg.limiteConsumo || null,
+      };
+      const res = await api.updateIntegracion(updatedInteg.id, body);
+      setIntegrations((prev) =>
+        prev.map((integ) => (integ.id === updatedInteg.id ? { ...integ, ...res } : integ))
+      );
+    } catch (e) {
+      console.error('Error al actualizar integración', e);
+      throw e;
+    }
+  };
 
-        const newLog: AuditLog = {
-          id: `log-${Date.now()}`,
-          poiId: 'system',
-          poiName: target?.name || 'Integración API',
-          action: 'test_connection',
-          adminName: currentUser?.name || 'Administrador',
-          comment: `Prueba de conexión: ${success ? 'Exitosa (Conectado)' : 'Fallida (Error de credenciales)'}`,
-          timestamp: new Date().toISOString(),
-        };
-        setLogs((prev) => [newLog, ...prev]);
-        resolve(success);
-      }, 1000);
-    });
+  const testIntegrationConnection = async (id: string, confirmarConsumo?: boolean): Promise<{ success: boolean; requiresConfirmation?: boolean; warning?: string }> => {
+    try {
+      const res = await api.testIntegracion(id, confirmarConsumo);
+      const success = res.estadoConexion === 'conectada';
+      
+      // Actualizar estado local
+      setIntegrations((prev) => prev.map(i => i.id === id ? {
+        ...i, 
+        estadoConexion: res.estadoConexion, 
+        ultimaPruebaConexion: res.fechaPrueba,
+        ultimoError: res.mensaje || null
+      } : i));
+
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: res.proveedor || 'Integración API',
+        action: 'test_connection',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Prueba de conexión: ${success ? 'Exitosa (Conectado)' : 'Fallida'} - ${res.mensaje}`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      
+      return { 
+        success, 
+        requiresConfirmation: res.confirmacionRequerida, 
+        warning: res.advertenciaConsumo 
+      };
+    } catch (e: any) {
+      console.error('Error al probar conexión', e);
+      return { success: false };
+    }
   };
 
   const updateTranslation = (lang: string, key: string, value: string) => {
@@ -1401,26 +1519,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // CRUD Categorías (US-CYP-03)
   const addCategory = async (catData: Omit<Category, 'id'>) => {
+    // Optimistic Update: Generamos un ID temporal para que se refleje de inmediato
+    const tempId = `temp-${Date.now()}`;
+    const newCatOptimistic: Category = {
+      id: tempId,
+      name: catData.name,
+      description: catData.description,
+      enabled: catData.enabled,
+    };
+    
+    setCategories((prev) => [...prev, newCatOptimistic]);
+
     try {
-      const dbCat = await api.createCategory(catData.name);
-      const newCat: Category = {
-        id: dbCat.id,
-        name: dbCat.nombre,
-        description: '',
-        enabled: true,
-      };
-      setCategories((prev) => [...prev, newCat]);
+      const dbCat = await api.createCategory({
+        nombre: catData.name,
+        descripcion: catData.description,
+        activa: catData.enabled
+      });
+      
+      // Reemplazamos el ID temporal por el ID real que devuelve el backend
+      setCategories((prev) => 
+        prev.map(c => c.id === tempId ? { ...c, id: dbCat.id } : c)
+      );
+
       const newLog: AuditLog = {
         id: `log-${Date.now()}`,
         poiId: 'system',
         poiName: 'Configuración CYP',
         action: 'category_create',
         adminName: currentUser?.name || 'Administrador',
-        comment: `Creada categoría turística: "${newCat.name}"`,
+        comment: `Creada categoría turística: "${newCatOptimistic.name}"`,
         timestamp: new Date().toISOString(),
       };
       setLogs((prev) => [newLog, ...prev]);
     } catch (err: any) {
+      // Si falla, revertimos el cambio optimista
+      setCategories((prev) => prev.filter(c => c.id !== tempId));
       alert(err.message || 'Error al crear la categoría');
     }
   };
@@ -1431,9 +1565,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
     try {
       if (updatedCat.name) {
-        await api.updateCategory(updatedCat.id, updatedCat.name);
+        await api.updateCategory(updatedCat.id, {
+          nombre: updatedCat.name,
+          descripcion: updatedCat.description,
+          activa: updatedCat.enabled
+        });
       }
-      await api.toggleCategoryActiva(updatedCat.id, updatedCat.enabled);
+      // api.toggleCategoryActiva ya no es necesario si updateCategory manda activa
     } catch (err) {
       console.warn('Nota de actualización categoría backend:', err);
     }
@@ -1473,65 +1611,105 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // CRUD Estados de Validación (US-CYP-04)
-  const addValidationState = (stateData: Omit<ValidationState, 'id'>) => {
-    const newState: ValidationState = {
-      ...stateData,
-      id: `state-${Date.now()}`,
-    };
-    setValidationStates((prev) => [...prev, newState]);
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'state_create',
-      adminName: currentUser?.name || 'Administrador',
-      comment: `Creado estado de validación: "${newState.name}"`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const loadValidationStates = async () => {
+    try {
+      const data = await api.getValidationStates();
+      if (Array.isArray(data)) {
+        setValidationStates(
+          data.map((s: any) => ({
+            id: s.id,
+            name: s.nombre,
+            description: s.descripcion || '',
+            enabled: s.activa !== undefined ? s.activa : true,
+            allowedTransitions: s.transicionesOrigen ? s.transicionesOrigen.map((t: any) => t.estadoDestinoId) : [],
+          }))
+        );
+      }
+    } catch (e) {
+      console.warn('Nota al cargar estados de validación:', e);
+    }
   };
 
-  const updateValidationState = (updatedState: ValidationState) => {
-    setValidationStates((prev) =>
-      prev.map((s) => (s.id === updatedState.id ? updatedState : s))
-    );
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'state_toggle',
-      adminName: currentUser?.name || 'Administrador',
-      comment: `Modificado estado de validación: "${updatedState.name}" (${updatedState.enabled ? 'Activa' : 'Inactiva'})`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
+  const addValidationState = async (stateData: Omit<ValidationState, 'id'>): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const created = await api.createValidationState({
+        nombre: stateData.name,
+        descripcion: stateData.description,
+        activa: stateData.enabled,
+        transicionesPermitidas: stateData.allowedTransitions,
+      });
+      const newState: ValidationState = {
+        id: created.id || `state-${Date.now()}`,
+        name: created.nombre || stateData.name,
+        description: created.descripcion || stateData.description,
+        enabled: created.activa !== undefined ? created.activa : stateData.enabled,
+        allowedTransitions: stateData.allowedTransitions || [],
+      };
+      setValidationStates((prev) => [...prev, newState]);
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'state_create',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Creado estado de validación: "${newState.name}"`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al crear estado de validación' };
+    }
   };
 
-  const deleteValidationState = (id: string): boolean => {
+  const updateValidationState = async (updatedState: ValidationState): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await api.updateValidationState(updatedState.id, {
+        nombre: updatedState.name,
+        descripcion: updatedState.description,
+        activa: updatedState.enabled,
+        transicionesPermitidas: updatedState.allowedTransitions,
+      });
+      setValidationStates((prev) =>
+        prev.map((s) => (s.id === updatedState.id ? updatedState : s))
+      );
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'state_toggle',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Modificado estado de validación: "${updatedState.name}" (${updatedState.enabled ? 'Activa' : 'Inactiva'})`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al actualizar estado de validación' };
+    }
+  };
+
+  const deleteValidationState = async (id: string): Promise<{ success: boolean; error?: string }> => {
     const target = validationStates.find((s) => s.id === id);
-    if (!target) return false;
+    if (!target) return { success: false, error: 'Estado no encontrado' };
 
-    let mappedStatus: POIStatus | null = null;
-    if (id === 'state-pending') mappedStatus = 'pending';
-    else if (id === 'state-approved') mappedStatus = 'approved';
-    else if (id === 'state-rejected') mappedStatus = 'rejected';
-    else if (id === 'state-correction') mappedStatus = 'correction';
-
-    const isUsed = pois.some((p) => p.status === mappedStatus || p.status.toLowerCase() === target.name.toLowerCase());
-    if (isUsed) return false;
-
-    setValidationStates((prev) => prev.filter((s) => s.id !== id));
-    const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      poiId: 'system',
-      poiName: 'Configuración CYP',
-      action: 'state_delete',
-      adminName: currentUser?.name || 'Administrador',
-      comment: `Eliminado estado de validación: "${target.name}"`,
-      timestamp: new Date().toISOString(),
-    };
-    setLogs((prev) => [newLog, ...prev]);
-    return true;
+    try {
+      await api.deleteValidationState(id);
+      setValidationStates((prev) => prev.filter((s) => s.id !== id));
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        poiId: 'system',
+        poiName: 'Configuración CYP',
+        action: 'state_delete',
+        adminName: currentUser?.name || 'Administrador',
+        comment: `Eliminado estado de validación: "${target.name}"`,
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al eliminar estado de validación' };
+    }
   };
 
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
@@ -1823,14 +2001,62 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // 4. CENTRO DE NOTIFICACIONES (US-NYA-07)
-  const markNotificationAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-    );
+  async function loadNotifications() {
+    try {
+      const data: any = await api.getNotifications();
+      const notifsArray = Array.isArray(data) ? data : (data?.data || data?.items || []);
+      const mapped = notifsArray.map((n: any) => {
+        let typeStr = n.tipoNotificacion || n.type || 'info';
+        const titleLower = (n.titulo || n.title || '').toLowerCase();
+        
+        if (titleLower.includes('aprobado') || titleLower.includes('felicitaciones')) {
+          typeStr = 'validation';
+        } else if (titleLower.includes('rechazado') || titleLower.includes('correccion') || titleLower.includes('corrección')) {
+          typeStr = 'warning';
+        } else if (titleLower.includes('reseña') || titleLower.includes('comentario')) {
+          typeStr = 'review';
+        }
+        
+        return {
+          id: n.id,
+          type: typeStr,
+          title: n.titulo || n.title || 'Notificación',
+          message: n.mensaje || n.message || '',
+          createdAt: n.fechaCreacion || n.createdAt || new Date().toISOString(),
+          isRead: n.leida || n.isRead || false,
+          actionUrl: n.urlAccion || n.actionUrl || null,
+        };
+      });
+      setNotifications(mapped);
+    } catch (e) {
+      console.warn('Error al cargar notificaciones:', e);
+    }
   };
 
-  const markAllNotificationsAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await api.markNotificationAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+    } catch (e) {
+      console.warn('Error al marcar notificacion como leida:', e);
+      // Fallback local
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await api.markAllNotificationsAsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    } catch (e) {
+      console.warn('Error al marcar todas como leidas:', e);
+      // Fallback local
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    }
   };
 
   const addNotification = (notif: Omit<NotificationItem, 'id' | 'createdAt' | 'isRead'>) => {
@@ -1908,6 +2134,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addValidationState,
         updateValidationState,
         deleteValidationState,
+        loadValidationStates,
         etiquetas,
         loadEtiquetas,
         addEtiqueta,
@@ -1924,6 +2151,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteService,
         toggleServiceAvailability,
         notifications,
+        loadNotifications,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         addNotification,
