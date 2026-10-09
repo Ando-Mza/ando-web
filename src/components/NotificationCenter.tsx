@@ -39,7 +39,23 @@ export default function NotificationCenter() {
     markNotificationAsRead(id);
     if (actionUrl) {
       setIsOpen(false);
-      router.push(actionUrl);
+      
+      let finalUrl = actionUrl;
+      // Handle legacy integration URL
+      if (finalUrl === '/admin/integraciones') {
+        finalUrl = '/admin/settings';
+      }
+      
+      if (finalUrl.startsWith('http') || finalUrl.startsWith('/api')) {
+        // Build absolute url for backend API if it's a relative /api route
+        const targetUrl = finalUrl.startsWith('/api') 
+          ? `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}${finalUrl}`
+          : finalUrl;
+        
+        window.open(targetUrl, '_blank');
+      } else {
+        router.push(finalUrl);
+      }
     }
   };
 
@@ -79,20 +95,27 @@ export default function NotificationCenter() {
       {isOpen && (
         <div className="absolute right-0 mt-3 w-80 sm:w-96 rounded-2xl bg-white border border-black/10 shadow-2xl z-50 overflow-hidden animate-fade-in font-wixText flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-black/5">
-            <div className="min-w-0">
-              <h4 className="text-sm font-bold text-textDark font-wixDisplay leading-tight">Notificaciones</h4>
-              <p className="text-[11px] text-textDark/55 mt-0.5">
-                {unreadCount > 0
-                  ? `${unreadCount} sin leer`
-                  : notifications.length > 0
-                    ? 'Estás al día'
-                    : 'Sin novedades'}
-              </p>
+          <div className="relative flex items-center justify-between px-5 py-3.5 overflow-hidden border-b border-black/5">
+            <div className="absolute inset-0 bg-gradient-to-r from-accentWine/5 to-transparent pointer-events-none" />
+            
+            {/* Espaciador invisible para centrar exactamente el contenido con la X de la derecha */}
+            <div className="w-7 h-7" />
+            
+            <div className="relative flex flex-col items-center justify-center text-center">
+              <div className="flex items-center gap-1.5">
+                <Bell className="h-3.5 w-3.5 text-accentWine" />
+                <h4 className="text-sm font-bold text-textDark font-wixDisplay leading-tight">Notificaciones</h4>
+              </div>
+              {unreadCount > 0 && (
+                <p className="text-[11px] font-medium mt-1">
+                  <span className="text-accentWine font-bold">{unreadCount} nuevas</span>
+                </p>
+              )}
             </div>
+
             <button
               onClick={() => setIsOpen(false)}
-              className="p-1.5 rounded-lg text-textDark/50 hover:text-textDark hover:bg-black/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine"
+              className="relative p-1.5 rounded-lg text-textDark/40 hover:text-textDark hover:bg-black/5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine"
               aria-label="Cerrar notificaciones"
             >
               <X className="h-4 w-4" />
@@ -100,7 +123,7 @@ export default function NotificationCenter() {
           </div>
 
           {/* List */}
-          <div className="max-h-96 overflow-y-auto divide-y divide-black/5">
+          <div className="max-h-[calc(100vh-200px)] overflow-y-auto divide-y divide-black/5">
             {notifications.length === 0 ? (
               <div className="px-8 py-10 text-center space-y-3">
                 <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-bgPrimary text-textDark/40">
@@ -153,18 +176,18 @@ export default function NotificationCenter() {
                       {notif.message}
                     </p>
                     {notif.actionUrl && (
-                      <Link
-                        href={notif.actionUrl}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          markNotificationAsRead(notif.id);
-                          setIsOpen(false);
-                        }}
-                        className="inline-flex items-center text-[11px] font-bold text-accentWine hover:underline pt-1"
-                      >
-                        <span>Ver detalles</span>
-                        <ExternalLink className="h-3 w-3 ml-1" />
-                      </Link>
+                      <div className="flex justify-end pt-1.5">
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNotificationClick(notif.id, notif.actionUrl);
+                          }}
+                          className="inline-flex items-center text-[11px] font-bold text-accentWine hover:text-accentWine/80 hover:underline transition-colors cursor-pointer"
+                        >
+                          <span>Ver detalles</span>
+                          <ExternalLink className="h-3 w-3 ml-1" />
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>

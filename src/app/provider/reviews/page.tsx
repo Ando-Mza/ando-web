@@ -224,9 +224,32 @@ export default function ProviderReviewsPage() {
                 {/* Review Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/5 pb-3">
                   <div className="flex items-center space-x-3">
-                    <div className="h-10 w-10 rounded-full bg-fillPrimary/10 text-fillPrimary border border-fillPrimary/20 flex items-center justify-center font-bold text-sm">
-                      {review.userName.slice(0, 2).toUpperCase()}
-                    </div>
+                    {review.userAvatar && review.userAvatar !== 'null' && review.userAvatar !== 'undefined' ? (
+                      <>
+                        <img 
+                          src={review.userAvatar} 
+                          alt={review.userName} 
+                          className="h-10 w-10 rounded-full object-cover border border-black/10 flex-shrink-0"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (fallback) {
+                              fallback.style.display = 'flex';
+                            }
+                          }}
+                        />
+                        <div 
+                          className="h-10 w-10 rounded-full bg-fillPrimary/10 text-fillPrimary border border-fillPrimary/20 items-center justify-center flex-shrink-0"
+                          style={{ display: 'none' }}
+                        >
+                          <User className="h-5 w-5 text-fillPrimary" />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-fillPrimary/10 text-fillPrimary border border-fillPrimary/20 flex items-center justify-center flex-shrink-0">
+                        <User className="h-5 w-5 text-fillPrimary" />
+                      </div>
+                    )}
                     <div>
                       <h4 className="text-sm font-bold text-textDark">{review.userName}</h4>
                       <p className="text-[11px] text-textDark/60 flex items-center gap-1.5">
