@@ -29,7 +29,7 @@ export default function AdminDashboard() {
   const totalPois = pois.length;
   const pendingValidation = pois.filter(p => p.status === 'pending').length;
   const approvedPois = pois.filter(p => p.status === 'approved').length;
-  const activeIntegrations = integrations.filter(i => i.habilitada).length;
+  const activeIntegrations = integrations.filter(i => i.enabled).length;
 
   // Contar por categorías para mostrar en el desglose
   const categoriesCount = pois.reduce((acc: { [key: string]: number }, poi) => {

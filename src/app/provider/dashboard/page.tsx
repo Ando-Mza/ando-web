@@ -187,7 +187,7 @@ export default function ProviderDashboard() {
             >
               {providerPois.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.name} ({p.category})
                 </option>
               ))}
             </select>
@@ -536,32 +536,9 @@ export default function ProviderDashboard() {
                     <div key={rev.id} className="p-4 bg-bgPrimary/40 rounded-xl border border-black/5 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2.5">
-                          {rev.userAvatar && rev.userAvatar !== 'null' && rev.userAvatar !== 'undefined' ? (
-                            <>
-                              <img 
-                                src={rev.userAvatar} 
-                                alt={rev.userName} 
-                                className="h-8 w-8 rounded-full object-cover border border-black/10 flex-shrink-0"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                  if (fallback) {
-                                    fallback.style.display = 'flex';
-                                  }
-                                }}
-                              />
-                              <div 
-                                className="h-8 w-8 bg-fillPrimary/10 text-fillPrimary rounded-full items-center justify-center font-bold text-xs border border-fillPrimary/20 flex-shrink-0"
-                                style={{ display: 'none' }}
-                              >
-                                <UserIcon className="h-4 w-4 text-fillPrimary" />
-                              </div>
-                            </>
-                          ) : (
-                            <div className="h-8 w-8 bg-fillPrimary/10 text-fillPrimary rounded-full flex items-center justify-center font-bold text-xs border border-fillPrimary/20 flex-shrink-0">
-                              <UserIcon className="h-4 w-4 text-fillPrimary" />
-                            </div>
-                          )}
+                          <div className="h-8 w-8 bg-fillPrimary/10 text-fillPrimary rounded-full flex items-center justify-center font-bold text-xs border border-fillPrimary/20">
+                            <UserIcon className="h-4 w-4 text-fillPrimary" />
+                          </div>
                           <div>
                             <h5 className="font-bold text-xs text-textDark">{rev.userName}</h5>
                             <span className="text-[10px] text-textDark/50">{rev.date}</span>
@@ -741,9 +718,9 @@ export default function ProviderDashboard() {
             <div className="bg-white rounded-2xl border border-black/5 p-5 shadow-xs space-y-3">
               <h4 className="font-wixDisplay text-xs font-bold text-textDark uppercase tracking-wider">Políticas de Moderación</h4>
               <div className="space-y-2 text-xs text-textDark/75 leading-relaxed">
-                <p>1. <strong>Aprobación de Cambios:</strong> Cualquier modificación a la descripción, fotos o datos de ubicación pasará a estado <em>Pendiente de Validación</em> hasta ser aprobada por el administrador.</p>
-                <p>2. <strong>Consistencia de Horarios:</strong> La hora de cierre debe ser siempre posterior a la hora de apertura.</p>
-                <p>3. <strong>Imágenes Permitidas:</strong> Las imágenes deben ser representativas del establecimiento y en formato JPG, PNG o WEBP (máx. 30 MB por archivo).</p>
+                <p>1. **Aprobación de Cambios:** Cualquier modificación a la descripción, fotos o datos de ubicación pasará a estado <em>Pendiente de Validación</em> hasta ser aprobada por el administrador.</p>
+                <p>2. **Consistencia de Horarios:** La hora de cierre debe ser siempre posterior a la hora de apertura.</p>
+                <p>3. **Imágenes Permitidas:** Las imágenes deben ser representativas del establecimiento y en formato JPG, PNG o WEBP (máx. 30 MB por archivo).</p>
               </div>
             </div>
           </div>

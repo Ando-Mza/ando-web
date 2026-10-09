@@ -33,7 +33,6 @@ import { mapBackendRoleToFrontend, mapBackendStatusToFrontend } from '../utils/r
 
 interface AppContextProps {
   currentUser: User | null;
-  isAuthLoading: boolean;
   users: User[];
   pois: POI[];
   schedules: Schedule[];
@@ -60,24 +59,22 @@ interface AppContextProps {
   rejectPOI: (id: string, adminName: string, feedback: string) => Promise<{ success: boolean; error?: string }>;
   requestCorrectionPOI: (id: string, adminName: string, feedback: string) => Promise<{ success: boolean; error?: string }>;
   deletePOIImage: (poiId: string, imageUrl: string, adminName: string) => void;
-  updateGeneralParams: (params: GeneralParams) => Promise<void>;
-  resetGeneralParams: () => Promise<void>;
+  updateGeneralParams: (params: GeneralParams) => void;
+  resetGeneralParams: () => void;
   toggleIntegration: (id: string) => void;
   updateIntegration: (integration: Integration) => void;
-  testIntegrationConnection: (id: string, confirmarConsumo?: boolean) => Promise<{ success: boolean; requiresConfirmation?: boolean; warning?: string }>;
+  testIntegrationConnection: (id: string) => Promise<boolean>;
   updateTranslation: (lang: string, key: string, value: string) => void;
   addPOI: (poi: Omit<POI, 'id' | 'status' | 'createdBy' | 'updatedAt'>) => Promise<{ success: boolean; id?: string; error?: string }>;
   updatePOI: (poi: POI) => Promise<{ success: boolean; error?: string }>;
-  refreshPois: () => Promise<void>;
   loadSchedulesForPoi: (poiId: string) => Promise<void>;
   saveSchedules: (poiId: string, newSchedules: Schedule[]) => Promise<{ success: boolean; error?: string }>;
   addCategory: (category: Omit<Category, 'id'>) => void;
   updateCategory: (category: Category) => void;
   deleteCategory: (id: string) => boolean;
-  addValidationState: (state: Omit<ValidationState, 'id'>) => Promise<{ success: boolean; error?: string }>;
-  updateValidationState: (state: ValidationState) => Promise<{ success: boolean; error?: string }>;
-  deleteValidationState: (id: string) => Promise<{ success: boolean; error?: string }>;
-  loadValidationStates: () => Promise<void>;
+  addValidationState: (state: Omit<ValidationState, 'id'>) => void;
+  updateValidationState: (state: ValidationState) => void;
+  deleteValidationState: (id: string) => boolean;
 
   // Nuevas capacidades (Etiquetas, Reseñas del prestador, Servicios, Notificaciones)
   etiquetas: Etiqueta[];
@@ -99,7 +96,6 @@ interface AppContextProps {
   toggleServiceAvailability: (serviceId: string) => Promise<{ success: boolean; error?: string }>;
 
   notifications: NotificationItem[];
-  loadNotifications: () => Promise<void>;
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   addNotification: (notification: Omit<NotificationItem, 'id' | 'createdAt' | 'isRead'>) => void;
@@ -108,7 +104,7 @@ interface AppContextProps {
 const AppContext = createContext<AppContextProps | undefined>(undefined);
 
 // Helper para decodificar JWT sin librerías externas de forma segura
-function decodeJwt(token: string): { userId?: string; email?: string; role?: string; exp?: number } | null {
+function decodeJwt(token: string): { userId?: string; email?: string; role?: string } | null {
   try {
     const parts = token.split('.');
     if (parts.length < 2) return null;
@@ -125,7 +121,6 @@ function decodeJwt(token: string): { userId?: string; email?: string; role?: str
       userId: parsed.sub || parsed.userId || parsed.id,
       email: parsed.email,
       role: parsed.role || parsed.roleName || (typeof parsed.role === 'object' ? parsed.role?.nombre : undefined),
-      exp: parsed.exp,
     };
   } catch {
     return null;
@@ -136,27 +131,22 @@ function decodeJwt(token: string): { userId?: string; email?: string; role?: str
 function mapBackendPoi(p: any): POI {
   if (!p) return {} as POI;
 
-  // Extracción robusta de nombre de categoría y IDs
+  // Extracción robusta de nombre de categoría
   let catName = 'General';
   let catIds: string[] = [];
-
-  const rawCats = p.categorias || p.categoriasPoi || p.categoriaPois;
-  if (Array.isArray(rawCats) && rawCats.length > 0) {
-    const firstCat = rawCats[0];
-    catName = typeof firstCat === 'string'
-      ? firstCat
-      : (firstCat?.nombre || firstCat?.categoria?.nombre || 'General');
-
-    catIds = rawCats
-      .map((c: any) => (typeof c === 'string' ? c : (c.id || c.categoriaId || c.categoria?.id)))
-      .filter(Boolean);
+  if (Array.isArray(p.categorias) && p.categorias.length > 0) {
+    const firstCat = p.categorias[0];
+    catName = typeof firstCat === 'string' ? firstCat : (firstCat?.nombre || firstCat?.categoria?.nombre || 'General');
+    catIds = p.categorias.map((c: any) => (typeof c === 'string' ? c : (c.id || c.categoriaId))).filter(Boolean);
+  } else if (Array.isArray(p.categoriaPois) && p.categoriaPois.length > 0) {
+    catName = p.categoriaPois[0]?.categoria?.nombre || 'General';
+    catIds = p.categoriaPois.map((cp: any) => cp.categoriaId || cp.categoria?.id).filter(Boolean);
   } else if (p.categoria) {
     catName = typeof p.categoria === 'object' ? (p.categoria?.nombre || 'General') : String(p.categoria);
     if (typeof p.categoria === 'object' && p.categoria.id) catIds = [p.categoria.id];
   } else if (p.categoriaNombre) {
     catName = p.categoriaNombre;
   }
-
   if (Array.isArray(p.categoriaIds) && p.categoriaIds.length > 0) {
     catIds = p.categoriaIds;
   }
@@ -176,9 +166,7 @@ function mapBackendPoi(p: any): POI {
   }
 
   // Extracción robusta de estado
-  const rawStatus = typeof p.estado === 'object'
-    ? (p.estado?.nombre || p.estado?.name || p.estado?.id || '')
-    : (p.estado || p.estadoNombre || p.status || p.estadoId || '');
+  const rawStatus = typeof p.estado === 'object' ? (p.estado?.nombre || p.estado?.name || '') : (p.estado || p.estadoNombre || p.status || '');
   const mappedStatus = mapBackendStatusToFrontend(rawStatus);
 
   // Conteo de validaciones y reportes comunitarios
@@ -193,15 +181,6 @@ function mapBackendPoi(p: any): POI {
       : 0
   );
 
-  // Extracción robusta de feedback/observaciones de la última revisión o rechazo
-  let latestFeedback = p.observaciones || p.feedback || p.motivoRechazo || undefined;
-  if (!latestFeedback && Array.isArray(p.revisiones) && p.revisiones.length > 0) {
-    const revWithObs = [...p.revisiones].reverse().find((r: any) => r.observaciones && String(r.observaciones).trim() !== '');
-    if (revWithObs) {
-      latestFeedback = revWithObs.observaciones;
-    }
-  }
-
   return {
     id: p.id || '',
     name: p.nombre || p.name || 'Sin nombre',
@@ -215,7 +194,7 @@ function mapBackendPoi(p: any): POI {
     },
     images: imageList,
     status: mappedStatus,
-    feedback: latestFeedback,
+    feedback: p.observaciones || p.feedback || p.motivoRechazo || undefined,
     createdBy: p.creadoPorId || p.organizacionId || p.usuarioId || '',
     updatedAt: p.updatedAt || p.actualizadoEn || new Date().toISOString(),
     email: p.emailContacto || p.email || '',
@@ -253,42 +232,6 @@ function mapBackendPoi(p: any): POI {
 function mapBackendUser(u: any): User {
   const roleObj = u.usuarioRoles?.[0]?.rol || u.role;
   const mappedRole = mapBackendRoleToFrontend(roleObj?.nombre || roleObj);
-  const org = u.usuarioOrganizaciones?.[0]?.organizacion || u.organizacion;
-  const orgNombre = org?.nombre || u.nombreEmpresa || u.nombreOrganizacion || '';
-  const orgCuit = org?.cuit || u.cuit || u.cuitEmpresa || '';
-  // Extraer estado de la organización (para prestadores)
-  const orgEstado = org?.organizacionEstados?.find((oe: any) => !oe.fechaHoraHasta)?.estadoOrganizacion?.nombre
-    || org?.organizacionEstados?.[0]?.estadoOrganizacion?.nombre;
-  const orgEstadoLower = (orgEstado || '').toLowerCase().trim();
-
-  let calculatedStatus: 'active' | 'pending' | 'inactive' = 'active';
-  if (u.fechaBaja) {
-    calculatedStatus = 'inactive';
-  } else if (
-    orgEstadoLower === 'pendiente' ||
-    u.estado === 'pendiente' ||
-    u.status === 'pending'
-  ) {
-    calculatedStatus = 'pending';
-  } else if (
-    orgEstadoLower === 'aprobado' ||
-    orgEstadoLower === 'aceptado' ||
-    orgEstadoLower === 'activo' ||
-    u.estado === 'activo' ||
-    u.estado === 'active'
-  ) {
-    calculatedStatus = 'active';
-  } else if (
-    orgEstadoLower === 'inactivo' ||
-    orgEstadoLower === 'rechazado' ||
-    u.estado === 'inactivo' ||
-    u.status === 'inactive'
-  ) {
-    calculatedStatus = 'inactive';
-  } else {
-    calculatedStatus = 'active';
-  }
-
   return {
     id: u.id,
     name: `${u.nombre || ''} ${u.apellido || ''}`.trim() || u.email,
@@ -297,32 +240,16 @@ function mapBackendUser(u: any): User {
     email: u.email,
     role: mappedRole,
     phone: u.telefono || '',
-    businessName: orgNombre,
-    cuit: orgCuit,
-    status: calculatedStatus,
+    businessName: u.usuarioOrganizaciones?.[0]?.organizacion?.nombre || '',
+    cuit: u.usuarioOrganizaciones?.[0]?.organizacion?.cuit || '',
+    status: u.fechaBaja
+      ? 'inactive'
+      : (u.estado === 'pendiente' || u.status === 'pending' ? 'pending' : 'active'),
   };
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ando_user');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {
-          return null;
-        }
-      }
-    }
-    return null;
-  });
-  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return !!localStorage.getItem('accessToken');
-    }
-    return false;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [pois, setPois] = useState<POI[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -334,71 +261,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [translations, setTranslations] = useState<TranslationDict>(mockTranslations);
   const [currentLanguage, setCurrentLanguage] = useState<'es' | 'en' | 'pt'>('es');
-
-  const refreshPois = async () => {
-    try {
-      const allAdminPois: POI[] = [];
-      const seenIds = new Set<string>();
-
-      // 1. Obtener TODOS los POIs desde la API de revisión del administrador (sin filtrar por estado)
-      try {
-        const revisionData = await api.getAdminRevisionPois({ incluirTodos: true, limit: 1000 });
-        const poisArray = Array.isArray(revisionData)
-          ? revisionData
-          : (revisionData?.data || revisionData?.items || []);
-        if (Array.isArray(poisArray)) {
-          for (const p of poisArray) {
-            if (p?.id && !seenIds.has(p.id)) {
-              seenIds.add(p.id);
-              allAdminPois.push(mapBackendPoi(p));
-            }
-          }
-        }
-      } catch (eRev) {
-        console.warn('Error al cargar POIs de revisión admin:', eRev);
-      }
-
-      // 2. Obtener POIs públicos aprobados
-      try {
-        const publicData: any = await api.getAllPublicPois();
-        const publicArray = Array.isArray(publicData)
-          ? publicData
-          : (publicData?.data || publicData?.items || []);
-        if (Array.isArray(publicArray)) {
-          for (const p of publicArray) {
-            if (p?.id && !seenIds.has(p.id)) {
-              seenIds.add(p.id);
-              allAdminPois.push(mapBackendPoi(p));
-            }
-          }
-        }
-      } catch (ePub) {
-        console.warn('Error al cargar POIs públicos:', ePub);
-      }
-
-      // 3. Obtener POIs comunitarios
-      try {
-        const comunitariaData: any = await api.getValidacionComunitariaPois();
-        const comArray: any[] = Array.isArray(comunitariaData)
-          ? comunitariaData
-          : (comunitariaData?.data || comunitariaData?.items || []);
-        if (Array.isArray(comArray)) {
-          for (const p of comArray) {
-            if (p?.id && !seenIds.has(p.id)) {
-              seenIds.add(p.id);
-              allAdminPois.push(mapBackendPoi(p));
-            }
-          }
-        }
-      } catch (eCom) {
-        console.warn('Error al cargar POIs comunitarios:', eCom);
-      }
-
-      setPois(allAdminPois);
-    } catch (e) {
-      console.error('Error al refrescar POIs desde la base de datos:', e);
-    }
-  };
 
   const loadBackendData = async (role: string, userId?: string) => {
     try {
@@ -418,27 +280,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         console.warn('No se pudieron cargar categorías desde el backend:', e);
       }
 
-      // Cargar notificaciones para el usuario autenticado
-      await loadNotifications();
-
       if (role === 'admin') {
-        // Cargar parámetros generales
-        try {
-          const params = await api.getParametrosGenerales();
-          if (Array.isArray(params)) {
-            const mappedParams = { ...DEFAULT_GENERAL_PARAMS };
-            for (const param of params) {
-              if (param.clave === 'POI_MAX_IMAGES') mappedParams.maxImagesPerPOI = Number(param.valor);
-              if (param.clave === 'POI_MAX_TIME_RANGES_PER_DAY') mappedParams.maxTimeRangesPerDay = Number(param.valor);
-              if (param.clave === 'VALIDATION_GRACE_PERIOD_DAYS') mappedParams.validationGracePeriodDays = Number(param.valor);
-              if (param.clave === 'POI_REQUIRE_REVIEW_FOR_EDITS') mappedParams.requireReviewForEdits = param.valor === 'true';
-            }
-            setGeneralParams(mappedParams);
-          }
-        } catch (e) {
-          console.warn('No se pudieron cargar los parámetros generales:', e);
-        }
-
         // Cargar lista de usuarios
         try {
           const dbUsers = await api.getUsers();
@@ -449,13 +291,119 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           console.warn('No se pudieron cargar usuarios:', e);
         }
 
-        // Cargar POIs reales desde la base de datos
-        await refreshPois();
+        // Cargar POIs para revisión y catálogo admin
+        try {
+          const allAdminPois: POI[] = [];
+          const seenIds = new Set<string>();
 
-        // Cargar estados de validación
-        await loadValidationStates();
-        // Cargar integraciones reales
-        await loadIntegrations();
+          // 1. POIs en revisión formal y estados del backend
+          try {
+            const revisionData = await api.getAdminRevisionPois({ limit: 500 });
+            const poisArray = Array.isArray(revisionData)
+              ? revisionData
+              : (revisionData?.data || revisionData?.items || []);
+            if (Array.isArray(poisArray)) {
+              for (const p of poisArray) {
+                if (p?.id && !seenIds.has(p.id)) {
+                  seenIds.add(p.id);
+                  allAdminPois.push(mapBackendPoi(p));
+                }
+              }
+            }
+          } catch (eRev) {
+            console.warn('Nota al cargar POIs de revisión admin:', eRev);
+          }
+
+          // 2. POIs en validación comunitaria
+          try {
+            const comunitariaData: any = await api.getValidacionComunitariaPois();
+            const comArray: any[] = Array.isArray(comunitariaData)
+              ? comunitariaData
+              : (comunitariaData?.data || comunitariaData?.items || []);
+            if (Array.isArray(comArray)) {
+              for (const p of comArray) {
+                if (p?.id && !seenIds.has(p.id)) {
+                  seenIds.add(p.id);
+                  allAdminPois.push(mapBackendPoi(p));
+                }
+              }
+            }
+          } catch (eCom) {
+            console.warn('Nota al cargar POIs comunitarios:', eCom);
+          }
+
+          // 3. POIs del prestador/organización del usuario si existen
+          try {
+            const myPoisData: any = await api.getMyPois();
+            const myPoisArray = Array.isArray(myPoisData)
+              ? myPoisData
+              : (myPoisData?.data || myPoisData?.items || myPoisData?.pois || []);
+            if (Array.isArray(myPoisArray)) {
+              for (const p of myPoisArray) {
+                if (p?.id && !seenIds.has(p.id)) {
+                  seenIds.add(p.id);
+                  allAdminPois.push(mapBackendPoi(p));
+                }
+              }
+            }
+          } catch (eMy) {
+            // Usuario sin organización, se omite
+          }
+
+          // 4. Intentar consultar POIs aprobados con el estadoId si se conoce
+          try {
+            let estadoAprobadoId: string | null = null;
+            if (typeof window !== 'undefined') {
+              estadoAprobadoId = localStorage.getItem('ando_estado_aprobado_id');
+            }
+            if (estadoAprobadoId) {
+              const approvedData = await api.getAdminRevisionPois({ estadoId: estadoAprobadoId, limit: 500 });
+              const appArray = Array.isArray(approvedData)
+                ? approvedData
+                : (approvedData?.data || approvedData?.items || []);
+              if (Array.isArray(appArray)) {
+                for (const p of appArray) {
+                  if (p?.id && !seenIds.has(p.id)) {
+                    seenIds.add(p.id);
+                    allAdminPois.push(mapBackendPoi(p));
+                  }
+                }
+              }
+            }
+          } catch (eApp) {
+            console.warn('Nota al cargar POIs aprobados con estadoId:', eApp);
+          }
+
+          // 5. Cargar POIs reales del sistema persistidos (por ejemplo, Bodega Los Andes del prestador)
+          if (typeof window !== 'undefined') {
+            try {
+              const cachedRealPois: POI[] = JSON.parse(localStorage.getItem('ando_real_pois') || '[]');
+              if (Array.isArray(cachedRealPois)) {
+                for (const p of cachedRealPois) {
+                  if (p?.id && !seenIds.has(p.id)) {
+                    seenIds.add(p.id);
+                    allAdminPois.push(p);
+                  }
+                }
+              }
+            } catch {}
+          }
+
+          // Establecer únicamente los POIs reales recuperados del backend y del sistema
+          setPois((prev) => {
+            const merged = [...allAdminPois];
+            const seen = new Set(merged.map((p) => p.id));
+            for (const p of prev) {
+              if (p?.id && !seen.has(p.id) && !p.id.startsWith('poi-')) {
+                seen.add(p.id);
+                merged.push(p);
+              }
+            }
+            return merged;
+          });
+        } catch (e) {
+          console.warn('No se pudieron cargar POIs admin:', e);
+        }
       }
 
       if (role === 'provider') {
@@ -464,18 +412,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const dbPois: any = await api.getMyPois();
           const poisArray: any[] = Array.isArray(dbPois) ? dbPois : (dbPois?.pois || dbPois?.data || dbPois?.items || []);
           if (Array.isArray(poisArray)) {
-            // Actualizar estado de POIs en memoria
             const mappedPois: POI[] = poisArray.map(mapBackendPoi);
             setPois(mappedPois);
 
-            // Guardar el ID de estado de cada POI para futuras consultas administrativas
-            for (const p of poisArray) {
-              const st = p.estado?.nombre || p.estadoNombre || (typeof p.estado === 'string' ? p.estado : '');
-              if (st.toLowerCase() === 'aprobado' && (p.estadoId || p.estado?.id)) {
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('ando_estado_aprobado_id', p.estadoId || p.estado?.id);
+            // Persistir POIs reales del prestador en el almacenamiento local para que el Admin los pueda ver
+            if (typeof window !== 'undefined') {
+              try {
+                const existing: POI[] = JSON.parse(localStorage.getItem('ando_real_pois') || '[]');
+                const combined = [...mappedPois];
+                const seenMap = new Set(combined.map((p) => p.id));
+                for (const p of existing) {
+                  if (p?.id && !seenMap.has(p.id)) {
+                    seenMap.add(p.id);
+                    combined.push(p);
+                  }
                 }
-              }
+                localStorage.setItem('ando_real_pois', JSON.stringify(combined));
+
+                // Guardar el ID de estado de cada POI para futuras consultas administrativas
+                for (const p of poisArray) {
+                  const st = p.estado?.nombre || p.estadoNombre || (typeof p.estado === 'string' ? p.estado : '');
+                  if (st.toLowerCase() === 'aprobado' && (p.estadoId || p.estado?.id)) {
+                    localStorage.setItem('ando_estado_aprobado_id', p.estadoId || p.estado?.id);
+                  }
+                }
+              } catch {}
             }
 
             // Cargar horarios del primer POI del prestador al arrancar
@@ -485,33 +446,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 const horarios: any = await api.getHorariosByPoi(firstPoiId);
                 const horariosArray: any[] = Array.isArray(horarios) ? horarios : (horarios?.data || []);
                 if (Array.isArray(horariosArray)) {
-                  const mappedSchedules: Schedule[] = horariosArray.map((h: any) => {
-                    let days: number[] = [];
-                    if (h.diaSemanaDesde !== undefined && h.diaSemanaHasta !== undefined) {
-                      const start = Number(h.diaSemanaDesde);
-                      const end = Number(h.diaSemanaHasta);
-                      if (start <= end) {
-                        for (let d = start; d <= end; d++) days.push(d);
-                      } else {
-                        for (let d = start; d <= 6; d++) days.push(d);
-                        for (let d = 0; d <= end; d++) days.push(d);
-                      }
-                    } else if (Array.isArray(h.daysOfWeek)) {
-                      days = h.daysOfWeek;
-                    } else {
-                      days = [h.diaSemanaDesde ?? 1];
-                    }
-                    
-                    return {
-                      id: String(h.id || `sch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
-                      poiId: firstPoiId,
-                      daysOfWeek: days,
-                      timeRanges: [{ start: String(h.horaDesde || h.horaApertura || '09:00').slice(0, 5), end: String(h.horaHasta || h.horaCierre || '18:00').slice(0, 5) }],
-                      season: h.temporada || 'all',
-                      isHoliday: h.esFeriado || false,
-                      description: h.descripcion || '',
-                    };
-                  });
+                  const mappedSchedules: Schedule[] = horariosArray.map((h: any) => ({
+                    id: h.id,
+                    poiId: firstPoiId,
+                    daysOfWeek: Array.isArray(h.diasSemana) ? h.diasSemana : [],
+                    timeRanges: [{ start: h.horaApertura || '09:00', end: h.horaCierre || '18:00' }],
+                    season: h.temporada || 'all',
+                    isHoliday: h.esFeriado || false,
+                    description: h.descripcion || '',
+                  }));
                   setSchedules(mappedSchedules);
                 }
               } catch (e) {
@@ -541,24 +484,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const restoreSession = async () => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-      if (!token) {
-        setIsAuthLoading(false);
-        return;
-      }
+      if (!token) return;
 
       const jwtData = decodeJwt(token);
       let detectedRole: UserRole | null = jwtData?.role ? mapBackendRoleToFrontend(jwtData.role) : null;
       let targetUserId = jwtData?.userId || '';
-
-      if (jwtData?.exp && jwtData.exp * 1000 < Date.now()) {
-        console.warn('El token de sesión ha expirado.');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('ando_user');
-        setCurrentUser(null);
-        setIsAuthLoading(false);
-        return;
-      }
 
       try {
         const profile = await api.getProfile();
@@ -586,9 +516,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             console.warn('Acceso denegado: El rol no está autorizado para acceder a este portal.');
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
-            localStorage.removeItem('ando_user');
             setCurrentUser(null);
-            setIsAuthLoading(false);
             return;
           }
 
@@ -634,22 +562,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           };
 
           setCurrentUser(loggedUser);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('ando_user', JSON.stringify(loggedUser));
-          }
           await loadBackendData(detectedRole, profileId);
         }
-      } catch (err: any) {
-        console.error('Error al restaurar sesión backend:', err);
-        const errMsg = String(err?.message || '');
-        if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('Unauthorized') || errMsg.includes('jwt') || errMsg.includes('Session expired')) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('ando_user');
-          setCurrentUser(null);
-        }
-      } finally {
-        setIsAuthLoading(false);
+      } catch (err) {
+        console.error('Sesión expirada o inválida:', err);
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setCurrentUser(null);
       }
     };
     restoreSession();
@@ -719,8 +638,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
         
         setCurrentUser(loggedUser);
-        localStorage.setItem('ando_user', JSON.stringify(loggedUser));
-        setIsAuthLoading(false);
         await loadBackendData(mappedRole, data.user.id);
         
         return { success: true, role: mappedRole };
@@ -734,25 +651,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (token) {
-      api.logout().catch((err) => console.error('Error logging out from server:', err));
+      api.logout().catch(err => console.error('Error logging out from server:', err));
     }
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('ando_user');
-      localStorage.removeItem('ando_real_pois');
-      localStorage.removeItem('selectedProviderPoiId');
-      localStorage.removeItem('ando_estado_aprobado_id');
-    }
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
     setCurrentUser(null);
-    setIsAuthLoading(false);
     setPois([]);
     setUsers([]);
     setSchedules([]);
     setLogs([]);
-    setProviderReviews([]);
-    setServices([]);
-    setNotifications([]);
   };
 
   const registerProvider = async (userData: Omit<User, 'id' | 'role' | 'status'> & { password: string }): Promise<{ success: boolean; error?: string }> => {
@@ -807,23 +714,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           payload.apellido = parts.slice(1).join(' ') || undefined;
         }
         if (updatedData.phone !== undefined) payload.telefono = updatedData.phone;
-        if (updatedData.businessName !== undefined) {
-          payload.nombreEmpresa = updatedData.businessName;
-          payload.nombreOrganizacion = updatedData.businessName;
-        }
-        if (updatedData.cuit !== undefined) {
-          payload.cuit = updatedData.cuit;
-          payload.cuitEmpresa = updatedData.cuit;
-        }
-        if (updatedData.role !== undefined) {
-          payload.rol = updatedData.role === 'admin' ? 'administrador' : (updatedData.role === 'provider' ? 'prestador' : 'turista');
-        }
         if (updatedData.status !== undefined) {
           payload.estado = updatedData.status;
-          payload.status = updatedData.status;
           if (updatedData.status === 'inactive') {
             payload.fechaBaja = new Date().toISOString().slice(0, 10);
-          } else if (updatedData.status === 'active' || updatedData.status === 'pending') {
+          } else if (updatedData.status === 'active') {
             payload.fechaBaja = null;
           }
         }
@@ -855,35 +750,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === id) {
-          const newFirstName = updatedData.firstName !== undefined ? updatedData.firstName : u.firstName;
-          const newLastName = updatedData.lastName !== undefined ? updatedData.lastName : u.lastName;
-          const newName = updatedData.name || ((newFirstName || newLastName) ? `${newFirstName || ''} ${newLastName || ''}`.trim() : u.name);
-          return {
-            ...u,
-            ...updatedData,
-            firstName: newFirstName,
-            lastName: newLastName,
-            name: newName,
-          };
-        }
-        return u;
-      })
+      prev.map((u) => (u.id === id ? { ...u, ...updatedData } : u))
     );
     
     setCurrentUser((prev) => {
       if (prev && prev.id === id) {
-        const newFirstName = updatedData.firstName !== undefined ? updatedData.firstName : prev.firstName;
-        const newLastName = updatedData.lastName !== undefined ? updatedData.lastName : prev.lastName;
-        const newName = updatedData.name || ((newFirstName || newLastName) ? `${newFirstName || ''} ${newLastName || ''}`.trim() : prev.name);
-        return {
-          ...prev,
-          ...updatedData,
-          firstName: newFirstName,
-          lastName: newLastName,
-          name: newName,
-        };
+        return { ...prev, ...updatedData };
       }
       return prev;
     });
@@ -942,12 +814,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const nameParts = (userData.name || '').trim().split(' ');
-      const userFirstName = userData.firstName || nameParts[0] || userData.name;
-      const userLastName = userData.lastName !== undefined ? userData.lastName : (nameParts.slice(1).join(' ') || '');
+      const nameParts = userData.name.trim().split(' ');
       const payload: any = {
-        nombre: userFirstName,
-        apellido: userLastName,
+        nombre: nameParts[0] || userData.name,
+        apellido: nameParts.slice(1).join(' ') || '',
         email: userData.email,
         password: userData.password || '123456',
         telefono: userData.phone || '',
@@ -956,17 +826,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       if (userData.role === 'provider' && userData.businessName) {
         payload.nombreEmpresa = userData.businessName;
-        payload.nombreOrganizacion = userData.businessName;
         payload.cuitEmpresa = userData.cuit || '';
-        payload.cuit = userData.cuit || '';
       }
 
       const created = await api.createUser(payload);
       const newUser: User = {
         id: created.id || `usr-${Date.now()}`,
-        name: userData.name || `${userFirstName} ${userLastName}`.trim(),
-        firstName: userFirstName,
-        lastName: userLastName,
+        name: userData.name,
         email: userData.email,
         role: userData.role,
         phone: userData.phone,
@@ -1031,7 +897,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setPois((prev) =>
-      prev.map((poi) => (poi.id === id ? { ...poi, status: 'approved' as const, feedback: undefined } : poi))
+      prev.map((poi) => (poi.id === id ? { ...poi, status: 'approved', feedback: undefined } : poi))
     );
 
     const newLog: AuditLog = {
@@ -1070,7 +936,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setPois((prev) =>
-      prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected' as const, feedback: feedback.trim() } : poi))
+      prev.map((poi) => (poi.id === id ? { ...poi, status: 'rejected', feedback: feedback.trim() } : poi))
     );
 
     const newLog: AuditLog = {
@@ -1109,7 +975,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setPois((prev) =>
-      prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction' as const, feedback: feedback.trim() } : poi))
+      prev.map((poi) => (poi.id === id ? { ...poi, status: 'correction', feedback: feedback.trim() } : poi))
     );
 
     const newLog: AuditLog = {
@@ -1167,138 +1033,65 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLogs((prev) => [newLog, ...prev]);
   };
 
-  const updateGeneralParams = async (params: GeneralParams) => {
-    try {
-      await api.updateParametro('POI_MAX_IMAGES', String(params.maxImagesPerPOI));
-      await api.updateParametro('POI_MAX_TIME_RANGES_PER_DAY', String(params.maxTimeRangesPerDay));
-      await api.updateParametro('VALIDATION_GRACE_PERIOD_DAYS', String(params.validationGracePeriodDays));
-      await api.updateParametro('POI_REQUIRE_REVIEW_FOR_EDITS', String(params.requireReviewForEdits));
-      
-      setGeneralParams(params);
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: 'system',
-        poiName: 'Configuración CYP',
-        action: 'param_change',
-        adminName: currentUser?.name || 'Administrador',
-        comment: `Modificados límites globales (Imágenes: ${params.maxImagesPerPOI}, Franjas: ${params.maxTimeRangesPerDay}, Gracia: ${params.validationGracePeriodDays} días).`,
-        timestamp: new Date().toISOString(),
-      };
-      setLogs((prev) => [newLog, ...prev]);
-    } catch (e) {
-      console.error('Error al actualizar parámetros generales', e);
-      throw e;
-    }
+  const updateGeneralParams = (params: GeneralParams) => {
+    setGeneralParams(params);
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      poiId: 'system',
+      poiName: 'Configuración CYP',
+      action: 'param_change',
+      adminName: currentUser?.name || 'Administrador',
+      comment: `Modificados límites globales (Imágenes: ${params.maxImagesPerPOI}, Franjas: ${params.maxTimeRangesPerDay}, Gracia: ${params.validationGracePeriodDays} días).`,
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
   };
 
-  const resetGeneralParams = async () => {
-    try {
-      await api.resetParametro('POI_MAX_IMAGES');
-      await api.resetParametro('POI_MAX_TIME_RANGES_PER_DAY');
-      await api.resetParametro('VALIDATION_GRACE_PERIOD_DAYS');
-      await api.resetParametro('POI_REQUIRE_REVIEW_FOR_EDITS');
-      
-      setGeneralParams({ ...DEFAULT_GENERAL_PARAMS });
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: 'system',
-        poiName: 'Configuración CYP',
-        action: 'param_reset',
-        adminName: currentUser?.name || 'Administrador',
-        comment: 'Restablecidos parámetros generales a valores por defecto.',
-        timestamp: new Date().toISOString(),
-      };
-      setLogs((prev) => [newLog, ...prev]);
-    } catch (e) {
-      console.error('Error al restablecer parámetros generales', e);
-      throw e;
-    }
+  const resetGeneralParams = () => {
+    setGeneralParams({ ...DEFAULT_GENERAL_PARAMS });
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      poiId: 'system',
+      poiName: 'Configuración CYP',
+      action: 'param_reset',
+      adminName: currentUser?.name || 'Administrador',
+      comment: 'Restablecidos parámetros generales a valores por defecto.',
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
   };
 
-  const loadIntegrations = async () => {
-    try {
-      const ints = await api.getIntegraciones();
-      if (Array.isArray(ints)) {
-        setIntegrations(ints.map((i: any) => ({
-          id: i.id,
-          nombre: i.nombre,
-          proveedor: i.proveedor,
-          urlBase: i.urlBase || null,
-          limiteConsumo: i.limiteConsumo || null,
-          habilitada: i.habilitada,
-          estadoConexion: i.estadoConexion,
-          ultimaPruebaConexion: i.ultimaPruebaConexion || null,
-          ultimoError: i.ultimoError || null,
-        })));
-      }
-    } catch (e) {
-      console.warn('No se pudieron cargar las integraciones:', e);
-    }
+  const toggleIntegration = (id: string) => {
+    setIntegrations((prev) =>
+      prev.map((integ) => (integ.id === id ? { ...integ, enabled: !integ.enabled } : integ))
+    );
   };
 
-  const toggleIntegration = async (id: string) => {
-    const target = integrations.find(i => i.id === id);
-    if (!target) return;
-    try {
-      const res = await api.toggleIntegracion(id, !target.habilitada);
-      setIntegrations((prev) =>
-        prev.map((integ) => (integ.id === id ? { ...integ, habilitada: res.habilitada } : integ))
-      );
-    } catch (e) {
-      console.error('Error al cambiar estado de integracion', e);
-    }
+  const updateIntegration = (updatedInteg: Integration) => {
+    setIntegrations((prev) =>
+      prev.map((integ) => (integ.id === updatedInteg.id ? updatedInteg : integ))
+    );
   };
 
-  const updateIntegration = async (updatedInteg: Integration) => {
-    try {
-      const body = {
-        nombre: updatedInteg.nombre,
-        urlBase: updatedInteg.urlBase || null,
-        limiteConsumo: updatedInteg.limiteConsumo || null,
-      };
-      const res = await api.updateIntegracion(updatedInteg.id, body);
-      setIntegrations((prev) =>
-        prev.map((integ) => (integ.id === updatedInteg.id ? { ...integ, ...res } : integ))
-      );
-    } catch (e) {
-      console.error('Error al actualizar integración', e);
-      throw e;
-    }
-  };
+  const testIntegrationConnection = (id: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const target = integrations.find((i) => i.id === id);
+        const success = !!(target && target.apiKey && target.apiKey.length > 5);
 
-  const testIntegrationConnection = async (id: string, confirmarConsumo?: boolean): Promise<{ success: boolean; requiresConfirmation?: boolean; warning?: string }> => {
-    try {
-      const res = await api.testIntegracion(id, confirmarConsumo);
-      const success = res.estadoConexion === 'conectada';
-      
-      // Actualizar estado local
-      setIntegrations((prev) => prev.map(i => i.id === id ? {
-        ...i, 
-        estadoConexion: res.estadoConexion, 
-        ultimaPruebaConexion: res.fechaPrueba,
-        ultimoError: res.mensaje || null
-      } : i));
-
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: 'system',
-        poiName: res.proveedor || 'Integración API',
-        action: 'test_connection',
-        adminName: currentUser?.name || 'Administrador',
-        comment: `Prueba de conexión: ${success ? 'Exitosa (Conectado)' : 'Fallida'} - ${res.mensaje}`,
-        timestamp: new Date().toISOString(),
-      };
-      setLogs((prev) => [newLog, ...prev]);
-      
-      return { 
-        success, 
-        requiresConfirmation: res.confirmacionRequerida, 
-        warning: res.advertenciaConsumo 
-      };
-    } catch (e: any) {
-      console.error('Error al probar conexión', e);
-      return { success: false };
-    }
+        const newLog: AuditLog = {
+          id: `log-${Date.now()}`,
+          poiId: 'system',
+          poiName: target?.name || 'Integración API',
+          action: 'test_connection',
+          adminName: currentUser?.name || 'Administrador',
+          comment: `Prueba de conexión: ${success ? 'Exitosa (Conectado)' : 'Fallida (Error de credenciales)'}`,
+          timestamp: new Date().toISOString(),
+        };
+        setLogs((prev) => [newLog, ...prev]);
+        resolve(success);
+      }, 1000);
+    });
   };
 
   const updateTranslation = (lang: string, key: string, value: string) => {
@@ -1401,24 +1194,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
 
       const updated = await api.updatePoi(updatedPoi.id, payload);
-
-      if (Array.isArray(updatedPoi.horarios)) {
-        try {
-          await api.deleteAllHorarios(updatedPoi.id).catch(() => {});
-          if (updatedPoi.horarios.length > 0) {
-            const batchHorarios = updatedPoi.horarios.map((h: any) => ({
-              diaSemanaDesde: Number(h.diaSemanaDesde ?? 1),
-              horaDesde: String(h.horaDesde || h.horaApertura || '09:00').slice(0, 5),
-              diaSemanaHasta: Number(h.diaSemanaHasta ?? h.diaSemanaDesde ?? 1),
-              horaHasta: String(h.horaHasta || h.horaCierre || '18:00').slice(0, 5),
-            }));
-            await api.createMultipleHorarios(updatedPoi.id, batchHorarios);
-          }
-        } catch (errHorarios) {
-          console.warn('Nota al guardar horarios durante actualización de POI:', errHorarios);
-        }
-      }
-
       const mapped = mapBackendPoi(updated);
       setPois((prev) => prev.map((p) => (p.id === updatedPoi.id ? mapped : p)));
       return { success: true };
@@ -1438,27 +1213,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const horariosList: any[] = Array.isArray(horarios) ? horarios : (horarios?.data || []);
       if (Array.isArray(horariosList)) {
         const mappedSchedules: Schedule[] = horariosList.map((h: any) => {
-          let days: number[] = [];
-          if (h.diaSemanaDesde !== undefined && h.diaSemanaHasta !== undefined) {
-            const start = Number(h.diaSemanaDesde);
-            const end = Number(h.diaSemanaHasta);
-            if (start <= end) {
-              for (let d = start; d <= end; d++) days.push(d);
-            } else {
-              for (let d = start; d <= 6; d++) days.push(d);
-              for (let d = 0; d <= end; d++) days.push(d);
-            }
-          } else if (Array.isArray(h.daysOfWeek)) {
-            days = h.daysOfWeek;
-          } else {
-            days = [h.diaSemanaDesde ?? 1];
-          }
-
+          const days = h.diaSemanaDesde !== undefined
+            ? (h.diaSemanaDesde === h.diaSemanaHasta ? [h.diaSemanaDesde] : [h.diaSemanaDesde, h.diaSemanaHasta])
+            : (Array.isArray(h.diasSemana) ? h.diasSemana : [1]);
           return {
-            id: String(h.id || `sch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+            id: h.id || `sch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             poiId: poiId,
             daysOfWeek: days,
-            timeRanges: [{ start: String(h.horaDesde || h.horaApertura || '09:00').slice(0, 5), end: String(h.horaHasta || h.horaCierre || '18:00').slice(0, 5) }],
+            timeRanges: [{ start: h.horaDesde || h.horaApertura || '09:00', end: h.horaHasta || h.horaCierre || '18:00' }],
             season: h.temporada || 'all',
             isHoliday: h.esFeriado || false,
             description: h.descripcion || '',
@@ -1495,9 +1257,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               for (const range of ranges) {
                 batchHorarios.push({
                   diaSemanaDesde: Number(day),
-                  horaDesde: String(range.start || '09:00').slice(0, 5),
+                  horaDesde: range.start || '09:00',
                   diaSemanaHasta: Number(day),
-                  horaHasta: String(range.end || '18:00').slice(0, 5),
+                  horaHasta: range.end || '18:00',
                 });
               }
             }
@@ -1507,7 +1269,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             await api.createMultipleHorarios(poiId, batchHorarios);
           }
         }
-        await loadSchedulesForPoi(poiId);
         return { success: true };
       } catch (err: any) {
         console.warn('Nota de guardado backend horarios:', err);
@@ -1519,42 +1280,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // CRUD Categorías (US-CYP-03)
   const addCategory = async (catData: Omit<Category, 'id'>) => {
-    // Optimistic Update: Generamos un ID temporal para que se refleje de inmediato
-    const tempId = `temp-${Date.now()}`;
-    const newCatOptimistic: Category = {
-      id: tempId,
-      name: catData.name,
-      description: catData.description,
-      enabled: catData.enabled,
-    };
-    
-    setCategories((prev) => [...prev, newCatOptimistic]);
-
     try {
-      const dbCat = await api.createCategory({
-        nombre: catData.name,
-        descripcion: catData.description,
-        activa: catData.enabled
-      });
-      
-      // Reemplazamos el ID temporal por el ID real que devuelve el backend
-      setCategories((prev) => 
-        prev.map(c => c.id === tempId ? { ...c, id: dbCat.id } : c)
-      );
-
+      const dbCat = await api.createCategory(catData.name);
+      const newCat: Category = {
+        id: dbCat.id,
+        name: dbCat.nombre,
+        description: '',
+        enabled: true,
+      };
+      setCategories((prev) => [...prev, newCat]);
       const newLog: AuditLog = {
         id: `log-${Date.now()}`,
         poiId: 'system',
         poiName: 'Configuración CYP',
         action: 'category_create',
         adminName: currentUser?.name || 'Administrador',
-        comment: `Creada categoría turística: "${newCatOptimistic.name}"`,
+        comment: `Creada categoría turística: "${newCat.name}"`,
         timestamp: new Date().toISOString(),
       };
       setLogs((prev) => [newLog, ...prev]);
     } catch (err: any) {
-      // Si falla, revertimos el cambio optimista
-      setCategories((prev) => prev.filter(c => c.id !== tempId));
       alert(err.message || 'Error al crear la categoría');
     }
   };
@@ -1565,13 +1310,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
     try {
       if (updatedCat.name) {
-        await api.updateCategory(updatedCat.id, {
-          nombre: updatedCat.name,
-          descripcion: updatedCat.description,
-          activa: updatedCat.enabled
-        });
+        await api.updateCategory(updatedCat.id, updatedCat.name);
       }
-      // api.toggleCategoryActiva ya no es necesario si updateCategory manda activa
+      await api.toggleCategoryActiva(updatedCat.id, updatedCat.enabled);
     } catch (err) {
       console.warn('Nota de actualización categoría backend:', err);
     }
@@ -1611,105 +1352,65 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // CRUD Estados de Validación (US-CYP-04)
-  const loadValidationStates = async () => {
-    try {
-      const data = await api.getValidationStates();
-      if (Array.isArray(data)) {
-        setValidationStates(
-          data.map((s: any) => ({
-            id: s.id,
-            name: s.nombre,
-            description: s.descripcion || '',
-            enabled: s.activa !== undefined ? s.activa : true,
-            allowedTransitions: s.transicionesOrigen ? s.transicionesOrigen.map((t: any) => t.estadoDestinoId) : [],
-          }))
-        );
-      }
-    } catch (e) {
-      console.warn('Nota al cargar estados de validación:', e);
-    }
+  const addValidationState = (stateData: Omit<ValidationState, 'id'>) => {
+    const newState: ValidationState = {
+      ...stateData,
+      id: `state-${Date.now()}`,
+    };
+    setValidationStates((prev) => [...prev, newState]);
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      poiId: 'system',
+      poiName: 'Configuración CYP',
+      action: 'state_create',
+      adminName: currentUser?.name || 'Administrador',
+      comment: `Creado estado de validación: "${newState.name}"`,
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
   };
 
-  const addValidationState = async (stateData: Omit<ValidationState, 'id'>): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const created = await api.createValidationState({
-        nombre: stateData.name,
-        descripcion: stateData.description,
-        activa: stateData.enabled,
-        transicionesPermitidas: stateData.allowedTransitions,
-      });
-      const newState: ValidationState = {
-        id: created.id || `state-${Date.now()}`,
-        name: created.nombre || stateData.name,
-        description: created.descripcion || stateData.description,
-        enabled: created.activa !== undefined ? created.activa : stateData.enabled,
-        allowedTransitions: stateData.allowedTransitions || [],
-      };
-      setValidationStates((prev) => [...prev, newState]);
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: 'system',
-        poiName: 'Configuración CYP',
-        action: 'state_create',
-        adminName: currentUser?.name || 'Administrador',
-        comment: `Creado estado de validación: "${newState.name}"`,
-        timestamp: new Date().toISOString(),
-      };
-      setLogs((prev) => [newLog, ...prev]);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error al crear estado de validación' };
-    }
+  const updateValidationState = (updatedState: ValidationState) => {
+    setValidationStates((prev) =>
+      prev.map((s) => (s.id === updatedState.id ? updatedState : s))
+    );
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      poiId: 'system',
+      poiName: 'Configuración CYP',
+      action: 'state_toggle',
+      adminName: currentUser?.name || 'Administrador',
+      comment: `Modificado estado de validación: "${updatedState.name}" (${updatedState.enabled ? 'Activa' : 'Inactiva'})`,
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
   };
 
-  const updateValidationState = async (updatedState: ValidationState): Promise<{ success: boolean; error?: string }> => {
-    try {
-      await api.updateValidationState(updatedState.id, {
-        nombre: updatedState.name,
-        descripcion: updatedState.description,
-        activa: updatedState.enabled,
-        transicionesPermitidas: updatedState.allowedTransitions,
-      });
-      setValidationStates((prev) =>
-        prev.map((s) => (s.id === updatedState.id ? updatedState : s))
-      );
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: 'system',
-        poiName: 'Configuración CYP',
-        action: 'state_toggle',
-        adminName: currentUser?.name || 'Administrador',
-        comment: `Modificado estado de validación: "${updatedState.name}" (${updatedState.enabled ? 'Activa' : 'Inactiva'})`,
-        timestamp: new Date().toISOString(),
-      };
-      setLogs((prev) => [newLog, ...prev]);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error al actualizar estado de validación' };
-    }
-  };
-
-  const deleteValidationState = async (id: string): Promise<{ success: boolean; error?: string }> => {
+  const deleteValidationState = (id: string): boolean => {
     const target = validationStates.find((s) => s.id === id);
-    if (!target) return { success: false, error: 'Estado no encontrado' };
+    if (!target) return false;
 
-    try {
-      await api.deleteValidationState(id);
-      setValidationStates((prev) => prev.filter((s) => s.id !== id));
-      const newLog: AuditLog = {
-        id: `log-${Date.now()}`,
-        poiId: 'system',
-        poiName: 'Configuración CYP',
-        action: 'state_delete',
-        adminName: currentUser?.name || 'Administrador',
-        comment: `Eliminado estado de validación: "${target.name}"`,
-        timestamp: new Date().toISOString(),
-      };
-      setLogs((prev) => [newLog, ...prev]);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error al eliminar estado de validación' };
-    }
+    let mappedStatus: POIStatus | null = null;
+    if (id === 'state-pending') mappedStatus = 'pending';
+    else if (id === 'state-approved') mappedStatus = 'approved';
+    else if (id === 'state-rejected') mappedStatus = 'rejected';
+    else if (id === 'state-correction') mappedStatus = 'correction';
+
+    const isUsed = pois.some((p) => p.status === mappedStatus || p.status.toLowerCase() === target.name.toLowerCase());
+    if (isUsed) return false;
+
+    setValidationStates((prev) => prev.filter((s) => s.id !== id));
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      poiId: 'system',
+      poiName: 'Configuración CYP',
+      action: 'state_delete',
+      adminName: currentUser?.name || 'Administrador',
+      comment: `Eliminado estado de validación: "${target.name}"`,
+      timestamp: new Date().toISOString(),
+    };
+    setLogs((prev) => [newLog, ...prev]);
+    return true;
   };
 
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
@@ -1901,162 +1602,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // 3. GESTIÓN DE SERVICIOS DEL POI (US-CYN-03)
   const loadServicesForPoi = async (poiId: string) => {
-    if (!poiId) return;
+    if (!poiId || poiId.startsWith('poi-')) return;
     try {
       const data: any = await api.getServiciosByPoi(poiId);
       const list: any[] = Array.isArray(data) ? data : (data?.servicios || data?.data || []);
-      if (Array.isArray(list)) {
+      if (Array.isArray(list) && list.length > 0) {
         const mapped: ServiceItem[] = list.map((sp: any) => ({
           id: sp.id,
           poiId: sp.poiId || poiId,
-          name: sp.nombre || sp.servicio?.nombre || 'Servicio',
-          category: sp.categoriaServicio || sp.servicio?.categoria || 'General',
-          description: sp.descripcion || sp.servicio?.descripcion || '',
+          name: sp.servicio?.nombre || sp.nombre || 'Servicio',
+          category: sp.servicio?.categoria || sp.categoria || 'Comodidad',
+          description: sp.notas || sp.servicio?.descripcion || '',
           price: sp.precio !== null && sp.precio !== undefined ? Number(sp.precio) : 0,
           durationMinutes: sp.duracionMinutos || 60,
-          maxCapacity: sp.capacidadMaxima,
-          terms: sp.condicionesContratacion,
           isAvailable: sp.disponible ?? sp.activo ?? true,
         }));
         setServices(mapped);
       }
     } catch (e) {
-      console.warn('Nota al cargar servicios del POI desde la base de datos:', e);
-      setServices([]);
+      console.warn('Nota al cargar servicios del POI:', e);
     }
   };
 
   const saveService = async (serviceData: Omit<ServiceItem, 'id'> & { id?: string }): Promise<{ success: boolean; error?: string }> => {
-    try {
-      if (serviceData.id) {
-        await api.updateServicioPoi(serviceData.poiId, serviceData.id, {
-          nombre: serviceData.name,
-          descripcion: serviceData.description,
-          categoriaServicio: serviceData.category,
-          precio: serviceData.price,
-          duracionMinutos: serviceData.durationMinutes,
-          capacidadMaxima: serviceData.maxCapacity,
-          condicionesContratacion: serviceData.terms,
-          disponible: serviceData.isAvailable,
-        });
-      } else {
-        let catalogId: string | undefined = undefined;
-        try {
-          const catalogo = await api.getCatalogoServicios(true);
-          const list = Array.isArray(catalogo) ? catalogo : [];
-          const matched = list.find(
-            (c: any) => c.nombre.toLowerCase().trim() === serviceData.name.toLowerCase().trim()
-          );
-          if (matched) {
-            catalogId = matched.id;
-          }
-        } catch {}
-
-        await api.createServicioPoi(serviceData.poiId, {
-          servicioId: catalogId,
-          nombre: serviceData.name,
-          descripcion: serviceData.description,
-          categoriaServicio: serviceData.category,
-          precio: serviceData.price,
-          duracionMinutos: serviceData.durationMinutes,
-          capacidadMaxima: serviceData.maxCapacity,
-          condicionesContratacion: serviceData.terms,
-          disponible: serviceData.isAvailable,
-        });
-      }
-      await loadServicesForPoi(serviceData.poiId);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error al guardar el servicio en la base de datos.' };
+    if (serviceData.id) {
+      setServices((prev) =>
+        prev.map((s) => (s.id === serviceData.id ? ({ ...s, ...serviceData } as ServiceItem) : s))
+      );
+    } else {
+      const newService: ServiceItem = {
+        ...serviceData,
+        id: `srv-${Date.now()}`,
+      };
+      setServices((prev) => [...prev, newService]);
     }
+    return { success: true };
   };
 
   const deleteService = async (serviceId: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const target = services.find((s) => s.id === serviceId);
-      if (target) {
-        await api.deleteServicioPoi(target.poiId, serviceId);
-        setServices((prev) => prev.filter((s) => s.id !== serviceId));
-      }
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error al eliminar el servicio de la base de datos.' };
-    }
+    setServices((prev) => prev.filter((s) => s.id !== serviceId));
+    return { success: true };
   };
 
   const toggleServiceAvailability = async (serviceId: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const target = services.find((s) => s.id === serviceId);
-      if (target) {
-        const nextState = !target.isAvailable;
-        await api.toggleEstadoServicioPoi(target.poiId, serviceId, nextState);
-        setServices((prev) =>
-          prev.map((s) => (s.id === serviceId ? { ...s, isAvailable: nextState } : s))
-        );
-      }
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error al cambiar el estado del servicio.' };
-    }
+    setServices((prev) =>
+      prev.map((s) => (s.id === serviceId ? { ...s, isAvailable: !s.isAvailable } : s))
+    );
+    return { success: true };
   };
 
   // 4. CENTRO DE NOTIFICACIONES (US-NYA-07)
-  async function loadNotifications() {
-    try {
-      const data: any = await api.getNotifications();
-      const notifsArray = Array.isArray(data) ? data : (data?.data || data?.items || []);
-      const mapped = notifsArray.map((n: any) => {
-        let typeStr = n.tipoNotificacion || n.type || 'info';
-        const titleLower = (n.titulo || n.title || '').toLowerCase();
-        
-        if (titleLower.includes('aprobado') || titleLower.includes('felicitaciones')) {
-          typeStr = 'validation';
-        } else if (titleLower.includes('rechazado') || titleLower.includes('correccion') || titleLower.includes('corrección')) {
-          typeStr = 'warning';
-        } else if (titleLower.includes('reseña') || titleLower.includes('comentario')) {
-          typeStr = 'review';
-        }
-        
-        return {
-          id: n.id,
-          type: typeStr,
-          title: n.titulo || n.title || 'Notificación',
-          message: n.mensaje || n.message || '',
-          createdAt: n.fechaCreacion || n.createdAt || new Date().toISOString(),
-          isRead: n.leida || n.isRead || false,
-          actionUrl: n.urlAccion || n.actionUrl || null,
-        };
-      });
-      setNotifications(mapped);
-    } catch (e) {
-      console.warn('Error al cargar notificaciones:', e);
-    }
+  const markNotificationAsRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+    );
   };
 
-  const markNotificationAsRead = async (id: string) => {
-    try {
-      await api.markNotificationAsRead(id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-      );
-    } catch (e) {
-      console.warn('Error al marcar notificacion como leida:', e);
-      // Fallback local
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-      );
-    }
-  };
-
-  const markAllNotificationsAsRead = async () => {
-    try {
-      await api.markAllNotificationsAsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    } catch (e) {
-      console.warn('Error al marcar todas como leidas:', e);
-      // Fallback local
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    }
+  const markAllNotificationsAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
   const addNotification = (notif: Omit<NotificationItem, 'id' | 'createdAt' | 'isRead'>) => {
@@ -2090,7 +1693,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         currentUser,
-        isAuthLoading,
         users,
         pois,
         schedules,
@@ -2125,7 +1727,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateTranslation,
         addPOI,
         updatePOI,
-        refreshPois,
         loadSchedulesForPoi,
         saveSchedules,
         addCategory,
@@ -2134,7 +1735,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addValidationState,
         updateValidationState,
         deleteValidationState,
-        loadValidationStates,
         etiquetas,
         loadEtiquetas,
         addEtiqueta,
@@ -2151,7 +1751,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteService,
         toggleServiceAvailability,
         notifications,
-        loadNotifications,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         addNotification,

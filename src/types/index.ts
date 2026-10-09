@@ -138,14 +138,12 @@ export interface GeneralParams {
 
 export interface Integration {
   id: string;
-  nombre: string;
-  proveedor: string;
-  urlBase: string | null;
-  limiteConsumo: number | null;
-  habilitada: boolean;
-  estadoConexion: string;
-  ultimaPruebaConexion: string | null;
-  ultimoError: string | null;
+  name: string;
+  description: string;
+  enabled: boolean;
+  type: 'maps' | 'weather';
+  apiUrl?: string;
+  apiKey?: string;
 }
 
 export interface Category {
