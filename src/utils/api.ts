@@ -2,7 +2,7 @@ import { ENV } from '../config/env';
 
 async function request<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT' = 'GET',
   body?: any,
   customHeaders: Record<string, string> = {}
 ): Promise<T> {
@@ -17,11 +17,24 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${ENV.API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    response = await fetch(`${ENV.API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Tiempo de espera agotado al conectar con el servidor.');
+    }
+    throw new Error('No se pudo conectar con el servidor backend.');
+  }
 
   if (!response.ok) {
     let errorMessage = `Error HTTP: ${response.status}`;
@@ -50,15 +63,16 @@ export const api = {
   login: (body: any) => request<any>('/auth/login', 'POST', body),
   logout: (body?: any) => request<any>('/auth/logout', 'POST', body),
   registerPrestador: (body: any) => request<any>('/auth/register/prestador', 'POST', body),
-  getProfile: () => request<any>('/user/profile', 'GET'),
-
-  // Password Recovery (US-ACC-03)
+  getProfile: () => request<any>('/auth/profile', 'GET'),
   requestPasswordRecovery: (email: string) =>
-    request<any>('/auth/password-recovery/request', 'POST', { email }),
-  validateRecoveryToken: (token: string) =>
-    request<any>(`/auth/password-recovery/validate?token=${encodeURIComponent(token)}`, 'GET'),
-  resetPassword: (body: { token: string; newPassword: string; confirmPassword: string }) =>
-    request<any>('/auth/password-recovery/reset', 'POST', body),
+    request<{ message: string }>('/auth/password-recovery/request', 'POST', { email }),
+  validatePasswordRecoveryToken: (token: string) =>
+    request<{ valid: boolean; message: string }>(
+      `/auth/password-recovery/validate?token=${encodeURIComponent(token)}`,
+      'GET',
+    ),
+  resetPasswordWithToken: (body: { token: string; passwordNueva: string; confirmPassword: string }) =>
+    request<{ message: string }>('/auth/password-recovery/reset', 'POST', body),
 
   // Users & Profiles
   getUsers: (params?: { search?: string; rol?: string }) => {
@@ -87,10 +101,11 @@ export const api = {
     request<any>(`/poi/${id}/estado?estado=${encodeURIComponent(estado)}`, 'PATCH'),
 
   // Admin POI Revision (US-CYN-05, US-GIT-07)
-  getAdminRevisionPois: (params?: { estado?: string; estadoId?: string; fuente?: string; search?: string; page?: number; limit?: number }) => {
+  getAdminRevisionPois: (params?: { estado?: string; estadoId?: string; incluirTodos?: string | boolean; fuente?: string; search?: string; page?: number; limit?: number }) => {
     const qs = new URLSearchParams();
     if (params?.estadoId) qs.set('estadoId', params.estadoId);
     if (params?.estado) qs.set('estado', params.estado);
+    if (params?.incluirTodos !== undefined) qs.set('incluirTodos', String(params.incluirTodos));
     if (params?.fuente) qs.set('fuente', params.fuente);
     if (params?.search) qs.set('search', params.search);
     if (params?.page) qs.set('page', String(params.page));
@@ -98,6 +113,7 @@ export const api = {
     const queryString = qs.toString();
     return request<any>(`/poi/admin/revision${queryString ? `?${queryString}` : ''}`, 'GET');
   },
+  getAllPublicPois: () => request<any[]>('/poi', 'GET'),
   getAdminPoiRevisionDetail: (id: string) =>
     request<any>(`/poi/admin/revision/${id}`, 'GET'),
   aprobarPoi: (id: string) =>
@@ -115,8 +131,8 @@ export const api = {
 
   // POI Categories (Admin)
   getCategories: () => request<any[]>('/poi/categorias/all', 'GET'),
-  createCategory: (nombre: string) => request<any>('/poi/categorias', 'POST', { nombre }),
-  updateCategory: (id: string, nombre: string) => request<any>(`/poi/categorias/${id}`, 'PATCH', { nombre }),
+  createCategory: (data: { nombre: string; descripcion?: string; activa?: boolean }) => request<any>('/poi/categorias', 'POST', data),
+  updateCategory: (id: string, data: { nombre?: string; descripcion?: string; activa?: boolean }) => request<any>(`/poi/categorias/${id}`, 'PATCH', data),
   toggleCategoryActiva: (id: string, activa: boolean) =>
     request<any>(`/poi/categorias/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteCategory: (id: string) => request<any>(`/poi/categorias/${id}`, 'DELETE'),
@@ -129,6 +145,15 @@ export const api = {
   toggleEtiquetaActiva: (id: string, activa: boolean) =>
     request<any>(`/poi/etiquetas/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteEtiqueta: (id: string) => request<any>(`/poi/etiquetas/${id}`, 'DELETE'),
+
+  // Validation States (Admin - US-CYP-04)
+  getValidationStates: (soloActivos?: boolean) =>
+    request<any[]>(`/admin/estados-validacion${soloActivos ? '?soloActivos=true' : ''}`, 'GET'),
+  createValidationState: (body: any) => request<any>('/admin/estados-validacion', 'POST', body),
+  updateValidationState: (id: string, body: any) => request<any>(`/admin/estados-validacion/${id}`, 'PATCH', body),
+  toggleValidationState: (id: string, activa: boolean) =>
+    request<any>(`/admin/estados-validacion/${id}/estado?activa=${activa}`, 'PATCH'),
+  deleteValidationState: (id: string) => request<any>(`/admin/estados-validacion/${id}`, 'DELETE'),
 
   // Ubicaciones (Regiones, Departamentos, Zonas - US-CYN-02)
   getRegiones: (includeAll?: boolean) =>
@@ -185,26 +210,64 @@ export const api = {
   // Servicios (Catálogo y Negocios - US-CYN-03)
   getCatalogoServicios: (soloActivos?: boolean) =>
     request<any>(`/poi/servicios/catalogo${soloActivos ? '?soloActivos=true' : ''}`, 'GET'),
-  getServiciosByPoi: (poiId: string) =>
-    request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'GET'),
+  getServiciosByPoi: async (poiId: string) => {
+    try {
+      return await request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'GET');
+    } catch {
+      return await request<any>(`/poi/${poiId}/servicios`, 'GET');
+    }
+  },
   createServicioPoi: (poiId: string, body: any) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'POST', body),
   updateServicioPoi: (poiId: string, servicioId: string, body: any) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}`, 'PATCH', body),
   toggleEstadoServicioPoi: (poiId: string, servicioId: string, activo: boolean) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}/estado`, 'PATCH', { activo }),
+  deleteServicioPoi: (poiId: string, servicioId: string) =>
+    request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}`, 'DELETE'),
 
-  // Reportes y Soporte (US-CYN-08, US-AYS-05)
+  // Reportes y Soporte (US-CYN-08, US-AYS-03, US-AYS-05)
   createReporteContenido: (body: {
     poiId?: string;
     reviewId?: string;
     motivo: string;
     descripcion?: string;
   }) => request<any>('/reportes', 'POST', body),
+  createConsultaSoporte: (body: { asunto: string; descripcion: string; evidencia?: string }) => 
+    request<any>('/soporte/consultas', 'POST', body),
+  createReporteError: (body: { asunto: string; descripcion: string; evidencias?: string[] }) =>
+    request<any>('/soporte/reportes-error', 'POST', body),
 
   // Storage / Cloudflare R2 Uploads
   getPresignedUrl: (fileName: string, contentType: string) =>
     request<{ uploadUrl: string; key: string }>('/storage/presigned-url', 'POST', { fileName, contentType }),
+
+  // Parámetros Generales (US-CYP-01)
+  getParametrosGenerales: () => request<any[]>('/parametros', 'GET'),
+  updateParametro: (identifier: string, valor: string) =>
+    request<any>(`/parametros/${identifier}`, 'PATCH', { valor }),
+  resetParametro: (identifier: string) => request<any>(`/parametros/${identifier}/reset`, 'POST'),
+
+  // Integraciones (US-CYP-07)
+  getIntegraciones: () => request<any[]>('/integraciones', 'GET'),
+  updateIntegracion: (id: string, body: any) =>
+    request<any>(`/integraciones/${id}`, 'PATCH', body),
+  toggleIntegracion: (id: string, habilitada: boolean) =>
+    request<any>(`/integraciones/${id}/estado`, 'PATCH', { habilitada }),
+  testIntegracion: (id: string, confirmarConsumo?: boolean) =>
+    request<any>(`/integraciones/${id}/prueba-conexion`, 'POST', { confirmarConsumo }),
+
+  // Notifications (US-NYA-04, 05, 07)
+  getNotifications: () => request<any[]>('/notifications', 'GET'),
+  getUnreadNotificationsCount: () => request<number>('/notifications/unread-count', 'GET'),
+  markNotificationAsRead: (id: string) => request<any>(`/notifications/${id}/read`, 'PATCH'),
+  markAllNotificationsAsRead: () => request<any>('/notifications/read-all', 'PATCH'),
+  getNotificationPreferences: () => request<any>('/notifications/preferences', 'GET'),
+  updateNotificationPreferences: (preferencias: any[]) => request<any>('/notifications/preferences', 'PUT', { preferencias }),
+  
+  // Platform Updates (US-NYA-06)
+  publishPlatformUpdate: (body: { titulo: string; mensaje: string; urlAccion?: string }) =>
+    request<any>('/notifications/platform-update', 'POST', body),
 };
 
 /**
