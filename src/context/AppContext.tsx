@@ -101,6 +101,7 @@ interface AppContextProps {
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   addNotification: (notification: Omit<NotificationItem, 'id' | 'createdAt' | 'isRead'>) => void;
+  completeOnboarding: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
@@ -298,6 +299,7 @@ function mapBackendUser(u: any): User {
     businessName: orgNombre,
     cuit: orgCuit,
     status: calculatedStatus,
+    onboardingCompletado: u.onboardingCompletado ?? false,
   };
 }
 
@@ -586,6 +588,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             cuit: cuit || undefined,
             phone: phone || undefined,
             status: 'active',
+            onboardingCompletado: profile?.onboardingCompletado ?? false,
           };
 
           setCurrentUser(loggedUser);
@@ -671,6 +674,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           cuit: cuit || undefined,
           phone: phone || undefined,
           status: 'active',
+          onboardingCompletado: data.user?.onboardingCompletado ?? false,
         };
         
         setCurrentUser(loggedUser);
@@ -698,6 +702,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('ando_real_pois');
       localStorage.removeItem('selectedProviderPoiId');
       localStorage.removeItem('ando_estado_aprobado_id');
+      sessionStorage.removeItem('ando_ryi_global_filters');
     }
     setCurrentUser(null);
     setIsAuthLoading(false);
@@ -1860,6 +1865,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const completeOnboarding = async () => {
+    try {
+      await api.completeOnboarding();
+    } catch (e) {
+      console.warn('No se pudo marcar onboarding en backend:', e);
+    }
+    if (currentUser) {
+      const updated = { ...currentUser, onboardingCompletado: true };
+      setCurrentUser(updated);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ando_user', JSON.stringify(updated));
+        localStorage.setItem(`ando_onboarding_completed_${currentUser.id}`, 'true');
+      }
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1927,6 +1948,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         markNotificationAsRead,
         markAllNotificationsAsRead,
         addNotification,
+        completeOnboarding,
       }}
     >
       {children}

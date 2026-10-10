@@ -11,13 +11,47 @@ import {
   AlertTriangle, 
   Info, 
   X, 
-  ExternalLink 
+  ExternalLink,
+  Download
 } from 'lucide-react';
 import Link from 'next/link';
+import { descargarEnlaceExportacion, getEnlacesExportacion } from '@/utils/exportDownloads';
+
+const PREFIJO_DESCARGA = '#download-report:';
 
 export default function NotificationCenter() {
-  const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useApp();
+  const { notifications, markNotificationAsRead, markAllNotificationsAsRead, currentUser } = useApp();
   const [isOpen, setIsOpen] = useState(false);
+  const [descargandoId, setDescargandoId] = useState<string | null>(null);
+  const [avisoDescarga, setAvisoDescarga] = useState<Record<string, string>>({});
+
+  // Descarga del archivo de una exportación generada en segundo plano (US-RYI-05)
+  const handleDescargarExportacion = async (notifId: string, actionUrl: string) => {
+    if (descargandoId) return;
+    const token = actionUrl.replace(PREFIJO_DESCARGA, '');
+    const enlace = getEnlacesExportacion(currentUser?.id).find((e) => e.token === token);
+    const seccionReportes = currentUser?.role === 'admin' ? 'Reportes e Informes' : 'Reportes';
+
+    if (!enlace) {
+      setAvisoDescarga((prev) => ({
+        ...prev,
+        [notifId]: `Este enlace ya no está disponible. Generá una nueva exportación desde ${seccionReportes}.`,
+      }));
+      return;
+    }
+
+    setDescargandoId(notifId);
+    const resultado = await descargarEnlaceExportacion(enlace);
+    setDescargandoId(null);
+
+    const mensaje =
+      resultado.estado === 'descargado'
+        ? 'La descarga comenzó.'
+        : resultado.estado === 'expirado'
+          ? `El enlace expiró (24 horas). Generá uno nuevo desde ${seccionReportes} > Exportar.`
+          : resultado.mensaje;
+    setAvisoDescarga((prev) => ({ ...prev, [notifId]: mensaje }));
+  };
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
@@ -120,13 +154,35 @@ export default function NotificationCenter() {
                     </div>
                     <p className="text-xs text-textDark/70 leading-relaxed line-clamp-2">{notif.message}</p>
                     {notif.actionUrl && (
-                      <Link
-                        href={notif.actionUrl}
-                        className="inline-flex items-center text-[11px] font-bold text-accentWine hover:underline pt-1"
-                      >
-                        <span>Ver detalles</span>
-                        <ExternalLink className="h-3 w-3 ml-1" />
-                      </Link>
+                      notif.actionUrl.startsWith(PREFIJO_DESCARGA) ? (
+                        <div className="pt-1 space-y-1">
+                          <button
+                            type="button"
+                            disabled={descargandoId !== null}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDescargarExportacion(notif.id, notif.actionUrl as string);
+                            }}
+                            className="inline-flex items-center text-[11px] font-bold text-accentWine hover:underline cursor-pointer disabled:opacity-50"
+                          >
+                            <Download className="h-3 w-3 mr-1" />
+                            <span>{descargandoId === notif.id ? 'Descargando...' : 'Descargar archivo'}</span>
+                          </button>
+                          {avisoDescarga[notif.id] && (
+                            <p className="text-[11px] text-textDark/70" role="status">
+                              {avisoDescarga[notif.id]}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <Link
+                          href={notif.actionUrl}
+                          className="inline-flex items-center text-[11px] font-bold text-accentWine hover:underline pt-1"
+                        >
+                          <span>Ver detalles</span>
+                          <ExternalLink className="h-3 w-3 ml-1" />
+                        </Link>
+                      )
                     )}
                   </div>
                 </div>
