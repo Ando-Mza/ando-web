@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   HelpCircle, 
   BookOpen, 
@@ -22,7 +24,8 @@ import {
   Layers,
   FileText,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Lock
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/utils/api';
@@ -34,8 +37,12 @@ export default function AdminHelpPage() {
   const { currentUser } = useApp();
   const isAdmin = currentUser?.role === 'admin';
 
-  // Navegación de pestañas principales
-  const [activeTab, setActiveTab] = useState<'consultas' | 'gestion'>('consultas');
+  // Navegación de pestañas principales: manual, consultas, gestion
+  const [activeTab, setActiveTab] = useState<'manual' | 'consultas' | 'gestion'>('manual');
+  const [manualContent, setManualContent] = useState('');
+  const [faqSearchQuery, setFaqSearchQuery] = useState('');
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [openManualIndex, setOpenManualIndex] = useState<number | null>(0);
 
   // Modales de herramientas existentes
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
@@ -119,6 +126,22 @@ export default function AdminHelpPage() {
       q: '¿Cómo se garantiza la trazabilidad y auditoría de eventos?',
       a: 'En la sección "Auditoría y Logs", el sistema registra automáticamente el timestamp, IP, administrador actor y detalle de cada decisión crítica. Los registros son de solo lectura y pueden exportarse para auditorías externas.',
     },
+    {
+      q: '¿Qué pasa si apruebo por error un negocio falso?',
+      a: 'Podés buscar el POI en el sistema, ingresar a su detalle y cambiar su estado manualmente a "Suspendido" o "Rechazado", lo que lo ocultará inmediatamente del mapa público.'
+    },
+    {
+      q: '¿Por qué hay reportes sin "Usuario reportante"?',
+      a: 'Son los reportes generados automáticamente por la Inteligencia Artificial de ANDO al detectar lenguaje inapropiado durante la publicación de una reseña.'
+    },
+    {
+      q: '¿La eliminación de usuarios borra sus datos de la base de datos?',
+      a: 'No. Por cuestiones de auditoría e integridad referencial, las eliminaciones son "lógicas". La cuenta se desactiva y se oculta su contenido, pero los registros persisten en la base de datos.'
+    },
+    {
+      q: '¿Puedo crear otro usuario Administrador?',
+      a: 'Sí. Desde el módulo de Administración de Usuarios, usando el botón "+ Nuevo Usuario" y asignándole el rol `Administrador`. Tienen los mismos privilegios que tu cuenta.'
+    }
   ];
 
   // Carga de datos desde Backend
@@ -427,6 +450,12 @@ export default function AdminHelpPage() {
       return true;
     });
   }, [articulos, selectedCategoriaFilter, selectedTipoFilter, searchFilter]);
+  useEffect(() => {
+    fetch('/manual/manual_usuario_ando_admin.md')
+      .then((r) => r.text())
+      .then((text) => setManualContent(text))
+      .catch(() => setManualContent('No se pudo cargar el manual del administrador.'));
+  }, []);
 
   return (
     <div className="space-y-8 font-wixText">
@@ -471,31 +500,44 @@ export default function AdminHelpPage() {
         </div>
       )}
 
-      {/* Pestañas de Navegación: Guía/FAQs vs Gestión Administrativa (US-AYS-06) */}
-      <div className="flex border-b border-black/10 gap-2">
+      {/* Pestañas de Navegación: Manual vs Guía/FAQs vs Gestión Administrativa (US-AYS-06) */}
+      <div className="flex border-b border-black/10 gap-2 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab('manual')}
+          className={`pb-3 px-4 font-wixDisplay text-sm font-bold border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer whitespace-nowrap ${
+            activeTab === 'manual'
+              ? 'border-accentWine text-accentWine'
+              : 'border-transparent text-textDark/60 hover:text-textDark'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          <span>Manual del Administrador</span>
+        </button>
         <button
           type="button"
           onClick={() => setActiveTab('consultas')}
-          className={`pb-3 px-4 font-wixDisplay text-sm font-bold border-b-2 transition-all cursor-pointer ${
+          className={`pb-3 px-4 font-wixDisplay text-sm font-bold border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer whitespace-nowrap ${
             activeTab === 'consultas'
               ? 'border-accentWine text-accentWine'
               : 'border-transparent text-textDark/60 hover:text-textDark'
           }`}
         >
-          Guía Rápida y Preguntas Frecuentes
+          <BookOpen className="h-4 w-4" />
+          <span>Guía Rápida y Preguntas Frecuentes</span>
         </button>
         {isAdmin && (
           <button
             type="button"
             onClick={() => setActiveTab('gestion')}
-            className={`pb-3 px-4 font-wixDisplay text-sm font-bold border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer ${
+            className={`pb-3 px-4 font-wixDisplay text-sm font-bold border-b-2 transition-all flex items-center space-x-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === 'gestion'
                 ? 'border-accentWine text-accentWine'
                 : 'border-transparent text-textDark/60 hover:text-textDark'
             }`}
           >
             <Settings className="h-4 w-4" />
-            <span>Gestión de Artículos y Categorías</span>
+            <span>Gestión de Artículos y Categorías (US-AYS-06)</span>
           </button>
         )}
       </div>
@@ -548,6 +590,64 @@ export default function AdminHelpPage() {
           </button>
         </div>
       </div>
+
+      {/* PESTAÑA: MANUAL DEL ADMINISTRADOR (MARKDOWN) */}
+      {activeTab === 'manual' && (
+        <div className="bg-white rounded-3xl border border-black/5 shadow-xs overflow-hidden p-6 sm:p-8 space-y-4 animate-fade-in">
+          {manualContent ? (() => {
+            const sections = manualContent.split(/(?=^## )/m);
+            const accordionSections = sections.slice(1);
+
+            return (
+              <div className="divide-y divide-black/5">
+                {accordionSections.map((section, idx) => {
+                  const isOpen = openManualIndex === idx;
+                  const lines = section.trim().split('\n');
+                  const title = lines[0].replace(/^##\s+/, '').replace(/^[\d.]+\s*/, '');
+                  const content = lines.slice(1).join('\n');
+
+                  return (
+                    <div key={idx} className="py-4">
+                      <button
+                        onClick={() => setOpenManualIndex(isOpen ? null : idx)}
+                        className="w-full flex items-center justify-between text-left gap-4 cursor-pointer focus:outline-none group"
+                      >
+                        <span className="text-sm sm:text-base font-bold text-textDark group-hover:text-accentWine transition-colors">
+                          {title}
+                        </span>
+                        {isOpen ? (
+                          <ChevronUp className="h-5 w-5 text-accentWine flex-shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 text-textDark/40 flex-shrink-0 group-hover:text-accentWine transition-colors" />
+                        )}
+                      </button>
+                      {isOpen && (
+                        <div className="mt-4 prose prose-sm max-w-none bg-bgPrimary/30 p-4 sm:p-6 rounded-2xl border border-black/5 animate-fade-in
+                          [&_h2]:text-xl [&_h2]:font-wixDisplay [&_h2]:font-bold [&_h2]:text-accentWine [&_h2]:mt-8 [&_h2]:mb-4
+                          [&_h3]:text-lg [&_h3]:font-wixDisplay [&_h3]:font-bold [&_h3]:text-textDark [&_h3]:mt-6 [&_h3]:mb-3
+                          [&_p]:text-sm [&_p]:text-textDark/80 [&_p]:leading-relaxed [&_p]:mb-4
+                          [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ul_li]:text-sm [&_ul_li]:text-textDark/80 [&_ul_li]:mb-1
+                          [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_ol_li]:text-sm [&_ol_li]:text-textDark/80 [&_ol_li]:mb-1
+                          [&_img]:rounded-xl [&_img]:shadow-md [&_img]:max-w-full [&_img]:my-6 [&_img]:mx-auto
+                          [&_a]:text-accentWine [&_a]:font-bold [&_a]:underline [&_a:hover]:text-accentWine/80
+                          [&_table]:w-full [&_table]:mb-6 [&_table]:border-collapse [&_th]:bg-black/5 [&_th]:p-3 [&_th]:text-left [&_th]:text-xs [&_th]:font-bold [&_td]:p-3 [&_td]:border-b [&_td]:border-black/5 [&_td]:text-xs [&_td]:text-textDark/80
+                          [&_blockquote]:border-l-4 [&_blockquote]:border-accentWine [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:bg-accentWine/5 [&_blockquote]:p-3 [&_blockquote]:rounded-r-xl [&_blockquote]:my-4"
+                        >
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })() : (
+            <div className="py-8 text-center text-textDark/50 text-xs">Cargando manual...</div>
+          )}
+        </div>
+      )}
 
       {/* PESTAÑA 1: VISTA DE GUÍAS Y FAQS */}
       {activeTab === 'consultas' && (
@@ -1065,6 +1165,7 @@ export default function AdminHelpPage() {
               </div>
             </form>
           </div>
+
         </div>
       )}
 
