@@ -259,7 +259,7 @@ export const api = {
   createConsultaSoporte: (body: { asunto: string; descripcion: string; evidencia?: string }) => 
     request<any>('/soporte/consultas', 'POST', body),
   createReporteError: (body: { asunto: string; descripcion: string; evidencias?: string[] }) =>
-    request<any>('/soporte/reportes-error', 'POST', body),
+    request<{ id: string; mensaje: string }>('/soporte/reportes-error', 'POST', body),
 
   // Módulo de Reportes e Informes (US-RYI-01, US-RYI-06)
   getReportePoisMasVisitados: (params?: {
@@ -466,8 +466,6 @@ export const api = {
   // Soporte y Onboarding (US-AYS-04 & US-AYS-05)
   completeOnboarding: () =>
     request<{ onboardingCompletado: boolean }>('/user/profile/onboarding', 'PATCH'),
-  createReporteError: (body: { asunto: string; descripcion: string; evidencias?: string[] }) =>
-    request<{ id: string; mensaje: string }>('/soporte/reportes-error', 'POST', body),
 
   // Ayuda y Soporte — Gestión de Contenidos (US-AYS-01 & US-AYS-06)
   getAyudaCategorias: () =>

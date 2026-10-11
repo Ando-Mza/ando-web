@@ -55,7 +55,6 @@ export default function AdminHelpPage() {
   const [dataError, setDataError] = useState<string | null>(null);
 
   // Estados de visualización y filtrado
-  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [selectedCategoriaFilter, setSelectedCategoriaFilter] = useState<string>('all');
   const [selectedTipoFilter, setSelectedTipoFilter] = useState<string>('all');
