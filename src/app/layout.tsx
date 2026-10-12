@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Unbounded, Wix_Madefor_Display, Wix_Madefor_Text } from "next/font/google";
 import { AppProvider } from "@/context/AppContext";
+import FlashMessage from "@/components/common/FlashMessage";
 import "./globals.css";
 
 const unbounded = Unbounded({
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-wixText bg-bgPrimary text-textDark">
         <AppProvider>
           {children}
+          <FlashMessage />
         </AppProvider>
       </body>
     </html>

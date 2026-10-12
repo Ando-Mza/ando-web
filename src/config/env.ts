@@ -8,7 +8,7 @@ export const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined' && window.location?.hostname) {
     return `http://${window.location.hostname}:3000`;
   }
-  return 'http://localhost:3000';
+  return 'http://127.0.0.1:3000';
 };
 
 export const ENV = {

@@ -32,7 +32,12 @@ import {
   Globe,
   DollarSign,
   Users,
-  AlertOctagon
+  AlertOctagon,
+  Upload,
+  Plus,
+  Trash2,
+  Image as ImageIcon,
+  Link as LinkIcon
 } from 'lucide-react';
 
 const InstagramIcon = ({ className }: { className?: string }) => (
@@ -44,6 +49,7 @@ const InstagramIcon = ({ className }: { className?: string }) => (
 );
 
 import { ADMIN_REJECT_PRESETS, ADMIN_CORRECTION_PRESETS } from '@/config/constants';
+import { uploadFileToR2 } from '@/utils/api';
 
 export default function ContentValidation() {
   const { 
@@ -59,6 +65,7 @@ export default function ContentValidation() {
     refreshPois,
     services,
     loadServicesForPoi,
+    updatePOI,
   } = useApp();
 
   useEffect(() => {
@@ -75,6 +82,259 @@ export default function ContentValidation() {
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
 
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
+
+  // ----------------------------------------------------
+  // US-GIT-06: Gestión de Multimedia como Administrador
+  // ----------------------------------------------------
+  interface ImageSlot {
+    id: string;
+    type: 'file' | 'url';
+    file: File | null;
+    url: string;
+    error?: string;
+    previewUrl?: string;
+  }
+
+  const [showUploadMediaModal, setShowUploadMediaModal] = useState(false);
+  const [targetPoiForMedia, setTargetPoiForMedia] = useState<POI | null>(null);
+  const [imageSlots, setImageSlots] = useState<ImageSlot[]>([
+    { id: 'slot-1', type: 'file', file: null, url: '' }
+  ]);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+
+  const openUploadMediaModal = (poi: POI) => {
+    setTargetPoiForMedia(poi);
+    setImageSlots([{ id: `slot-${Date.now()}-1`, type: 'file', file: null, url: '' }]);
+    setShowUploadMediaModal(true);
+  };
+
+  const handleAddSlot = () => {
+    setImageSlots((prev) => [
+      ...prev,
+      { id: `slot-${Date.now()}-${prev.length + 1}`, type: 'file', file: null, url: '' }
+    ]);
+  };
+
+  const handleRemoveSlot = (id: string) => {
+    setImageSlots((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleSlotTypeChange = (id: string, type: 'file' | 'url') => {
+    setImageSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        return {
+          ...s,
+          type,
+          error: undefined,
+        };
+      })
+    );
+  };
+
+  const handleSlotFileChange = (id: string, file: File | null) => {
+    setImageSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        let error: string | undefined = undefined;
+        let previewUrl: string | undefined = undefined;
+
+        if (file) {
+          const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg|avif)$/i.test(file.name);
+          if (!isImage) {
+            error = 'El formato del archivo no es válido';
+          } else {
+            previewUrl = URL.createObjectURL(file);
+          }
+        }
+        return { ...s, file, previewUrl, error };
+      })
+    );
+  };
+
+  const handleSlotUrlChange = (id: string, url: string) => {
+    setImageSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        return { ...s, url, error: undefined };
+      })
+    );
+  };
+
+  const isImageUrlAccessible = (url: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+        resolve(false);
+        return;
+      }
+      const img = new Image();
+      let done = false;
+
+      const timer = setTimeout(() => {
+        if (!done) {
+          done = true;
+          img.src = '';
+          resolve(false);
+        }
+      }, 6000);
+
+      img.onload = () => {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          resolve(true);
+        }
+      };
+      img.onerror = () => {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          resolve(false);
+        }
+      };
+      img.src = url;
+    });
+  };
+
+  const handleSaveMedia = async () => {
+    if (!targetPoiForMedia) return;
+
+    let hasErrors = false;
+    const updatedSlots = [...imageSlots];
+
+    // Phase 1: Validate each slot
+    for (let i = 0; i < updatedSlots.length; i++) {
+      const slot = updatedSlots[i];
+      const hasFile = !!slot.file;
+      const hasUrl = !!slot.url.trim();
+
+      // Regla: El Administrador intenta proporcionar simultáneamente un archivo y una URL para la misma imagen
+      if (hasFile && hasUrl) {
+        updatedSlots[i] = {
+          ...slot,
+          error: 'Debe seleccionar únicamente uno de los dos mecanismos de carga',
+        };
+        hasErrors = true;
+        continue;
+      }
+
+      // Regla: El Administrador no selecciona un archivo ni ingresa una URL para una imagen
+      if (!hasFile && !hasUrl) {
+        updatedSlots[i] = {
+          ...slot,
+          error: 'Debe seleccionar una imagen o ingresar una URL',
+        };
+        hasErrors = true;
+        continue;
+      }
+
+      // Regla: Archivo seleccionado pero con formato inválido
+      if (hasFile && slot.file) {
+        const isImage = slot.file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg|avif)$/i.test(slot.file.name);
+        if (!isImage) {
+          updatedSlots[i] = {
+            ...slot,
+            error: 'El formato del archivo no es válido',
+          };
+          hasErrors = true;
+          continue;
+        }
+      }
+
+      // Regla: URL ingresada
+      if (hasUrl) {
+        const rawUrl = slot.url.trim();
+        let validFormat = false;
+        try {
+          const parsed = new URL(rawUrl);
+          validFormat = parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+          validFormat = false;
+        }
+
+        if (!validFormat) {
+          updatedSlots[i] = {
+            ...slot,
+            error: 'La URL ingresada no tiene un formato válido',
+          };
+          hasErrors = true;
+          continue;
+        }
+
+        // Validar que sea accesible públicamente y sea una imagen
+        const isAccessible = await isImageUrlAccessible(rawUrl);
+        if (!isAccessible) {
+          updatedSlots[i] = {
+            ...slot,
+            error: 'No fue posible acceder a la imagen. Verificá que la URL sea pública y esté disponible',
+          };
+          hasErrors = true;
+          continue;
+        }
+      }
+    }
+
+    setImageSlots(updatedSlots);
+
+    if (hasErrors) {
+      return;
+    }
+
+    // Phase 2: Upload files and save
+    setIsUploadingMedia(true);
+    const newUrls: string[] = [];
+
+    try {
+      for (let i = 0; i < updatedSlots.length; i++) {
+        const slot = updatedSlots[i];
+        if (slot.file) {
+          try {
+            const uploadedUrl = await uploadFileToR2(slot.file);
+            if (!uploadedUrl) {
+              throw new Error('Upload returned empty URL');
+            }
+            newUrls.push(uploadedUrl);
+          } catch (uploadErr) {
+            console.error('Error uploading file to R2:', uploadErr);
+            updatedSlots[i] = {
+              ...slot,
+              error: 'No fue posible cargar la imagen',
+            };
+            setImageSlots([...updatedSlots]);
+            triggerToast('No fue posible cargar la imagen');
+            setIsUploadingMedia(false);
+            return;
+          }
+        } else if (slot.url.trim()) {
+          newUrls.push(slot.url.trim());
+        }
+      }
+
+      const existingImages = targetPoiForMedia.images || [];
+      const updatedImages = [...existingImages, ...newUrls];
+
+      const res = await updatePOI({
+        ...targetPoiForMedia,
+        images: updatedImages,
+      });
+
+      if (res.success) {
+        triggerToast('Las imágenes se asociaron correctamente al POI.');
+        if (selectedPoi && selectedPoi.id === targetPoiForMedia.id) {
+          setSelectedPoi((prev) => prev ? { ...prev, images: updatedImages } : null);
+        }
+        setShowUploadMediaModal(false);
+        setTargetPoiForMedia(null);
+      } else {
+        triggerToast(res.error || 'No fue posible actualizar las imágenes del POI.');
+      }
+    } catch (err: any) {
+      console.error('Error al guardar imágenes:', err);
+      triggerToast('No fue posible cargar la imagen');
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedPoi?.id) {
@@ -654,6 +914,14 @@ export default function ContentValidation() {
                     </button>
 
                     <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={() => openUploadMediaModal(poi)}
+                        className="px-2.5 py-2 bg-accentWine/10 hover:bg-accentWine hover:text-white text-accentWine font-bold rounded-xl text-xs border border-accentWine/20 transition-colors inline-flex items-center space-x-1 cursor-pointer"
+                        title="Cargar imágenes al POI"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        <span>Imágenes</span>
+                      </button>
                       {poi.status !== 'approved' && (
                         <button
                           onClick={() => openApproveModal(poi)}
@@ -754,6 +1022,13 @@ export default function ContentValidation() {
                               title="Ver ficha completa"
                             >
                               <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => openUploadMediaModal(poi)}
+                              className="p-1.5 bg-accentWine/10 hover:bg-accentWine hover:text-white text-accentWine rounded-lg border border-accentWine/20 transition-colors cursor-pointer"
+                              title="Cargar imágenes al POI"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
                             </button>
                             {poi.status !== 'approved' && (
                               <button
@@ -1107,9 +1382,19 @@ export default function ContentValidation() {
             <div className="p-6 space-y-6">
               {/* Cover & Gallery */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-textDark/70 uppercase tracking-wider">
-                  Galería de imágenes ({selectedPoi.images.length})
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-textDark/70 uppercase tracking-wider">
+                    Galería de imágenes ({selectedPoi.images.length})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => openUploadMediaModal(selectedPoi)}
+                    className="px-3 py-1.5 bg-accentWine hover:bg-accentWine/90 text-white font-bold rounded-xl text-xs transition-colors inline-flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Cargar imágenes al POI</span>
+                  </button>
+                </div>
                 {selectedPoi.images.length === 0 ? (
                   <div className="p-6 bg-bgPrimary rounded-2xl border border-black/5 text-center text-xs text-textDark/50">
                     No se han cargado imágenes para este punto de interés.
@@ -1695,6 +1980,192 @@ export default function ContentValidation() {
                 className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
               >
                 Confirmar Rechazo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== MODAL: CARGAR IMÁGENES AL POI (US-GIT-06) ==================== */}
+      {showUploadMediaModal && targetPoiForMedia && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-black/5 animate-scale-up p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-black/5 pb-4">
+              <div>
+                <h4 className="font-wixDisplay text-lg font-bold text-textDark">Cargar imágenes al POI</h4>
+                <p className="text-xs text-textDark/60 truncate">
+                  Punto de interés: <strong>{targetPoiForMedia.name}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isUploadingMedia) {
+                    setShowUploadMediaModal(false);
+                    setTargetPoiForMedia(null);
+                  }
+                }}
+                className="p-1.5 rounded-lg hover:bg-black/5 text-textDark/60 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
+              Podés incorporar una o varias imágenes. Para cada una podés seleccionar un archivo desde tu dispositivo o ingresar una URL pública de fuente externa.
+            </div>
+
+            {/* Slots List */}
+            <div className="space-y-4">
+              {imageSlots.map((slot, idx) => (
+                <div key={slot.id} className="p-4 bg-bgPrimary/50 border border-black/10 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-textDark/70 uppercase tracking-wider">
+                      Imagen #{idx + 1}
+                    </span>
+                    {imageSlots.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSlot(slot.id)}
+                        className="text-xs text-red-600 hover:text-red-800 font-semibold flex items-center space-x-1 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Quitar</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Mode selector */}
+                  <div className="flex items-center space-x-2 border-b border-black/5 pb-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSlotTypeChange(slot.id, 'file')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                        slot.type === 'file'
+                          ? 'bg-accentWine text-white shadow-xs'
+                          : 'bg-white text-textDark/70 hover:bg-black/5 border border-black/10'
+                      }`}
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      <span>Archivo local</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSlotTypeChange(slot.id, 'url')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                        slot.type === 'url'
+                          ? 'bg-accentWine text-white shadow-xs'
+                          : 'bg-white text-textDark/70 hover:bg-black/5 border border-black/10'
+                      }`}
+                    >
+                      <LinkIcon className="h-3.5 w-3.5" />
+                      <span>URL externa</span>
+                    </button>
+                  </div>
+
+                  {/* Input area according to selected mechanism */}
+                  {slot.type === 'file' ? (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-textDark/80">
+                        Seleccionar archivo desde el dispositivo
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          handleSlotFileChange(slot.id, file);
+                        }}
+                        className="block w-full text-xs text-textDark file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-accentWine/10 file:text-accentWine hover:file:bg-accentWine/20 cursor-pointer"
+                      />
+                      {slot.previewUrl && (
+                        <div className="mt-2 relative h-28 w-44 rounded-xl overflow-hidden border border-black/10">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={slot.previewUrl} alt="Vista previa" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-textDark/80">
+                        Ingresar URL pública de la imagen
+                      </label>
+                      <input
+                        type="url"
+                        value={slot.url}
+                        onChange={(e) => handleSlotUrlChange(slot.id, e.target.value)}
+                        placeholder="https://ejemplo.com/imagen-atractivo.jpg"
+                        className="w-full p-2.5 rounded-xl border border-black/15 text-xs focus:outline-none focus:ring-2 focus:ring-accentWine bg-white"
+                      />
+                      {slot.url.trim() && (
+                        <div className="mt-2 relative h-28 w-44 rounded-xl overflow-hidden border border-black/10 bg-white">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={slot.url.trim()}
+                            alt="Vista previa URL"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Inline Error Message */}
+                  {slot.error && (
+                    <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-600 flex items-center space-x-1.5">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <span>{slot.error}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Add More Slots Button */}
+            <button
+              type="button"
+              onClick={handleAddSlot}
+              className="w-full py-2.5 border-2 border-dashed border-accentWine/30 hover:border-accentWine text-accentWine font-bold text-xs rounded-2xl transition-colors flex items-center justify-center space-x-1.5 cursor-pointer bg-accentWine/5"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Agregar otra imagen</span>
+            </button>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-black/5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isUploadingMedia) {
+                    setShowUploadMediaModal(false);
+                    setTargetPoiForMedia(null);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-textDark/70 hover:bg-black/5 rounded-xl transition-colors cursor-pointer"
+                disabled={isUploadingMedia}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveMedia}
+                disabled={isUploadingMedia}
+                className="px-5 py-2.5 bg-accentWine hover:bg-accentWine/90 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-2 cursor-pointer disabled:opacity-50"
+              >
+                {isUploadingMedia ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Guardando imágenes...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    <span>Guardar</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

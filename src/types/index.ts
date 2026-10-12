@@ -12,6 +12,7 @@ export interface User {
   cuit?: string;         // Opcional para prestadores
   password?: string;     // Para simulaciones de login/reset
   status?: 'active' | 'pending' | 'inactive'; // Estado de la cuenta
+  onboardingCompletado?: boolean; // US-AYS-04
 }
 
 export type POIStatus = 'pending' | 'approved' | 'rejected' | 'correction';
@@ -138,12 +139,14 @@ export interface GeneralParams {
 
 export interface Integration {
   id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  type: 'maps' | 'weather';
-  apiUrl?: string;
-  apiKey?: string;
+  nombre: string;
+  proveedor: string;
+  urlBase: string | null;
+  limiteConsumo: number | null;
+  habilitada: boolean;
+  estadoConexion: string;
+  ultimaPruebaConexion: string | null;
+  ultimoError: string | null;
 }
 
 export interface Category {
@@ -227,5 +230,33 @@ export interface ValidationState {
   enabled: boolean;
   allowedTransitions: string[]; // IDs de estados destinos válidos
 }
+
+export type AyudaArticuloTipo = 'MANUAL' | 'FAQ';
+
+export interface AyudaCategoria {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  activo: boolean;
+  /** Solo en el listado de gestión del Administrador */
+  cantidadArticulos?: number;
+  fechaCreacion?: string;
+  fechaActualizacion?: string;
+}
+
+export interface AyudaArticulo {
+  id: string;
+  categoriaId: string;
+  categoria?: AyudaCategoria;
+  tipo: AyudaArticuloTipo;
+  titulo: string;
+  contenido: string;
+  palabrasClave: string[];
+  rolesPermitidos: string[];
+  activo: boolean;
+  fechaCreacion?: string;
+  fechaActualizacion?: string;
+}
+
 
 

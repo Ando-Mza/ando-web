@@ -13,10 +13,14 @@ import {
   User,
   Layers,
   MessageSquare,
-  HelpCircle
+  HelpCircle,
+  BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationCenter from '@/components/NotificationCenter';
+import OnboardingTutorialModal from '@/components/common/OnboardingTutorialModal';
+import ErrorReportModal from '@/components/common/ErrorReportModal';
+import { Sparkles, AlertTriangle } from 'lucide-react';
 
 export default function ProviderLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -26,10 +30,22 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isErrorReportOpen, setIsErrorReportOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted || isAuthLoading || !currentUser) return;
+    const localDone = typeof window !== 'undefined'
+      ? localStorage.getItem(`ando_onboarding_completed_${currentUser.id}`) === 'true'
+      : false;
+    if (!currentUser.onboardingCompletado && !localDone) {
+      setIsOnboardingOpen(true);
+    }
+  }, [mounted, isAuthLoading, currentUser]);
 
   useEffect(() => {
     if (!mounted || isAuthLoading) return;
@@ -86,6 +102,12 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       desc: 'Opiniones y respuestas'
     },
     {
+      name: 'Reportes y Métricas',
+      path: '/provider/reports',
+      icon: BarChart3,
+      desc: 'Desempeño y ranking'
+    },
+    {
       name: 'Mi Perfil y Cuenta',
       path: '/provider/profile',
       icon: User,
@@ -113,8 +135,8 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
         }`}
       >
         {/* Brand/Logo */}
-        <div className="flex h-16 items-center justify-between px-6 border-b border-black/5">
-          <Link href="/provider/dashboard" className="flex items-center space-x-2 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 rounded-lg">
+        <div className="flex h-24 items-center justify-between px-6 py-4 border-b border-black/5">
+          <Link href="/provider/dashboard" className="flex items-center space-x-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 rounded-lg">
             {isSidebarOpen ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src="/brand/logotipoColor1.svg" alt="ANDO" className="h-7 w-auto" />
@@ -190,7 +212,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
         }`}
       >
         {/* Top Header */}
-        <header className="flex h-16 items-center justify-between px-8 bg-white border-b border-black/5 sticky top-0 z-10">
+        <header className="flex h-24 items-center justify-between px-8 py-4 bg-white border-b border-black/5 sticky top-0 z-40">
           <div className="flex items-center">
             <h2 className="font-wixDisplay text-lg font-bold text-fillPrimary">
               {menuItems.find(item => item.path === pathname)?.name || 'Portal del prestador'}
@@ -198,13 +220,34 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           </div>
           
           {/* Header Actions */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             {currentUser.businessName && (
               <div className="hidden lg:flex items-center space-x-1.5 bg-fillPrimary/5 text-fillPrimary px-3 py-1 rounded-full text-xs font-semibold border border-fillPrimary/10">
                 <Store className="h-3.5 w-3.5" />
                 <span>{currentUser.businessName}</span>
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => setIsOnboardingOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-fillPrimary/20 bg-fillPrimary/5 text-fillPrimary hover:bg-fillPrimary/10 text-xs font-bold transition cursor-pointer"
+              title="Ver Tutorial de Onboarding"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Tutorial</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsErrorReportOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-xs font-bold transition cursor-pointer"
+              title="Reportar Error del Sistema"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+              <span className="hidden md:inline">Reportar Error</span>
+            </button>
+
             <NotificationCenter />
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
@@ -255,6 +298,19 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           </div>
         </div>
       )}
+
+      {/* Interactive Onboarding Tutorial (US-AYS-04) */}
+      <OnboardingTutorialModal
+        role="provider"
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+      />
+
+      {/* User Error Reporting Modal (US-AYS-05) */}
+      <ErrorReportModal
+        isOpen={isErrorReportOpen}
+        onClose={() => setIsErrorReportOpen(false)}
+      />
     </div>
   );
 }
