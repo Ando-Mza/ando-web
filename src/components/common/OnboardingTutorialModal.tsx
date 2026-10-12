@@ -19,6 +19,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import GuidedTour, { GuidedTourStop } from '@/components/common/GuidedTour';
 
 export interface OnboardingTutorialModalProps {
   role: 'admin' | 'provider';
@@ -26,6 +27,118 @@ export interface OnboardingTutorialModalProps {
   onClose: () => void;
   isFirstTime?: boolean;
 }
+
+// Recorrido en pantalla: qué se puede hacer en cada menú del panel (último tramo del tutorial)
+const ADMIN_TOUR: GuidedTourStop[] = [
+  {
+    target: '/admin/dashboard',
+    title: 'Dashboard',
+    text: 'Acá ves el resumen de la plataforma: indicadores de actividad, turistas y estado general del catálogo.',
+  },
+  {
+    target: '/admin/validation',
+    title: 'Catálogo y Validación',
+    text: 'Acá revisás los puntos de interés que cargan los prestadores y la comunidad: podés aprobarlos, rechazarlos o pedir correcciones.',
+  },
+  {
+    target: '/admin/users',
+    title: 'Gestión de Usuarios',
+    text: 'Acá administrás las cuentas: creás usuarios, cambiás su estado y das de baja prestadores o administradores.',
+  },
+  {
+    target: '/admin/reports',
+    title: 'Reportes e Informes',
+    text: 'Acá consultás los POIs más visitados, la actividad de usuarios, los negocios locales y el uso del asistente. Podés filtrar por período y exportar en PDF, Excel o CSV.',
+  },
+  {
+    target: '/admin/logs',
+    title: 'Auditoría y Logs',
+    text: 'Acá auditás lo que pasó en el sistema: acciones de usuarios, cambios en POIs, logins fallidos y errores, con filtros por fecha, tipo y usuario.',
+  },
+  {
+    target: '/admin/settings',
+    title: 'Configuración del Sistema',
+    text: 'Acá mantenés las categorías, etiquetas, estados de validación y parámetros generales de la plataforma.',
+  },
+  {
+    target: '/admin/help',
+    title: 'Centro de Ayuda',
+    text: 'Acá están el manual y las preguntas frecuentes. También cargás, editás o eliminás los artículos de ayuda que ven los usuarios.',
+  },
+  {
+    target: 'notifications',
+    title: 'Notificaciones',
+    text: 'Acá recibís los avisos del sistema, por ejemplo cuando una exportación grande está lista para descargar.',
+  },
+  {
+    target: 'tutorial',
+    title: 'Tutorial',
+    text: 'Con este botón podés volver a ver este tutorial cuando quieras.',
+  },
+  {
+    target: 'report-error',
+    title: 'Reportar un error',
+    text: 'Si algo no funciona como esperabas, reportalo desde acá y recibís un número de incidente para el seguimiento.',
+  },
+];
+
+const PROVIDER_TOUR: GuidedTourStop[] = [
+  {
+    target: '/provider/dashboard',
+    title: 'Dashboard',
+    text: 'Acá ves el resumen de tus negocios: visitas, reseñas y estado de tus publicaciones.',
+  },
+  {
+    target: '/provider/business',
+    title: 'Mis Negocios',
+    text: 'Acá cargás y editás tus negocios: fotos, descripción, ubicación y datos de contacto.',
+  },
+  {
+    target: '/provider/schedules',
+    title: 'Días y Horarios',
+    text: 'Acá definís los días y horarios de atención que ven los turistas.',
+  },
+  {
+    target: '/provider/services',
+    title: 'Servicios y Ofertas',
+    text: 'Acá administrás los servicios que ofrece cada negocio.',
+  },
+  {
+    target: '/provider/reviews',
+    title: 'Reseñas de Turistas',
+    text: 'Acá leés las reseñas que te dejaron y les respondés públicamente.',
+  },
+  {
+    target: '/provider/reports',
+    title: 'Reportes y Métricas',
+    text: 'Acá consultás el rendimiento de tus negocios: paradas planificadas, visitas, ranking de tu rubro, y podés exportarlo.',
+  },
+  {
+    target: '/provider/profile',
+    title: 'Mi Perfil y Cuenta',
+    text: 'Acá actualizás tus datos, tu contraseña y la información de tu cuenta.',
+  },
+  {
+    target: '/provider/help',
+    title: 'Centro de Ayuda',
+    text: 'Acá encontrás el manual, las preguntas frecuentes y el canal de contacto.',
+  },
+  {
+    target: 'notifications',
+    title: 'Notificaciones',
+    text: 'Acá recibís los avisos sobre tus negocios y tus exportaciones.',
+  },
+  {
+    target: 'tutorial',
+    title: 'Tutorial',
+    text: 'Con este botón podés volver a ver este tutorial cuando quieras.',
+  },
+  {
+    target: 'report-error',
+    title: 'Reportar un error',
+    text: 'Si algo no funciona como esperabas, reportalo desde acá.',
+  },
+];
 
 interface Step {
   title: string;
@@ -45,11 +158,14 @@ export default function OnboardingTutorialModal({
   const { completeOnboarding } = useApp();
   const [currentStep, setCurrentStep] = useState(0);
   const [isCompletedState, setIsCompletedState] = useState(false);
+  // Tras los pasos explicativos se recorre el panel real señalando cada menú
+  const [isTourActive, setIsTourActive] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(0);
       setIsCompletedState(false);
+      setIsTourActive(false);
     }
   }, [isOpen]);
 
@@ -188,7 +304,7 @@ export default function OnboardingTutorialModal({
 
   const handleNext = () => {
     if (isLastStep) {
-      setIsCompletedState(true);
+      setIsTourActive(true);
     } else {
       setCurrentStep((prev) => prev + 1);
     }
@@ -213,6 +329,23 @@ export default function OnboardingTutorialModal({
 
   const handleOmit = closeAndPersist;
   const handleFinish = closeAndPersist;
+
+  if (isTourActive) {
+    return (
+      <GuidedTour
+        isOpen
+        stops={role === 'admin' ? ADMIN_TOUR : PROVIDER_TOUR}
+        onFinish={() => {
+          setIsTourActive(false);
+          setIsCompletedState(true);
+        }}
+        onSkip={() => {
+          setIsTourActive(false);
+          handleOmit();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in font-wixText">
@@ -375,7 +508,7 @@ export default function OnboardingTutorialModal({
                 onClick={handleNext}
                 className="flex items-center space-x-1.5 px-5 py-2.5 rounded-xl bg-accentWine text-white font-bold text-xs shadow-md hover:bg-accentWine/90 transition cursor-pointer"
               >
-                <span>{isLastStep ? 'Finalizar' : 'Siguiente'}</span>
+                <span>{isLastStep ? 'Ver en pantalla' : 'Siguiente'}</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

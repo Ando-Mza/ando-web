@@ -27,6 +27,7 @@ import {
   TranslationDict
 } from '../utils/mockData';
 import { api } from '../utils/api';
+import { clearReportCache } from '../utils/reportCache';
 import { DEFAULT_GENERAL_PARAMS } from '../config/constants';
 import { USER_ROLES } from '../constants/enums';
 import { mapBackendRoleToFrontend, mapBackendStatusToFrontend } from '../utils/roleUtils';
@@ -749,6 +750,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('ando_estado_aprobado_id');
       sessionStorage.removeItem('ando_ryi_global_filters');
     }
+    clearReportCache();
     setCurrentUser(null);
     setIsAuthLoading(false);
     setPois([]);

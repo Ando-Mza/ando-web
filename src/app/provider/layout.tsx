@@ -169,6 +169,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
               <Link
                 key={item.path}
                 href={item.path}
+                data-tour={item.path}
                 className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 ${
                   isActive
                     ? 'bg-fillPrimary text-white shadow-md shadow-fillPrimary/10'
@@ -232,6 +233,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
               type="button"
               onClick={() => setIsOnboardingOpen(true)}
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-fillPrimary/20 bg-fillPrimary/5 text-fillPrimary hover:bg-fillPrimary/10 text-xs font-bold transition cursor-pointer"
+              data-tour="tutorial"
               title="Ver Tutorial de Onboarding"
             >
               <Sparkles className="h-3.5 w-3.5" />
@@ -242,13 +244,16 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
               type="button"
               onClick={() => setIsErrorReportOpen(true)}
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-xs font-bold transition cursor-pointer"
+              data-tour="report-error"
               title="Reportar Error del Sistema"
             >
               <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
               <span className="hidden md:inline">Reportar Error</span>
             </button>
 
-            <NotificationCenter />
+            <div data-tour="notifications">
+              <NotificationCenter />
+            </div>
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">

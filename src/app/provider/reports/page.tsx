@@ -10,6 +10,7 @@ import ExportReportModal, { FiltrosExportacion } from '@/components/reports/Expo
 import ReportGlobalFilters from '@/components/reports/ReportGlobalFilters';
 import { ReportErrorState, ReportLoadingState } from '@/components/reports/ReportStates';
 import { useReportFilterOptions } from '@/utils/useReportFilterOptions';
+import { cachedReportRequest, clearReportCache, peekReportCache, reportCacheKey } from '@/utils/reportCache';
 import {
   loadSessionReportFilters,
   saveSessionReportFilters,
@@ -45,16 +46,21 @@ export default function ProviderReportsPage() {
   // El backend devuelve únicamente los negocios vinculados al Prestador autenticado (US-RYI-03)
   const fetchProviderReport = useCallback(async () => {
     const id = ++requestId.current;
-    setIsLoading(true);
+    const params = {
+      fechaDesde,
+      fechaHasta,
+      categoriaId,
+      departamentoId,
+      search: searchQuery || undefined,
+    };
+    // Una consulta idéntica ya resuelta se toma de memoria, sin volver a mostrar la carga
+    const key = reportCacheKey('prestador:mi-negocio', params);
+    const enMemoria = peekReportCache<ReporteNegociosPrestadorResponse>(key);
+    if (enMemoria === undefined) setIsLoading(true);
     setError(null);
     try {
-      const res: ReporteNegociosPrestadorResponse = await api.getReporteNegociosPrestador({
-        fechaDesde,
-        fechaHasta,
-        categoriaId,
-        departamentoId,
-        search: searchQuery || undefined,
-      });
+      const res: ReporteNegociosPrestadorResponse =
+        enMemoria ?? (await cachedReportRequest(key, () => api.getReporteNegociosPrestador(params)));
       if (id !== requestId.current) return;
       const lista = Array.isArray(res?.negocios) ? res.negocios : [];
       setNegocios(lista);
@@ -91,6 +97,8 @@ export default function ProviderReportsPage() {
   // La respuesta se publica en el backend (flujo de US-RYV) y recién entonces se refleja en pantalla
   const handleReplyReview = async (reviewId: string, replyComment: string) => {
     const res = await api.replyReview(reviewId, replyComment);
+    // Las reseñas guardadas en memoria ya no reflejan la respuesta publicada
+    clearReportCache('prestador:mi-negocio');
     const respuesta = res?.response ?? res?.respuesta ?? res?.data ?? res;
     setNegocios((prev) =>
       prev.map((neg) => ({
@@ -200,6 +208,7 @@ export default function ProviderReportsPage() {
             departamentos={filterOptions.departamentos}
             isLoadingOpciones={filterOptions.isLoading}
             opcionesError={filterOptions.error}
+            onRetryOpciones={filterOptions.reintentar}
             onFilterChange={handleFilterChange}
             onReset={handleResetFilters}
             onSuggestExport={(rango) => {

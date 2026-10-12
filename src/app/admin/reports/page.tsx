@@ -28,6 +28,7 @@ import AiThematicPieChart from '@/components/reports/AiThematicPieChart';
 import ExportReportModal, { FiltrosExportacion } from '@/components/reports/ExportReportModal';
 import { ReportErrorState, ReportLoadingState } from '@/components/reports/ReportStates';
 import { useReportFilterOptions } from '@/utils/useReportFilterOptions';
+import { cachedReportRequest, clearReportCache, peekReportCache, reportCacheKey } from '@/utils/reportCache';
 import {
   loadSessionReportFilters,
   saveSessionReportFilters,
@@ -122,20 +123,25 @@ export default function AdminReportsPage() {
 
   const fetchPois = useCallback(async () => {
     const id = ++requestIds.current.pois;
-    setPoisLoading(true);
+    const params = {
+      fechaDesde,
+      fechaHasta,
+      categoriaId,
+      departamentoId,
+      search: searchQuery || undefined,
+      sortBy,
+      sortOrder,
+      page: currentPage,
+      limit: PAGE_SIZE,
+    };
+    // Una consulta idéntica ya resuelta se toma de memoria, sin volver a mostrar la carga
+    const key = reportCacheKey('admin:pois-mas-visitados', params);
+    const enMemoria = peekReportCache<any>(key);
+    if (enMemoria === undefined) setPoisLoading(true);
     setPoisError(null);
     try {
-      const res = await api.getReportePoisMasVisitados({
-        fechaDesde,
-        fechaHasta,
-        categoriaId,
-        departamentoId,
-        search: searchQuery || undefined,
-        sortBy,
-        sortOrder,
-        page: currentPage,
-        limit: PAGE_SIZE,
-      });
+      const res =
+        enMemoria ?? (await cachedReportRequest(key, () => api.getReportePoisMasVisitados(params)));
       if (id !== requestIds.current.pois) return;
       setPoisData(Array.isArray(res?.data) ? res.data : []);
       setTop10Data(Array.isArray(res?.top10Grafico) ? res.top10Grafico : []);
@@ -151,14 +157,14 @@ export default function AdminReportsPage() {
 
   const fetchUsers = useCallback(async () => {
     const id = ++requestIds.current.users;
-    setUsersLoading(true);
+    const params = { fechaDesde, fechaHasta, granularidad: selectedGranularidad };
+    const key = reportCacheKey('admin:actividad-usuarios', params);
+    const enMemoria = peekReportCache<any>(key);
+    if (enMemoria === undefined) setUsersLoading(true);
     setUsersError(null);
     try {
-      const res = await api.getReporteActividadUsuarios({
-        fechaDesde,
-        fechaHasta,
-        granularidad: selectedGranularidad,
-      });
+      const res =
+        enMemoria ?? (await cachedReportRequest(key, () => api.getReporteActividadUsuarios(params)));
       if (id !== requestIds.current.users) return;
       if (!res?.kpis || !Array.isArray(res?.evolucionTemporal)) {
         throw new Error('El servidor devolvió una respuesta incompleta para este reporte.');
@@ -174,18 +180,22 @@ export default function AdminReportsPage() {
 
   const fetchBusinesses = useCallback(async () => {
     const id = ++requestIds.current.businesses;
-    setBusinessesLoading(true);
+    const params = {
+      fechaDesde,
+      fechaHasta,
+      categoriaId,
+      departamentoId,
+      search: searchQuery || undefined,
+      page: 1,
+      limit: BUSINESSES_FETCH_LIMIT,
+    };
+    const key = reportCacheKey('admin:negocios-locales', params);
+    const enMemoria = peekReportCache<any>(key);
+    if (enMemoria === undefined) setBusinessesLoading(true);
     setBusinessesError(null);
     try {
-      const res = await api.getReporteNegociosAdmin({
-        fechaDesde,
-        fechaHasta,
-        categoriaId,
-        departamentoId,
-        search: searchQuery || undefined,
-        page: 1,
-        limit: BUSINESSES_FETCH_LIMIT,
-      });
+      const res =
+        enMemoria ?? (await cachedReportRequest(key, () => api.getReporteNegociosAdmin(params)));
       if (id !== requestIds.current.businesses) return;
       setBusinesses(Array.isArray(res?.data) ? res.data : []);
       setTopGrowth(Array.isArray(res?.top10MayorCrecimiento) ? res.top10MayorCrecimiento : []);
@@ -199,10 +209,14 @@ export default function AdminReportsPage() {
 
   const fetchAi = useCallback(async () => {
     const id = ++requestIds.current.ai;
-    setAiLoading(true);
+    const params = { fechaDesde, fechaHasta };
+    const key = reportCacheKey('admin:asistente-ia', params);
+    const enMemoria = peekReportCache<any>(key);
+    if (enMemoria === undefined) setAiLoading(true);
     setAiError(null);
     try {
-      const res = await api.getReporteAsistenteIa({ fechaDesde, fechaHasta });
+      const res =
+        enMemoria ?? (await cachedReportRequest(key, () => api.getReporteAsistenteIa(params)));
       if (id !== requestIds.current.ai) return;
       if (!res?.metricas || !Array.isArray(res?.distribucionTematica)) {
         throw new Error('El servidor devolvió una respuesta incompleta para este reporte.');
@@ -269,6 +283,8 @@ export default function AdminReportsPage() {
 
   const handleUmbralChange = async (nuevoUmbral: number) => {
     await api.updateUmbralCostoAsistente(nuevoUmbral);
+    // El umbral forma parte del reporte: lo guardado en memoria quedó desactualizado
+    clearReportCache('admin:asistente-ia');
     await fetchAi();
   };
 
@@ -384,6 +400,7 @@ export default function AdminReportsPage() {
         departamentos={filterOptions.departamentos}
         isLoadingOpciones={filterOptions.isLoading}
         opcionesError={filterOptions.error}
+        onRetryOpciones={filterOptions.reintentar}
         onFilterChange={handleFilterChange}
         onReset={handleResetFilters}
         onSuggestExport={(rango) => {

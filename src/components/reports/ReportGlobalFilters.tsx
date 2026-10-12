@@ -34,6 +34,8 @@ interface ReportGlobalFiltersProps {
   isLoadingOpciones?: boolean;
   /** Mensaje si no se pudo cargar el catálogo de categorías y zonas */
   opcionesError?: string | null;
+  /** Vuelve a pedir el catálogo al backend */
+  onRetryOpciones?: () => void;
   onFilterChange: (filters: FiltrosReporteState) => void;
   onReset: () => void;
   /** Se invoca con el rango (mayor a 365 días) que el usuario intentó aplicar */
@@ -52,6 +54,7 @@ export default function ReportGlobalFilters({
   departamentos,
   isLoadingOpciones = false,
   opcionesError = null,
+  onRetryOpciones,
   onFilterChange,
   onReset,
   onSuggestExport,
@@ -341,9 +344,18 @@ export default function ReportGlobalFilters({
       </div>
 
       {opcionesError && (
-        <p className="text-[11px] text-amber-700 font-semibold" role="status">
-          {opcionesError}
-        </p>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-amber-700 font-semibold" role="status">
+          <span>{opcionesError} Mientras tanto podés filtrar por período.</span>
+          {onRetryOpciones && (
+            <button
+              type="button"
+              onClick={onRetryOpciones}
+              className="px-2.5 py-1 rounded-full border border-amber-700/40 hover:bg-amber-700/10 cursor-pointer"
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
       )}
 
       {/* Mensajes de Validación Inline (Criterio 4 y 5) */}
