@@ -18,3 +18,18 @@ body {
   color: var(--color-textDark);
   font-family: var(--font-wixText);
 }
+
+/* Recharts: evitar el recuadro negro de foco al hacer clic en un gráfico */
+.recharts-wrapper,
+.recharts-wrapper *:focus,
+.recharts-wrapper *:focus-visible {
+  outline: none !important;
+}
+
+/* Elementos de gráficos clickeables: cambio de opacidad al pasar el mouse */
+.recharts-bar-rectangle {
+  transition: opacity 0.15s ease;
+}
+.recharts-bar-rectangle:hover {
+  opacity: 0.7;
+}

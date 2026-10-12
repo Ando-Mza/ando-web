@@ -13,7 +13,10 @@ import {
   Users,
   BarChart3,
   FileText,
-  HelpCircle
+  HelpCircle,
+  ShieldAlert,
+  Activity,
+  BadgeCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationCenter from '@/components/NotificationCenter';
@@ -83,6 +86,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       path: '/admin/validation',
       icon: CheckSquare,
       desc: 'Atractivos y moderación'
+    },
+    {
+      name: 'Validaciones de Usuario',
+      path: '/admin/validaciones',
+      icon: BadgeCheck,
+      desc: 'Documentación y verificación de cuentas'
+    },
+    {
+      name: 'Moderación de Contenido',
+      path: '/admin/moderacion',
+      icon: ShieldAlert,
+      desc: 'Reportes y contenido detectado por IA'
+    },
+    {
+      name: 'Actividad Sospechosa',
+      path: '/admin/actividad-sospechosa',
+      icon: Activity,
+      desc: 'Alertas de seguridad y fraude'
     },
     {
       name: 'Gestión de Usuarios',
