@@ -11,12 +11,18 @@ interface AiThematicPieChartProps {
 }
 
 const CATEGORY_COLORS: Record<string, { stroke: string; bg: string; text: string }> = {
-  'Información turística': { stroke: '#750031', bg: 'bg-[#750031]', text: 'text-[#750031]' },
-  'Ayuda con itinerario': { stroke: '#E96509', bg: 'bg-[#E96509]', text: 'text-[#E96509]' },
-  'Recomendaciones': { stroke: '#8E527D', bg: 'bg-[#8E527D]', text: 'text-[#8E527D]' },
-  'Soporte de plataforma': { stroke: '#2563EB', bg: 'bg-blue-600', text: 'text-blue-600' },
-  'Otros': { stroke: '#6B7280', bg: 'bg-gray-500', text: 'text-gray-500' },
+  'información turística': { stroke: '#750031', bg: 'bg-[#750031]', text: 'text-[#750031]' },
+  'ayuda con itinerario': { stroke: '#E96509', bg: 'bg-[#E96509]', text: 'text-[#E96509]' },
+  'recomendaciones': { stroke: '#8E527D', bg: 'bg-[#8E527D]', text: 'text-[#8E527D]' },
+  'soporte de plataforma': { stroke: '#2563EB', bg: 'bg-blue-600', text: 'text-blue-600' },
+  'otros': { stroke: '#6B7280', bg: 'bg-gray-500', text: 'text-gray-500' },
 };
+
+/** El backend envía las categorías en minúsculas: se muestran con mayúscula solo en la primera palabra */
+function etiquetaCategoria(categoria: string): string {
+  const texto = (categoria || '').trim();
+  return texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
+}
 
 export default function AiThematicPieChart({
   distribucion,
@@ -41,7 +47,7 @@ export default function AiThematicPieChart({
     const strokeDashoffset = -((accumulatedPercent / 100) * circumference);
     accumulatedPercent += item.porcentaje;
 
-    const colors = CATEGORY_COLORS[item.categoria] || {
+    const colors = CATEGORY_COLORS[(item.categoria || '').trim().toLowerCase()] || {
       stroke: '#9CA3AF',
       bg: 'bg-gray-400',
       text: 'text-gray-400',
@@ -131,7 +137,7 @@ export default function AiThematicPieChart({
             {/* Centro del Donut */}
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-4">
               <span className="text-[10px] font-bold text-textDark/50 uppercase tracking-wider truncate max-w-[120px]">
-                {activeItem ? activeItem.categoria : 'Total Consultas'}
+                {activeItem ? etiquetaCategoria(activeItem.categoria) : 'Total Consultas'}
               </span>
               <span className="font-wixDisplay text-2xl font-black text-textDark">
                 {activeItem ? `${activeItem.porcentaje.toFixed(1)}%` : total}
@@ -162,7 +168,7 @@ export default function AiThematicPieChart({
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center space-x-2.5">
                     <span className={`h-3 w-3 rounded-full ${seg.colors.bg} flex-shrink-0`} />
-                    <span className="font-bold text-textDark">{seg.categoria}</span>
+                    <span className="font-bold text-textDark">{etiquetaCategoria(seg.categoria)}</span>
                   </div>
 
                   <div className="flex items-center space-x-3 font-mono">
