@@ -1,5 +1,8 @@
 import { ENV } from '../config/env';
 import type { GeneralDashboardResponse, ProviderDashboardResponse } from '@/types/dashboard';
+import type { AlertaSospechosa, AlertasFilters, AlertasMetricas, AlertasPage, ReglaSospecha } from '@/types/suspicious';
+import type { SolicitudValidacion, ValidacionesFilters, ValidacionesPage } from '@/types/validations';
+import type { ModerationCase, ModerationFilters, ModerationPage } from '@/types/moderation';
 
 async function request<T>(
   path: string,
@@ -246,6 +249,65 @@ export const api = {
     motivo: string;
     descripcion?: string;
   }) => request<any>('/reportes', 'POST', body),
+
+  // Moderación de contenido (US-PAD-03)
+  getModerationCases: (filters?: ModerationFilters) => {
+    const qs = new URLSearchParams();
+    if (filters?.origen) qs.set('origen', filters.origen);
+    if (filters?.entidad) qs.set('entidad', filters.entidad);
+    if (filters?.estado) qs.set('estado', filters.estado);
+    if (filters?.page) qs.set('page', String(filters.page));
+    if (filters?.limit) qs.set('limit', String(filters.limit));
+    const queryString = qs.toString();
+    return request<ModerationPage>(`/moderacion${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
+  getModerationCase: (id: string) => request<ModerationCase>(`/moderacion/${id}`, 'GET'),
+  desestimarReporte: (id: string) =>
+    request<{ message: string; reporte: ModerationCase }>(`/moderacion/${id}/desestimar`, 'PATCH'),
+  eliminarContenidoReportado: (id: string, motivoModeracion?: string) =>
+    request<{ message: string; reporte: ModerationCase }>(
+      `/moderacion/${id}/eliminar-contenido`,
+      'PATCH',
+      motivoModeracion ? { motivoModeracion } : {},
+    ),
+  suspenderAutorReporte: (id: string, motivo?: string) =>
+    request<{ message: string; autor: { id: string; email: string; nombre: string } }>(
+      `/moderacion/${id}/suspender-autor`,
+      'POST',
+      motivo ? { motivo } : {},
+    ),
+
+  // Actividad sospechosa (US-PAD-05)
+  getAlertasSospechosas: (filters?: AlertasFilters) => {
+    const qs = new URLSearchParams();
+    Object.entries(filters ?? {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    });
+    const queryString = qs.toString();
+    return request<AlertasPage>(`/actividades-sospechosas${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
+  getAlertasMetricas: () => request<AlertasMetricas>('/actividades-sospechosas/metricas', 'GET'),
+  getReglasSospecha: () => request<ReglaSospecha[]>('/actividades-sospechosas/reglas', 'GET'),
+  getAlertaSospechosa: (id: string) => request<AlertaSospechosa>(`/actividades-sospechosas/${id}`, 'GET'),
+  revisarAlerta: (id: string, comentario?: string) =>
+    request<AlertaSospechosa>(`/actividades-sospechosas/${id}/revisar`, 'PATCH', comentario ? { comentario } : {}),
+  cerrarAlerta: (id: string, comentario?: string) =>
+    request<AlertaSospechosa>(`/actividades-sospechosas/${id}/cerrar`, 'PATCH', comentario ? { comentario } : {}),
+
+  // Gestión de validaciones de usuario (US-PAD-04)
+  getValidacionesUsuario: (filters?: ValidacionesFilters) => {
+    const qs = new URLSearchParams();
+    Object.entries(filters ?? {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    });
+    const queryString = qs.toString();
+    return request<ValidacionesPage>(`/validaciones${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
+  getValidacionUsuario: (id: string) => request<SolicitudValidacion>(`/validaciones/${id}`, 'GET'),
+  aprobarValidacionUsuario: (id: string) =>
+    request<{ message: string; solicitud: SolicitudValidacion }>(`/validaciones/${id}/aprobar`, 'PATCH'),
+  rechazarValidacionUsuario: (id: string, motivo: string) =>
+    request<{ message: string; solicitud: SolicitudValidacion }>(`/validaciones/${id}/rechazar`, 'PATCH', { motivo }),
 
   // Storage / Cloudflare R2 Uploads
   getPresignedUrl: (fileName: string, contentType: string) =>
