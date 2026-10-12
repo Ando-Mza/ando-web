@@ -1,333 +1,601 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useApp } from '@/context/AppContext';
-import { 
-  BarChart3, 
-  Download, 
-  Filter, 
-  Calendar, 
-  TrendingUp, 
-  Users, 
-  Store, 
-  Bot, 
-  ArrowUpRight, 
-  ArrowDownRight,
-  FileText,
-  Search,
-  Sparkles,
-  PieChart
-} from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { BarChart3, Download, Users, Store, Bot, AlertCircle, RefreshCw, Compass } from 'lucide-react';
+import { api } from '@/utils/api';
+import {
+  PoiReporteItem,
+  Top10PoiGrafico,
+  PoiDetalleMensualResponse,
+  SortByPoiReporte,
+  SortOrder,
+  ReporteActividadUsuariosResponse,
+  GranularidadReporte,
+  NegocioLocalItem,
+  RankingTopCrecimiento,
+  ReporteAsistenteIaResponse,
+  TipoReporteExportacion,
+} from '@/types/reportes';
+import ReportGlobalFilters from '@/components/reports/ReportGlobalFilters';
+import Top10PoiBarChart from '@/components/reports/Top10PoiBarChart';
+import PoisReportTable from '@/components/reports/PoisReportTable';
+import PoiMonthlyDetailModal from '@/components/reports/PoiMonthlyDetailModal';
+import UserActivityKpis from '@/components/reports/UserActivityKpis';
+import UserActivityLineChart from '@/components/reports/UserActivityLineChart';
+import AdminLocalBusinessesReport from '@/components/reports/AdminLocalBusinessesReport';
+import AiAssistantUsageKpis from '@/components/reports/AiAssistantUsageKpis';
+import AiThematicPieChart from '@/components/reports/AiThematicPieChart';
+import ExportReportModal, { FiltrosExportacion } from '@/components/reports/ExportReportModal';
+import { ReportErrorState, ReportLoadingState } from '@/components/reports/ReportStates';
+import { useReportFilterOptions } from '@/utils/useReportFilterOptions';
+import {
+  loadSessionReportFilters,
+  saveSessionReportFilters,
+  clearSessionReportFilters,
+  getDefaultReportFilters,
+  FiltrosReporteState,
+} from '@/utils/reportFiltersStorage';
+
+type ReportTab = 'pois' | 'users' | 'businesses' | 'ai';
+
+const PAGE_SIZE = 20;
+/** El catálogo de negocios se ordena y pagina en pantalla, por eso se pide completo. */
+const BUSINESSES_FETCH_LIMIT = 2000;
+
+const TABS: { id: ReportTab; label: string; icon: React.ElementType }[] = [
+  { id: 'pois', label: 'POIs más visitados', icon: Compass },
+  { id: 'users', label: 'Actividad de usuarios', icon: Users },
+  { id: 'businesses', label: 'Negocios locales', icon: Store },
+  { id: 'ai', label: 'Uso del asistente IA', icon: Bot },
+];
+
+const REPORTES: Record<ReportTab, { nombre: string; tipo: TipoReporteExportacion }> = {
+  pois: { nombre: 'Reporte de POIs más Visitados', tipo: 'pois-mas-visitados' },
+  users: { nombre: 'Reporte de Actividad de Usuarios', tipo: 'actividad-usuarios' },
+  businesses: { nombre: 'Reporte de Negocios Locales', tipo: 'negocios-locales' },
+  ai: { nombre: 'Reporte de Uso del Asistente IA', tipo: 'asistente-ia' },
+};
+
+function mensajeError(err: unknown): string {
+  return err instanceof Error && err.message
+    ? err.message
+    : 'Ocurrió un error inesperado. Intentá nuevamente.';
+}
 
 export default function AdminReportsPage() {
-  const { pois, users, categories } = useApp();
+  const [activeTab, setActiveTab] = useState<ReportTab>('pois');
 
-  const [activeTab, setActiveTab] = useState<'pois' | 'users' | 'businesses' | 'ai'>('pois');
-  const [period, setPeriod] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  // Filtros globales (US-RYI-06): persisten durante la sesión activa
+  const [filters, setFilters] = useState<FiltrosReporteState>(getDefaultReportFilters);
+  const [filtersReady, setFiltersReady] = useState(false);
+  const filterOptions = useReportFilterOptions('admin');
 
-  // 1. Filtrado de POIs
-  const filteredPois = pois.filter((poi) => {
-    const matchesCategory = selectedCategory === 'all' || poi.category.toLowerCase() === selectedCategory.toLowerCase();
-    const matchesSearch = poi.name.toLowerCase().includes(searchQuery.toLowerCase()) || poi.address.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+  useEffect(() => {
+    setFilters(loadSessionReportFilters());
+    setFiltersReady(true);
+  }, []);
+
+  const { fechaDesde, fechaHasta, selectedCategory, selectedDepartamento, searchQuery } = filters;
+  const categoriaId = selectedCategory !== 'all' ? selectedCategory : undefined;
+  const departamentoId = selectedDepartamento !== 'all' ? selectedDepartamento : undefined;
+
+  // ---- US-RYI-01: POIs más visitados
+  const [sortBy, setSortBy] = useState<SortByPoiReporte>('visitasEfectivas');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('DESC');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [poisData, setPoisData] = useState<PoiReporteItem[]>([]);
+  const [poisTotal, setPoisTotal] = useState(0);
+  const [poisTotalPages, setPoisTotalPages] = useState(1);
+  const [top10Data, setTop10Data] = useState<Top10PoiGrafico[]>([]);
+  const [poisLoading, setPoisLoading] = useState(true);
+  const [poisError, setPoisError] = useState<string | null>(null);
+
+  const [poiDetail, setPoiDetail] = useState<PoiDetalleMensualResponse | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // ---- US-RYI-02: Actividad de usuarios
+  const [selectedGranularidad, setSelectedGranularidad] = useState<GranularidadReporte>('auto');
+  const [userActivity, setUserActivity] = useState<ReporteActividadUsuariosResponse | null>(null);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersError, setUsersError] = useState<string | null>(null);
+
+  // ---- US-RYI-03: Negocios locales (vista Administrador)
+  const [businesses, setBusinesses] = useState<NegocioLocalItem[]>([]);
+  const [topGrowth, setTopGrowth] = useState<RankingTopCrecimiento[]>([]);
+  const [businessesLoading, setBusinessesLoading] = useState(true);
+  const [businessesError, setBusinessesError] = useState<string | null>(null);
+
+  // ---- US-RYI-04: Uso del asistente IA
+  const [aiReport, setAiReport] = useState<ReporteAsistenteIaResponse | null>(null);
+  const [aiLoading, setAiLoading] = useState(true);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Cada pestaña descarta las respuestas de consultas anteriores (filtros cambiados mientras cargaba)
+  const requestIds = useRef<Record<ReportTab | 'detail', number>>({
+    pois: 0,
+    users: 0,
+    businesses: 0,
+    ai: 0,
+    detail: 0,
   });
 
-  // 2. Métricas calculadas reales
-  const totalApprovedPois = pois.filter((p) => p.status === 'approved').length;
-  const totalPendingPois = pois.filter((p) => p.status === 'pending' || p.status === 'correction').length;
-  const totalProviders = users.filter((u) => u.role === 'provider').length;
-  const totalTourists = users.filter((u) => u.role === 'tourist').length;
-  const totalActiveUsers = users.filter((u) => u.status === 'active').length;
-
-  // 3. Exportación a CSV real (US-RYI-05)
-  const handleExportCSV = () => {
-    let csvContent = 'data:text/csv;charset=utf-8,';
-    let filename = `reporte_ando_${activeTab}_${period}.csv`;
-
-    if (activeTab === 'pois') {
-      csvContent += 'ID,Nombre,Categoria,Direccion,Estado,Calificacion,Total Resenas\n';
-      filteredPois.forEach((p) => {
-        csvContent += `"${p.id}","${p.name.replace(/"/g, '""')}","${p.category}","${p.address.replace(/"/g, '""')}","${p.status}","${p.rating || 0}","${p.reviewsCount || 0}"\n`;
+  const fetchPois = useCallback(async () => {
+    const id = ++requestIds.current.pois;
+    setPoisLoading(true);
+    setPoisError(null);
+    try {
+      const res = await api.getReportePoisMasVisitados({
+        fechaDesde,
+        fechaHasta,
+        categoriaId,
+        departamentoId,
+        search: searchQuery || undefined,
+        sortBy,
+        sortOrder,
+        page: currentPage,
+        limit: PAGE_SIZE,
       });
-    } else if (activeTab === 'users') {
-      csvContent += 'ID,Nombre,Email,Rol,Estado,Empresa,CUIT\n';
-      users.forEach((u) => {
-        csvContent += `"${u.id}","${u.name.replace(/"/g, '""')}","${u.email}","${u.role}","${u.status || 'active'}","${(u.businessName || '').replace(/"/g, '""')}","${u.cuit || ''}"\n`;
-      });
-    } else {
-      csvContent += 'Categoria,Cantidad POIs\n';
-      categories.forEach((c) => {
-        const count = pois.filter((p) => p.category.toLowerCase() === c.name.toLowerCase()).length;
-        csvContent += `"${c.name}","${count}"\n`;
-      });
+      if (id !== requestIds.current.pois) return;
+      setPoisData(Array.isArray(res?.data) ? res.data : []);
+      setTop10Data(Array.isArray(res?.top10Grafico) ? res.top10Grafico : []);
+      setPoisTotal(res?.meta?.total ?? 0);
+      setPoisTotalPages(Math.max(res?.meta?.totalPages ?? 1, 1));
+    } catch (err) {
+      if (id !== requestIds.current.pois) return;
+      setPoisError(mensajeError(err));
+    } finally {
+      if (id === requestIds.current.pois) setPoisLoading(false);
     }
+  }, [fechaDesde, fechaHasta, categoriaId, departamentoId, searchQuery, sortBy, sortOrder, currentPage]);
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const fetchUsers = useCallback(async () => {
+    const id = ++requestIds.current.users;
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const res = await api.getReporteActividadUsuarios({
+        fechaDesde,
+        fechaHasta,
+        granularidad: selectedGranularidad,
+      });
+      if (id !== requestIds.current.users) return;
+      if (!res?.kpis || !Array.isArray(res?.evolucionTemporal)) {
+        throw new Error('El servidor devolvió una respuesta incompleta para este reporte.');
+      }
+      setUserActivity(res);
+    } catch (err) {
+      if (id !== requestIds.current.users) return;
+      setUsersError(mensajeError(err));
+    } finally {
+      if (id === requestIds.current.users) setUsersLoading(false);
+    }
+  }, [fechaDesde, fechaHasta, selectedGranularidad]);
+
+  const fetchBusinesses = useCallback(async () => {
+    const id = ++requestIds.current.businesses;
+    setBusinessesLoading(true);
+    setBusinessesError(null);
+    try {
+      const res = await api.getReporteNegociosAdmin({
+        fechaDesde,
+        fechaHasta,
+        categoriaId,
+        departamentoId,
+        search: searchQuery || undefined,
+        page: 1,
+        limit: BUSINESSES_FETCH_LIMIT,
+      });
+      if (id !== requestIds.current.businesses) return;
+      setBusinesses(Array.isArray(res?.data) ? res.data : []);
+      setTopGrowth(Array.isArray(res?.top10MayorCrecimiento) ? res.top10MayorCrecimiento : []);
+    } catch (err) {
+      if (id !== requestIds.current.businesses) return;
+      setBusinessesError(mensajeError(err));
+    } finally {
+      if (id === requestIds.current.businesses) setBusinessesLoading(false);
+    }
+  }, [fechaDesde, fechaHasta, categoriaId, departamentoId, searchQuery]);
+
+  const fetchAi = useCallback(async () => {
+    const id = ++requestIds.current.ai;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await api.getReporteAsistenteIa({ fechaDesde, fechaHasta });
+      if (id !== requestIds.current.ai) return;
+      if (!res?.metricas || !Array.isArray(res?.distribucionTematica)) {
+        throw new Error('El servidor devolvió una respuesta incompleta para este reporte.');
+      }
+      setAiReport(res);
+    } catch (err) {
+      if (id !== requestIds.current.ai) return;
+      setAiError(mensajeError(err));
+    } finally {
+      if (id === requestIds.current.ai) setAiLoading(false);
+    }
+  }, [fechaDesde, fechaHasta]);
+
+  // Al cambiar un filtro se recalcula automáticamente el reporte visible (US-RYI-06)
+  useEffect(() => {
+    if (!filtersReady) return;
+    if (activeTab === 'pois') fetchPois();
+    else if (activeTab === 'users') fetchUsers();
+    else if (activeTab === 'businesses') fetchBusinesses();
+    else fetchAi();
+  }, [filtersReady, activeTab, fetchPois, fetchUsers, fetchBusinesses, fetchAi]);
+
+  const handleFilterChange = (next: FiltrosReporteState) => {
+    setFilters(next);
+    saveSessionReportFilters(next);
+    setCurrentPage(1);
   };
+
+  const handleResetFilters = () => {
+    clearSessionReportFilters();
+    setFilters(getDefaultReportFilters());
+    setSortBy('visitasEfectivas');
+    setSortOrder('DESC');
+    setSelectedGranularidad('auto');
+    setCurrentPage(1);
+  };
+
+  const handleSortChange = (column: SortByPoiReporte) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+    } else {
+      setSortBy(column);
+      setSortOrder('DESC');
+    }
+    setCurrentPage(1);
+  };
+
+  const handleSelectPoi = async (poiId: string) => {
+    const id = ++requestIds.current.detail;
+    setPoiDetail(null);
+    setIsDetailOpen(true);
+    setIsDetailLoading(true);
+    try {
+      const res = await api.getDetalleMensualPoi(poiId, { fechaDesde, fechaHasta });
+      if (id !== requestIds.current.detail) return;
+      setPoiDetail(res?.distribucionMensual ? res : null);
+    } catch {
+      if (id !== requestIds.current.detail) return;
+      setPoiDetail(null);
+    } finally {
+      if (id === requestIds.current.detail) setIsDetailLoading(false);
+    }
+  };
+
+  const handleUmbralChange = async (nuevoUmbral: number) => {
+    await api.updateUmbralCostoAsistente(nuevoUmbral);
+    await fetchAi();
+  };
+
+  // ---- US-RYI-05: Exportación
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  /** Rango mayor a 365 días que el usuario quiso consultar y se deriva a exportación */
+  const [exportRangeOverride, setExportRangeOverride] = useState<{
+    fechaDesde: string;
+    fechaHasta: string;
+  } | null>(null);
+
+  const categoriaNombre = filterOptions.categorias.find((c) => c.id === categoriaId)?.nombre;
+
+  const exportFiltros: FiltrosExportacion = {
+    fechaDesde: exportRangeOverride?.fechaDesde ?? fechaDesde,
+    fechaHasta: exportRangeOverride?.fechaHasta ?? fechaHasta,
+    categoriaId,
+    categoriaNombre,
+    departamento: departamentoId,
+    search: searchQuery || undefined,
+    ordenarPor: activeTab === 'pois' ? sortBy : undefined,
+    orden: activeTab === 'pois' ? sortOrder : undefined,
+  };
+
+  const isZeroUserActivity = useMemo(() => {
+    if (!userActivity) return false;
+    const { kpis } = userActivity;
+    return (
+      kpis.nuevosRegistros.actual === 0 &&
+      kpis.usuariosActivosUnicos.actual === 0 &&
+      kpis.itinerariosCreados.actual === 0 &&
+      kpis.itinerariosFinalizados.actual === 0 &&
+      kpis.resenasAprobadas.actual === 0 &&
+      kpis.conversacionesIaIniciadas.actual === 0
+    );
+  }, [userActivity]);
+
+  const hayDatosParaExportar =
+    exportRangeOverride !== null ||
+    (activeTab === 'pois' && !poisLoading && !poisError && poisTotal > 0) ||
+    (activeTab === 'users' && !usersLoading && !usersError && !!userActivity) ||
+    (activeTab === 'businesses' && !businessesLoading && !businessesError && businesses.length > 0) ||
+    (activeTab === 'ai' && !aiLoading && !aiError && !!aiReport);
+
+  const sinConversaciones = !!aiReport && aiReport.metricas.totalConversaciones === 0;
 
   return (
     <div className="space-y-8 font-wixText">
-      {/* Header Banner */}
+      {/* Encabezado del módulo */}
       <div className="bg-gradient-to-br from-accentWine/10 via-accentWine/5 to-transparent border border-accentWine/20 rounded-3xl p-6 sm:p-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center space-x-2 bg-accentWine/10 border border-accentWine/20 px-3 py-1 rounded-full text-xs font-bold text-accentWine">
               <BarChart3 className="h-3.5 w-3.5" />
-              <span>Reportes Estadísticos y Analíticas</span>
+              <span>Reportes e Informes</span>
             </div>
-            <h2 className="font-wixDisplay text-2xl sm:text-3xl font-extrabold text-textDark">
-              Centro de Informes y Estadísticas
-            </h2>
+            <h1 className="font-wixDisplay text-2xl sm:text-3xl font-extrabold text-textDark">
+              Centro de Analíticas y Reportes Estadísticos
+            </h1>
             <p className="text-xs sm:text-sm text-textDark/70 max-w-2xl leading-relaxed">
-              Consultá el rendimiento de los atractivos turísticos, el flujo de usuarios registrados y la oferta de prestadores en Mendoza.
+              Monitoreá los atractivos turísticos más visitados, el desempeño de los negocios locales, la actividad de los usuarios y el uso del asistente IA.
             </p>
           </div>
 
           <button
-            onClick={handleExportCSV}
-            className="px-5 py-3 bg-accentWine hover:bg-accentWine/90 text-white rounded-2xl text-xs font-bold shadow-lg shadow-accentWine/20 transition-all flex items-center space-x-2 cursor-pointer flex-shrink-0"
+            type="button"
+            onClick={() => {
+              setExportRangeOverride(null);
+              setIsExportOpen(true);
+            }}
+            className="px-5 py-3 bg-accentWine hover:bg-accentWine/90 text-white rounded-2xl text-xs font-bold shadow-lg shadow-accentWine/20 transition-all flex items-center space-x-2 cursor-pointer flex-shrink-0 self-start md:self-auto"
+            title="Exportar el reporte visible en PDF, Excel (XLSX) o CSV"
           >
             <Download className="h-4 w-4" />
-            <span>Exportar reporte en CSV</span>
+            <span>Exportar</span>
           </button>
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex flex-wrap gap-2 border-b border-black/5 pb-2">
-        <button
-          onClick={() => setActiveTab('pois')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
-            activeTab === 'pois' 
-              ? 'bg-accentWine text-white shadow-md shadow-accentWine/10' 
-              : 'text-textDark/70 hover:bg-black/5 hover:text-textDark'
-          }`}
-        >
-          <Store className="h-4 w-4" />
-          <span>Atractivos y POIs Populares</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
-            activeTab === 'users' 
-              ? 'bg-accentWine text-white shadow-md shadow-accentWine/10' 
-              : 'text-textDark/70 hover:bg-black/5 hover:text-textDark'
-          }`}
-        >
-          <Users className="h-4 w-4" />
-          <span>Actividad de Usuarios</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('businesses')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
-            activeTab === 'businesses' 
-              ? 'bg-accentWine text-white shadow-md shadow-accentWine/10' 
-              : 'text-textDark/70 hover:bg-black/5 hover:text-textDark'
-          }`}
-        >
-          <PieChart className="h-4 w-4" />
-          <span>Distribución de Negocios</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('ai')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
-            activeTab === 'ai' 
-              ? 'bg-accentWine text-white shadow-md shadow-accentWine/10' 
-              : 'text-textDark/70 hover:bg-black/5 hover:text-textDark'
-          }`}
-        >
-          <Bot className="h-4 w-4" />
-          <span>Uso de Asistente IA</span>
-        </button>
+      {/* Pestañas de reportes */}
+      <div className="flex flex-wrap gap-2 border-b border-black/5 pb-2" role="tablist" aria-label="Reportes disponibles">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          const selected = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+                selected
+                  ? 'bg-accentWine text-white shadow-md shadow-accentWine/10'
+                  : 'text-textDark/70 hover:bg-black/5 hover:text-textDark'
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Filter Bar (US-RYI-06) */}
-      <div className="bg-white rounded-2xl border border-black/5 p-5 shadow-xs space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Período */}
-          <div>
-            <label className="block text-[11px] font-bold text-textDark/70 mb-1">Período de análisis</label>
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as any)}
-              className="w-full text-xs py-2.5 px-3 rounded-xl bg-bgPrimary/60 border border-black/10 text-textDark font-semibold focus:outline-none focus:ring-2 focus:ring-accentWine/20"
-            >
-              <option value="7d">Últimos 7 días</option>
-              <option value="30d">Últimos 30 días</option>
-              <option value="90d">Últimos 90 días</option>
-              <option value="all">Histórico completo</option>
-            </select>
-          </div>
+      {/* Filtros globales persistentes (US-RYI-06) */}
+      <ReportGlobalFilters
+        fechaDesde={fechaDesde}
+        fechaHasta={fechaHasta}
+        selectedCategory={selectedCategory}
+        selectedDepartamento={selectedDepartamento}
+        searchQuery={searchQuery}
+        categorias={filterOptions.categorias}
+        departamentos={filterOptions.departamentos}
+        isLoadingOpciones={filterOptions.isLoading}
+        opcionesError={filterOptions.error}
+        onFilterChange={handleFilterChange}
+        onReset={handleResetFilters}
+        onSuggestExport={(rango) => {
+          setExportRangeOverride(rango);
+          setIsExportOpen(true);
+        }}
+      />
 
-          {/* Categoría */}
-          <div>
-            <label className="block text-[11px] font-bold text-textDark/70 mb-1">Categoría turística</label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full text-xs py-2.5 px-3 rounded-xl bg-bgPrimary/60 border border-black/10 text-textDark font-semibold focus:outline-none focus:ring-2 focus:ring-accentWine/20"
-            >
-              <option value="all">Todas las categorías</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.name}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+      {(activeTab === 'users' || activeTab === 'ai') &&
+        (categoriaId || departamentoId || searchQuery) && (
+          <p className="text-[11px] text-textDark/60 -mt-4 px-1">
+            Este reporte muestra métricas generales de la plataforma: se filtra por período. Los filtros de categoría, zona y búsqueda se aplican a los reportes de POIs y de negocios.
+          </p>
+        )}
 
-          {/* Búsqueda */}
-          <div>
-            <label className="block text-[11px] font-bold text-textDark/70 mb-1">Búsqueda rápida</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-textDark/40" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por nombre o dirección..."
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bgPrimary/60 border border-black/10 text-xs font-medium text-textDark placeholder-textDark/40 focus:outline-none focus:ring-2 focus:ring-accentWine/20"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* TAB 1: POIS POPULARES */}
+      {/* ---- POIs más visitados ---- */}
       {activeTab === 'pois' && (
-        <div className="bg-white rounded-3xl border border-black/5 p-6 shadow-xs space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-wixDisplay text-lg font-bold text-textDark">Atractivos turísticos registrados</h3>
-              <p className="text-xs text-textDark/60">Lista consolidada de POIs según el filtro seleccionado ({filteredPois.length} resultados)</p>
-            </div>
-          </div>
-
-          {filteredPois.length === 0 ? (
-            <div className="py-12 text-center text-xs text-textDark/60">
-              No se encontraron puntos de interés para los filtros seleccionados.
+        <div className="space-y-8">
+          {poisLoading && poisData.length === 0 ? (
+            <ReportLoadingState message="Calculando los POIs más visitados del período..." />
+          ) : poisError ? (
+            <ReportErrorState message={poisError} onRetry={fetchPois} />
+          ) : poisTotal === 0 ? (
+            <div className="bg-white rounded-3xl border border-black/5 p-12 text-center space-y-4 shadow-xs">
+              <div className="h-16 w-16 rounded-full bg-accentWine/10 text-accentWine flex items-center justify-center mx-auto">
+                <AlertCircle className="h-8 w-8" />
+              </div>
+              <div className="space-y-1.5 max-w-md mx-auto">
+                <h3 className="font-wixDisplay text-lg font-bold text-textDark">
+                  No hay itinerarios finalizados en ese rango
+                </h3>
+                <p className="text-xs text-textDark/60 leading-relaxed">
+                  No se registraron itinerarios finalizados ni en curso entre el{' '}
+                  <strong className="text-textDark">{fechaDesde}</strong> y el{' '}
+                  <strong className="text-textDark">{fechaHasta}</strong> para los filtros aplicados.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-5 py-2.5 bg-accentWine hover:bg-accentWine/90 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-accentWine/10 inline-flex items-center space-x-2"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Restablecer filtros</span>
+              </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-black/10 text-textDark/60 text-[10px] uppercase font-bold tracking-wider">
-                    <th className="pb-3">Nombre del Atractivo</th>
-                    <th className="pb-3">Categoría</th>
-                    <th className="pb-3">Ubicación</th>
-                    <th className="pb-3">Estado</th>
-                    <th className="pb-3 text-right">Puntuación</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black/5">
-                  {filteredPois.map((poi) => (
-                    <tr key={poi.id} className="hover:bg-bgPrimary/40 transition-colors">
-                      <td className="py-3.5 font-bold text-textDark">{poi.name}</td>
-                      <td className="py-3.5">
-                        <span className="bg-accentWine/10 text-accentWine px-2.5 py-0.5 rounded-md font-bold text-[10px]">
-                          {poi.category}
-                        </span>
-                      </td>
-                      <td className="py-3.5 text-textDark/70">{poi.address}</td>
-                      <td className="py-3.5">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                          poi.status === 'approved' 
-                            ? 'bg-green-50 text-green-700 border-green-200' 
-                            : poi.status === 'rejected'
-                            ? 'bg-red-50 text-red-700 border-red-200'
-                            : 'bg-amber-50 text-amber-800 border-amber-200'
-                        }`}>
-                          {poi.status === 'approved' ? 'Aprobado' : poi.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 text-right font-bold text-textDark font-mono">
-                        {poi.rating ? `⭐ ${poi.rating}.0` : 'Sin reseñas'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className={poisLoading ? 'opacity-60 pointer-events-none transition-opacity' : 'transition-opacity'} aria-busy={poisLoading}>
+              <div className="space-y-8">
+                <Top10PoiBarChart data={top10Data} onSelectPoi={handleSelectPoi} />
+                <PoisReportTable
+                  data={poisData}
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSortChange={handleSortChange}
+                  onSelectPoi={handleSelectPoi}
+                  currentPage={currentPage}
+                  pageSize={PAGE_SIZE}
+                  totalPages={poisTotalPages}
+                  totalRecords={poisTotal}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            </div>
+          )}
+
+          <PoiMonthlyDetailModal
+            detail={poiDetail}
+            isOpen={isDetailOpen}
+            onClose={() => {
+              requestIds.current.detail++;
+              setIsDetailOpen(false);
+              setPoiDetail(null);
+            }}
+            isLoading={isDetailLoading}
+          />
+        </div>
+      )}
+
+      {/* ---- Actividad de usuarios ---- */}
+      {activeTab === 'users' && (
+        <div className="space-y-8">
+          {usersLoading && !userActivity ? (
+            <ReportLoadingState message="Calculando métricas de actividad del período..." />
+          ) : usersError ? (
+            <ReportErrorState message={usersError} onRetry={fetchUsers} />
+          ) : userActivity ? (
+            <div className={`space-y-8 ${usersLoading ? 'opacity-60 pointer-events-none' : ''}`} aria-busy={usersLoading}>
+              {isZeroUserActivity && (
+                <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 flex items-start space-x-4" role="status">
+                  <AlertCircle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h3 className="font-wixDisplay text-base font-bold text-amber-900">
+                      No hubo actividad en el período seleccionado
+                    </h3>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      No se registraron altas, itinerarios ni interacciones entre el{' '}
+                      <strong>{fechaDesde}</strong> y el <strong>{fechaHasta}</strong>. Todas las métricas se muestran en cero.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <UserActivityKpis
+                kpis={userActivity.kpis}
+                periodoActual={userActivity.meta.periodoActual}
+                periodoAnterior={userActivity.meta.periodoAnterior}
+              />
+
+              <UserActivityLineChart
+                data={userActivity.evolucionTemporal}
+                granularidadAplicada={userActivity.meta.granularidadAplicada}
+                selectedGranularidad={selectedGranularidad}
+                onGranularidadChange={setSelectedGranularidad}
+              />
+
+              <div className="p-4 rounded-2xl bg-bgPrimary/60 border border-black/5 text-xs text-textDark/60 flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  Este reporte muestra únicamente métricas agregadas: no expone información de usuarios individuales.
+                </span>
+                <span className="font-semibold text-accentWine">
+                  Días analizados: {userActivity.meta.totalDias}
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {/* ---- Negocios locales ---- */}
+      {activeTab === 'businesses' && (
+        <div className="space-y-8">
+          {businessesLoading && businesses.length === 0 ? (
+            <ReportLoadingState message="Consultando el desempeño de los negocios locales..." />
+          ) : businessesError ? (
+            <ReportErrorState message={businessesError} onRetry={fetchBusinesses} />
+          ) : businesses.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-black/5 p-12 text-center space-y-3 shadow-xs">
+              <Store className="h-10 w-10 mx-auto text-textDark/30" />
+              <h3 className="font-wixDisplay text-lg font-bold text-textDark">
+                No se encontraron negocios para los filtros aplicados
+              </h3>
+              <p className="text-xs text-textDark/60">
+                Probá con otra categoría, zona o texto de búsqueda.
+              </p>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-5 py-2.5 bg-accentWine hover:bg-accentWine/90 text-white rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center space-x-2"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Restablecer filtros</span>
+              </button>
+            </div>
+          ) : (
+            <div className={businessesLoading ? 'opacity-60 pointer-events-none' : ''} aria-busy={businessesLoading}>
+              <AdminLocalBusinessesReport businesses={businesses} topGrowth={topGrowth} />
             </div>
           )}
         </div>
       )}
 
-      {/* TAB 2: ACTIVIDAD DE USUARIOS */}
-      {activeTab === 'users' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-3xl border border-black/5 p-6 shadow-xs space-y-2">
-            <span className="text-[11px] font-bold uppercase text-textDark/50">Prestadores Registrados</span>
-            <div className="flex items-baseline space-x-2">
-              <span className="font-wixDisplay text-3xl font-extrabold text-textDark">{totalProviders}</span>
-              <span className="text-xs text-textDark/60">cuentas</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-black/5 p-6 shadow-xs space-y-2">
-            <span className="text-[11px] font-bold uppercase text-textDark/50">Turistas Registrados</span>
-            <div className="flex items-baseline space-x-2">
-              <span className="font-wixDisplay text-3xl font-extrabold text-textDark">{totalTourists}</span>
-              <span className="text-xs text-textDark/60">cuentas</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-black/5 p-6 shadow-xs space-y-2">
-            <span className="text-[11px] font-bold uppercase text-textDark/50">Cuentas Activas</span>
-            <div className="flex items-baseline space-x-2">
-              <span className="font-wixDisplay text-3xl font-extrabold text-green-600">{totalActiveUsers}</span>
-              <span className="text-xs text-textDark/60">activas</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: NEGOCIOS LOCALES */}
-      {activeTab === 'businesses' && (
-        <div className="bg-white rounded-3xl border border-black/5 p-6 shadow-xs space-y-4">
-          <h3 className="font-wixDisplay text-lg font-bold text-textDark">Distribución por Categoría</h3>
-          <div className="space-y-3">
-            {categories.map((c) => {
-              const count = pois.filter((p) => p.category.toLowerCase() === c.name.toLowerCase()).length;
-              const total = pois.length || 1;
-              const pct = Math.round((count / total) * 100);
-
-              return (
-                <div key={c.id} className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-textDark/80">{c.name}</span>
-                    <span className="text-textDark font-bold">{count} ({pct}%)</span>
-                  </div>
-                  <div className="h-2 w-full bg-bgPrimary rounded-full overflow-hidden border border-black/5">
-                    <div className="h-full bg-accentWine rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+      {/* ---- Uso del asistente IA ---- */}
+      {activeTab === 'ai' && (
+        <div className="space-y-8">
+          {aiLoading && !aiReport ? (
+            <ReportLoadingState message="Calculando conversaciones, tokens y costo estimado..." />
+          ) : aiError ? (
+            <ReportErrorState message={aiError} onRetry={fetchAi} />
+          ) : aiReport ? (
+            <div className={`space-y-8 ${aiLoading ? 'opacity-60 pointer-events-none' : ''}`} aria-busy={aiLoading}>
+              {sinConversaciones && (
+                <div className="bg-white rounded-3xl border border-black/5 p-6 flex items-start space-x-4 shadow-xs" role="status">
+                  <Bot className="h-6 w-6 text-accentWine flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h3 className="font-wixDisplay text-base font-bold text-textDark">
+                      No hay conversaciones en este período
+                    </h3>
+                    <p className="text-xs text-textDark/60 leading-relaxed">
+                      No se iniciaron conversaciones con el asistente entre el{' '}
+                      <strong className="text-textDark">{fechaDesde}</strong> y el{' '}
+                      <strong className="text-textDark">{fechaHasta}</strong>. Las métricas se muestran en cero.
+                    </p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
+
+              <AiAssistantUsageKpis metricas={aiReport.metricas} onUmbralChange={handleUmbralChange} />
+
+              <AiThematicPieChart
+                distribucion={aiReport.distribucionTematica}
+                datosSemanaAnterior={aiReport.datosSemanaAnterior}
+                mensajeEstadoProcesamiento={aiReport.mensajeEstadoProcesamiento}
+              />
+            </div>
+          ) : null}
         </div>
       )}
 
-      {/* TAB 4: ASISTENTE IA */}
-      {activeTab === 'ai' && (
-        <div className="bg-white rounded-3xl border border-black/5 p-12 text-center space-y-3 shadow-xs">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-accentWine/10 text-accentWine">
-            <Bot className="h-7 w-7" />
-          </div>
-          <h4 className="font-wixDisplay text-lg font-bold text-textDark">Métricas del Asistente Conversacional</h4>
-          <p className="text-xs text-textDark/60 max-w-md mx-auto">
-            El módulo de Asistente IA procesa consultas turísticas en tiempo real en la aplicación móvil. Las métricas agregadas se calcularán automáticamente a medida que los turistas completen itinerarios.
-          </p>
-        </div>
-      )}
+      {/* Exportación (US-RYI-05) */}
+      <ExportReportModal
+        isOpen={isExportOpen}
+        onClose={() => {
+          setIsExportOpen(false);
+          setExportRangeOverride(null);
+        }}
+        rol="admin"
+        tipoReporte={REPORTES[activeTab].tipo}
+        nombreReporte={REPORTES[activeTab].nombre}
+        filtros={exportFiltros}
+        hayDatos={hayDatosParaExportar}
+      />
     </div>
   );
 }

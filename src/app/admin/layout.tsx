@@ -17,6 +17,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationCenter from '@/components/NotificationCenter';
+import OnboardingTutorialModal from '@/components/common/OnboardingTutorialModal';
+import { MENSAJE_SIN_PERMISOS, setFlashMessage } from '@/components/common/FlashMessage';
+import ErrorReportModal from '@/components/common/ErrorReportModal';
+import { Sparkles, AlertTriangle } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -26,15 +30,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isErrorReportOpen, setIsErrorReportOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
+    if (!mounted || isAuthLoading || !currentUser) return;
+    const localDone = typeof window !== 'undefined'
+      ? localStorage.getItem(`ando_onboarding_completed_${currentUser.id}`) === 'true'
+      : false;
+    if (!currentUser.onboardingCompletado && !localDone) {
+      setIsOnboardingOpen(true);
+    }
+  }, [mounted, isAuthLoading, currentUser]);
+
+  useEffect(() => {
     if (!mounted || isAuthLoading) return;
 
     if (!currentUser || currentUser.role !== 'admin') {
+      if (currentUser) setFlashMessage(MENSAJE_SIN_PERMISOS);
       router.push('/');
     }
   }, [mounted, isAuthLoading, currentUser, router]);
@@ -74,10 +91,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       desc: 'Prestadores y administradores'
     },
     {
-      name: 'Reportes y Estadísticas',
+      name: 'Reportes e Informes',
       path: '/admin/reports',
       icon: BarChart3,
-      desc: 'Métricas de la plataforma'
+      desc: 'Métricas, visitas y analíticas'
     },
     {
       name: 'Auditoría y Logs',
@@ -198,7 +215,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           
           {/* Header Actions */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={() => setIsOnboardingOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-accentWine/20 bg-accentWine/5 text-accentWine hover:bg-accentWine/10 text-xs font-bold transition cursor-pointer"
+              title="Ver Tutorial de Onboarding"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Tutorial</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsErrorReportOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-xs font-bold transition cursor-pointer"
+              title="Reportar Error del Sistema"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+              <span className="hidden md:inline">Reportar Error</span>
+            </button>
+
             <NotificationCenter />
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
@@ -249,6 +286,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       )}
+
+      {/* Interactive Onboarding Tutorial (US-AYS-04) */}
+      <OnboardingTutorialModal
+        role="admin"
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+      />
+
+      {/* User Error Reporting Modal (US-AYS-05) */}
+      <ErrorReportModal
+        isOpen={isErrorReportOpen}
+        onClose={() => setIsErrorReportOpen(false)}
+      />
     </div>
   );
 }
