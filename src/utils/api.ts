@@ -387,7 +387,7 @@ export const api = {
       umbralCostoAlerta,
     }),
   getFiltrosDisponiblesReportes: (rol: 'admin' | 'prestador' = 'admin') =>
-    request<FiltrosDisponiblesReportes>(`/${rol}/reportes/filtros-disponibles`, 'GET'),
+    request<FiltrosDisponiblesReportes>(`/${rol}/reportes/filtros-disponibles`, 'GET', undefined, {}, REPORT_TIMEOUT_MS),
 
   // US-RYI-05: Exportación de Reportes (el archivo lo genera el backend con los filtros aplicados)
   exportarReporte: async (
