@@ -56,6 +56,11 @@ const ADMIN_TOUR: GuidedTourStop[] = [
     text: 'Acá auditás lo que pasó en el sistema: acciones de usuarios, cambios en POIs, logins fallidos y errores, con filtros por fecha, tipo y usuario.',
   },
   {
+    target: '/admin/error-reports',
+    title: 'Reportes de Error',
+    text: 'Acá ves los errores que reportaron los usuarios desde la web y la app. Podés buscarlos por su identificador de incidente y abrir el detalle con las capturas.',
+  },
+  {
     target: '/admin/settings',
     title: 'Configuración del Sistema',
     text: 'Acá mantenés las categorías, etiquetas, estados de validación y parámetros generales de la plataforma.',

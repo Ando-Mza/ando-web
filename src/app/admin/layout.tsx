@@ -16,7 +16,8 @@ import {
   HelpCircle,
   ShieldAlert,
   Activity,
-  BadgeCheck
+  BadgeCheck,
+  Bug
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationCenter from '@/components/NotificationCenter';
@@ -122,6 +123,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       path: '/admin/logs',
       icon: FileText,
       desc: 'Historial de actividades'
+    },
+    {
+      name: 'Reportes de Error',
+      path: '/admin/error-reports',
+      icon: Bug,
+      desc: 'Errores reportados por usuarios'
     },
     {
       name: 'Configuración del Sistema',

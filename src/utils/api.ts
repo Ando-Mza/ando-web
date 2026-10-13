@@ -17,6 +17,24 @@ export class ApiError extends Error {
   }
 }
 
+/** Reporte de error enviado por un usuario (US-AYS-05), tal como lo consulta el Administrador (US-AYS-07) */
+export interface ReporteErrorAdmin {
+  id: string;
+  /** Identificador de incidente informado al usuario, p. ej. "INC-261013-K7QD" */
+  codigo: string;
+  asunto: string;
+  descripcion: string;
+  /** Enlaces a las capturas adjuntas */
+  evidencias: string[];
+  fechaCreacion: string;
+  usuario: { id: string; nombre: string; email: string } | null;
+}
+
+export interface ReportesErrorAdminResponse {
+  data: ReporteErrorAdmin[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
 /** Los reportes agregan datos de varias tablas y pueden demorar más que una consulta común. */
 const REPORT_TIMEOUT_MS = 45000;
 
@@ -284,7 +302,22 @@ export const api = {
   createConsultaSoporte: (body: { asunto: string; descripcion: string; evidencia?: string }) => 
     request<any>('/soporte/consultas', 'POST', body),
   createReporteError: (body: { asunto: string; descripcion: string; evidencias?: string[] }) =>
-    request<{ id: string; mensaje: string }>('/soporte/reportes-error', 'POST', body),
+    request<{ id: string; codigo?: string; mensaje: string }>('/soporte/reportes-error', 'POST', body),
+  // US-AYS-07: reportes de error recibidos (solo Administrador)
+  getReportesError: (params?: { search?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.search) qs.set('search', params.search);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return request<ReportesErrorAdminResponse>(
+      `/soporte/admin/reportes-error${query ? `?${query}` : ''}`,
+      'GET',
+      undefined,
+      {},
+      REPORT_TIMEOUT_MS,
+    );
+  },
 
   // Módulo de Reportes e Informes (US-RYI-01, US-RYI-06)
   getReportePoisMasVisitados: (params?: {
