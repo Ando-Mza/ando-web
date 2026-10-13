@@ -16,8 +16,10 @@ import {
   AlertTriangle,
   Check,
   Eye,
-  EyeOff
+  EyeOff,
+  Bell,
 } from 'lucide-react';
+import { api } from '@/utils/api';
 
 export default function ProviderProfilePage() {
   const router = useRouter();
@@ -73,6 +75,25 @@ export default function ProviderProfilePage() {
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
+  // Notification Preferences State
+  const [notificationPreferences, setNotificationPreferences] = useState<any[]>([]);
+  const [initialPreferencesStr, setInitialPreferencesStr] = useState<string>('');
+
+  useEffect(() => {
+    if (currentUser) {
+      api.getNotificationPreferences()
+        .then((res: any) => {
+          if (res && res.preferencias) {
+            setNotificationPreferences(res.preferencias);
+            setInitialPreferencesStr(JSON.stringify(res.preferencias));
+          }
+        })
+        .catch((err) => {
+          console.warn('Error fetching notification preferences:', err);
+        });
+    }
+  }, [currentUser]);
+
   if (!currentUser) return null;
 
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
@@ -93,7 +114,8 @@ export default function ProviderProfilePage() {
       cuit !== (currentUser.cuit || '') ||
       businessName !== (currentUser.businessName || '') ||
       newPassword !== '' ||
-      confirmPassword !== ''
+      confirmPassword !== '' ||
+      JSON.stringify(notificationPreferences) !== initialPreferencesStr
     );
   };
 
@@ -163,6 +185,9 @@ export default function ProviderProfilePage() {
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    if (initialPreferencesStr) {
+      setNotificationPreferences(JSON.parse(initialPreferencesStr));
+    }
     setShowCancelModal(false);
     showToast('Los cambios se descartaron', 'warning');
 
@@ -197,6 +222,25 @@ export default function ProviderProfilePage() {
     if (!res.success) {
       showToast(res.error || 'Error al guardar los datos del perfil.', 'error');
       return;
+    }
+
+    // Guardar preferencias de notificación si cambiaron
+    if (JSON.stringify(notificationPreferences) !== initialPreferencesStr) {
+      try {
+        const cleanPreferences = notificationPreferences.map(p => ({
+          categoria: p.categoria,
+          habilitado: p.habilitado,
+          inApp: p.inApp,
+          push: p.push,
+          email: p.email
+        }));
+        await api.updateNotificationPreferences(cleanPreferences);
+        setInitialPreferencesStr(JSON.stringify(notificationPreferences));
+      } catch (err: any) {
+        console.error('Error al guardar preferencias de notificación:', err);
+        showToast(err?.message || 'Perfil guardado, pero falló la actualización de notificaciones.', 'error');
+        return;
+      }
     }
 
     // Si se completó una nueva contraseña, invocar cambio de contraseña en backend
@@ -261,6 +305,23 @@ export default function ProviderProfilePage() {
   const reqCapital = /[A-Z]/.test(newPassword);
   const reqNumber = /[0-9]/.test(newPassword);
   const reqSpecial = /[^A-Za-z0-9]/.test(newPassword);
+
+  const formatNotificationCategory = (cat: string) => {
+    if (cat === 'respuestas_resenas') return 'Nuevas Reseñas';
+    const formatted = cat.replace(/_/g, ' ').toLowerCase();
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  };
+
+  const handlePreferenceChange = (categoria: string, field: 'habilitado' | 'inApp' | 'push' | 'email', checked: boolean) => {
+    setNotificationPreferences(prev => {
+      const existing = prev.find(p => p.categoria === categoria);
+      if (existing) {
+        return prev.map(p => p.categoria === categoria ? { ...p, [field]: checked } : p);
+      } else {
+        return [...prev, { categoria, habilitado: true, inApp: true, push: false, email: false, [field]: checked }];
+      }
+    });
+  };
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto pb-12 relative font-wixText">
@@ -679,7 +740,64 @@ export default function ProviderProfilePage() {
           )}
         </div>
 
-        {/* Section 3: Action buttons */}
+        {/* Section 3: Notification Preferences (US-CYP-06) */}
+        <div className="bg-white rounded-2xl border border-black/5 p-6 space-y-6 shadow-xs">
+          <div className="flex items-center justify-between pb-2 border-b border-black/5">
+            <h4 className="font-wixDisplay text-sm font-bold text-accentWine flex items-center">
+              <Bell className="h-4.5 w-4.5 mr-2 text-fillPrimary" />
+              <span>Configuración de Notificaciones</span>
+            </h4>
+          </div>
+          
+          <div className="space-y-4">
+            {[
+              'validaciones',
+              'actualizaciones_contenido',
+              'respuestas_resenas',
+              'novedades_plataforma'
+            ].map(cat => {
+              const pref = notificationPreferences.find(p => p.categoria === cat) || {
+                categoria: cat,
+                habilitado: true,
+                inApp: true,
+                push: false,
+                email: false
+              };
+
+              return (
+                <div key={cat} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-black/5 bg-bgPrimary/20 hover:bg-bgPrimary/40 transition-colors">
+                  <div className="mb-2 sm:mb-0">
+                    <h5 className="text-xs font-bold text-textDark">{formatNotificationCategory(cat)}</h5>
+                    <p className="text-[10px] text-textDark/60">
+                      Recibir avisos sobre {cat === 'respuestas_resenas' ? 'nuevas reseñas recibidas en tus puntos de interés' : cat.replace(/_/g, ' ')}.
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center space-x-4">
+                    {/* Switch principal */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-textDark/70">
+                        {pref.habilitado ? 'Habilitado' : 'Apagado'}
+                      </span>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={pref.habilitado}
+                          onChange={(e) => handlePreferenceChange(cat, 'habilitado', e.target.checked)}
+                        />
+                        <div className={`block w-8 h-5 rounded-full transition-colors ${pref.habilitado ? 'bg-fillPrimary' : 'bg-black/20'}`}></div>
+                        <div className={`dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform ${pref.habilitado ? 'transform translate-x-3' : ''}`}></div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Section 4: Action buttons */}
         <div className="flex items-center justify-between pt-4 border-t border-black/5">
           <button
             type="button"
