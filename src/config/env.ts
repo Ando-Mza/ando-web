@@ -2,8 +2,12 @@
  * Centralized environment configuration for the web application.
  */
 export const getApiBaseUrl = (): string => {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+  const configurada = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configurada) {
+    // Sin "https://" el navegador la toma como ruta relativa al propio sitio y ninguna
+    // consulta llega al backend; también se quita la barra final para no duplicarla.
+    const conProtocolo = /^https?:\/\//i.test(configurada) ? configurada : `https://${configurada}`;
+    return conProtocolo.replace(/\/+$/, '');
   }
   if (typeof window !== 'undefined' && window.location?.hostname) {
     return `http://${window.location.hostname}:3000`;
