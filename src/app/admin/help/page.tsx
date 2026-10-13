@@ -103,47 +103,19 @@ export default function AdminHelpPage() {
   } | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
 
-  // Fallback estático en caso de que el backend no tenga registros aún
-  const defaultFaqs = [
-    {
-      q: '¿Cómo funciona el flujo formal de auditoría de POIs?',
-      a: 'En "Validación de POIs", el administrador revisa los datos completos del POI (descripción, coordenadas, fotos y horarios). Puede aprobar directamente, solicitar corrección indicando observaciones detalladas o rechazar fundando el motivo. Cada acción genera un registro inmutable en el log de auditoría.',
-    },
-    {
-      q: '¿Cómo se gestionan las categorías y etiquetas turísticas?',
-      a: 'Desde "Configuración del Sistema", el administrador puede crear, editar, activar o desactivar categorías y etiquetas. Si una categoría ya está asignada a uno o más POIs activos, el sistema impide su eliminación directa para proteger la integridad referencial.',
-    },
-    {
-      q: '¿Cómo se maneja la baja de prestadores y usuarios?',
-      a: 'Al dar de baja una cuenta de prestador desde "Gestión de Usuarios", se aplica una baja lógica asignando la fecha de baja en el backend. Los POIs dependientes pasan a estado rechazado/inactivo y no se eliminan físicamente de la base de datos.',
-    },
-    {
-      q: '¿Dónde se consultan y descargan los reportes consolidados?',
-      a: 'En "Reportes y Estadísticas", el administrador puede filtrar por período (7d, 30d, 90d, histórico) y categoría turística para visualizar métricas agregadas y descargar los datos tabulares en formato CSV o PDF estándar.',
-    },
-    {
-      q: '¿Cómo se garantiza la trazabilidad y auditoría de eventos?',
-      a: 'En la sección "Auditoría y Logs", el sistema registra automáticamente el timestamp, IP, administrador actor y detalle de cada decisión crítica. Los registros son de solo lectura y pueden exportarse para auditorías externas.',
-    },
-    {
-      q: '¿Qué pasa si apruebo por error un negocio falso?',
-      a: 'Podés buscar el POI en el sistema, ingresar a su detalle y cambiar su estado manualmente a "Suspendido" o "Rechazado", lo que lo ocultará inmediatamente del mapa público.'
-    },
-    {
-      q: '¿Por qué hay reportes sin "Usuario reportante"?',
-      a: 'Son los reportes generados automáticamente por la Inteligencia Artificial de ANDO al detectar lenguaje inapropiado durante la publicación de una reseña.'
-    },
-    {
-      q: '¿La eliminación de usuarios borra sus datos de la base de datos?',
-      a: 'No. Por cuestiones de auditoría e integridad referencial, las eliminaciones son "lógicas". La cuenta se desactiva y se oculta su contenido, pero los registros persisten en la base de datos.'
-    },
-    {
-      q: '¿Puedo crear otro usuario Administrador?',
-      a: 'Sí. Desde el módulo de Administración de Usuarios, usando el botón "+ Nuevo Usuario" y asignándole el rol `Administrador`. Tienen los mismos privilegios que tu cuenta.'
-    }
-  ];
+  // Preguntas frecuentes publicadas para el rol Administrador (cargadas desde la gestión de ayuda)
+  const faqsAdmin = useMemo(
+    () =>
+      articulos.filter(
+        (a) =>
+          a.tipo === 'FAQ' &&
+          a.activo &&
+          (a.rolesPermitidos || []).some((rol) => rol.toLowerCase() === 'administrador')
+      ),
+    [articulos]
+  );
 
-  // Carga de datos desde Backend
+  // Carga de datos desde Backend  // Carga de datos desde Backend
   const loadAyudaData = useCallback(async () => {
     setIsLoadingData(true);
     setDataError(null);
@@ -246,7 +218,8 @@ export default function AdminHelpPage() {
       if (editingCategory) {
         await api.updateAyudaCategoria(editingCategory.id, {
           nombre: catNombre.trim(),
-          descripcion: catDescripcion.trim() || undefined,
+          // Se envía también vacía, para poder borrar una descripción ya cargada
+          descripcion: catDescripcion.trim(),
           activo: catActivo,
         });
         showSuccess('Categoría de ayuda actualizada correctamente.');
@@ -536,7 +509,7 @@ export default function AdminHelpPage() {
             }`}
           >
             <Settings className="h-4 w-4" />
-            <span>Gestión de Artículos y Categorías (US-AYS-06)</span>
+            <span>Gestión de Artículos y Categorías</span>
           </button>
         )}
       </div>
@@ -691,17 +664,40 @@ export default function AdminHelpPage() {
                 <BookOpen className="h-5 w-5 text-accentWine" />
                 <h3 className="font-wixDisplay text-lg font-bold text-textDark">Preguntas Frecuentes de Administración</h3>
               </div>
-              {articulos.filter(a => a.tipo === 'FAQ').length > 0 && (
+              {faqsAdmin.length > 0 && (
                 <span className="text-[11px] font-bold text-accentWine bg-accentWine/10 px-2.5 py-1 rounded-full">
-                  {articulos.filter(a => a.tipo === 'FAQ' && a.activo).length} preguntas publicadas
+                  {faqsAdmin.length} {faqsAdmin.length === 1 ? 'pregunta publicada' : 'preguntas publicadas'}
                 </span>
               )}
             </div>
 
+            {isLoadingData ? (
+              <p className="text-xs text-textDark/60 py-6 text-center">Cargando preguntas frecuentes...</p>
+            ) : dataError ? (
+              <p className="text-xs text-red-700 py-6 text-center" role="alert">
+                No se pudieron cargar las preguntas frecuentes: {dataError}
+              </p>
+            ) : faqsAdmin.length === 0 ? (
+              <div className="py-8 text-center space-y-3">
+                <p className="text-xs text-textDark/60 max-w-md mx-auto leading-relaxed">
+                  Todavía no hay preguntas frecuentes publicadas para el rol Administrador.
+                </p>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('gestion')}
+                    className="px-4 py-2 bg-accentWine hover:bg-accentWine/90 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    Cargar preguntas frecuentes
+                  </button>
+                )}
+              </div>
+            ) : null}
+
             <div className="divide-y divide-black/5">
-              {(articulos.filter(a => a.tipo === 'FAQ' && a.activo).length > 0 
-                ? articulos.filter(a => a.tipo === 'FAQ' && a.activo).map(a => ({ q: a.titulo, a: a.contenido }))
-                : defaultFaqs
+              {(isLoadingData || dataError
+                ? []
+                : faqsAdmin.map((a) => ({ q: a.titulo, a: a.contenido }))
               ).map((faq, idx) => {
                 const isOpen = openFaqIndex === idx;
                 return (

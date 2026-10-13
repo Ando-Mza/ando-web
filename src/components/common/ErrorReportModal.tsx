@@ -100,7 +100,8 @@ export default function ErrorReportModal({ isOpen, onClose }: ErrorReportModalPr
       });
 
       setConfirmationData({
-        id: res.id,
+        // Código legible del incidente (los reportes anteriores solo tenían el id interno)
+        id: res.codigo ?? res.id,
         mensaje: res.mensaje || 'Reporte enviado correctamente',
         email: currentUser?.email || 'tu cuenta de correo registrada',
       });
@@ -176,9 +177,6 @@ export default function ErrorReportModal({ isOpen, onClose }: ErrorReportModalPr
               </div>
 
               <div className="space-y-2">
-                <div className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold tracking-wide">
-                  Cartel de Confirmación
-                </div>
                 <h3 className="font-wixDisplay text-2xl font-black text-textDark">
                   {confirmationData.mensaje}
                 </h3>
@@ -193,7 +191,7 @@ export default function ErrorReportModal({ isOpen, onClose }: ErrorReportModalPr
                   Identificador de Incidente:
                 </span>
                 <div className="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-black/10">
-                  <span className="font-mono text-xs font-bold text-accentWine break-all select-all">
+                  <span className="font-mono text-lg font-black tracking-widest text-accentWine break-all select-all">
                     {confirmationData.id}
                   </span>
                   <button
