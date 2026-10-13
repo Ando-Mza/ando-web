@@ -1,10 +1,55 @@
 import { ENV } from '../config/env';
+import type { GeneralDashboardResponse, ProviderDashboardResponse } from '@/types/dashboard';
+import type { AlertaSospechosa, AlertasFilters, AlertasMetricas, AlertasPage, ReglaSospecha } from '@/types/suspicious';
+import type { SolicitudValidacion, ValidacionesFilters, ValidacionesPage } from '@/types/validations';
+import type { ModerationCase, ModerationFilters, ModerationPage } from '@/types/moderation';
+import { ExportReporteQuery, ExportReporteAsyncResponse, FiltrosDisponiblesReportes } from '@/types/reportes';
+import { QueryAuditLogsParams, PaginatedAuditLogsResponseDto } from '@/types/audit';
+import { AyudaCategoria, AyudaArticulo, AyudaArticuloTipo } from '@/types';
+
+/** Error de la API con el código HTTP, para que la UI distinga 403, 410, etc. */
+export class ApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+/** Reporte de error enviado por un usuario (US-AYS-05), tal como lo consulta el Administrador (US-AYS-07) */
+export interface ReporteErrorAdmin {
+  id: string;
+  /** Identificador de incidente informado al usuario, p. ej. "INC-261013-K7QD" */
+  codigo: string;
+  asunto: string;
+  descripcion: string;
+  /** Enlaces a las capturas adjuntas */
+  evidencias: string[];
+  fechaCreacion: string;
+  usuario: { id: string; nombre: string; email: string } | null;
+}
+
+export interface ReportesErrorAdminResponse {
+  data: ReporteErrorAdmin[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
+
+/** Los reportes agregan datos de varias tablas y pueden demorar más que una consulta común. */
+const REPORT_TIMEOUT_MS = 45000;
+
+function mensajeDeError(errorData: any, fallback: string): string {
+  const message = errorData?.message;
+  if (Array.isArray(message)) return message.join(', ');
+  return message || fallback;
+}
 
 async function request<T>(
   path: string,
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
   body?: any,
-  customHeaders: Record<string, string> = {}
+  customHeaders: Record<string, string> = {},
+  timeoutMs: number = 10000
 ): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
   
@@ -17,21 +62,34 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${ENV.API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    response = await fetch(`${ENV.API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new ApiError('El servidor tardó demasiado en responder. Intentá nuevamente.');
+    }
+    throw new ApiError('No se pudo conectar con el servidor. Revisá tu conexión e intentá nuevamente.');
+  }
 
   if (!response.ok) {
     let errorMessage = `Error HTTP: ${response.status}`;
     try {
       const errorData = await response.json();
-      errorMessage = errorData.message || (Array.isArray(errorData.message) ? errorData.message.join(', ') : errorData.message) || errorMessage;
+      errorMessage = mensajeDeError(errorData, errorMessage);
     } catch {
       // Ignorar si no es JSON
     }
-    throw new Error(errorMessage);
+    throw new ApiError(errorMessage, response.status);
   }
 
   if (response.status === 204 || response.status === 205) {
@@ -81,6 +139,27 @@ export const api = {
     request<{ success: boolean }>('/user/profile/verify-password', 'POST', { password }),
   deleteMyAccount: (body: { userId: string; passwordActual: string; motivo: string; detalle?: string }) =>
     request<any>('/user/profile', 'DELETE', body),
+
+  // Dashboard (US-PAD-01)
+  getGeneralDashboard: (params?: { periodo?: string; fechaDesde?: string; fechaHasta?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.periodo) qs.set('periodo', params.periodo);
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    const queryString = qs.toString();
+    return request<GeneralDashboardResponse>(`/dashboard/general${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
+
+  // Dashboard del Prestador (US-PAD-02)
+  getProviderDashboard: (params?: { poiId?: string; periodo?: string; fechaDesde?: string; fechaHasta?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.poiId) qs.set('poiId', params.poiId);
+    if (params?.periodo) qs.set('periodo', params.periodo);
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    const queryString = qs.toString();
+    return request<ProviderDashboardResponse>(`/dashboard/prestador${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
 
   // POI Status — Admin (endpoint genérico, se mantiene para compatibilidad)
   updatePoiStatus: (id: string, estado: string) =>
@@ -201,10 +280,365 @@ export const api = {
     motivo: string;
     descripcion?: string;
   }) => request<any>('/reportes', 'POST', body),
+  createConsultaSoporte: (body: { asunto: string; descripcion: string; evidencia?: string }) => 
+    request<any>('/soporte/consultas', 'POST', body),
+  createReporteError: (body: { asunto: string; descripcion: string; evidencias?: string[] }) =>
+    request<{ id: string; codigo?: string; mensaje: string }>('/soporte/reportes-error', 'POST', body),
+  // US-AYS-07: reportes de error recibidos (solo Administrador)
+  getReportesError: (params?: { search?: string; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.search) qs.set('search', params.search);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return request<ReportesErrorAdminResponse>(
+      `/soporte/admin/reportes-error${query ? `?${query}` : ''}`,
+      'GET',
+      undefined,
+      {},
+      REPORT_TIMEOUT_MS,
+    );
+  },
+
+  // Módulo de Reportes e Informes (US-RYI-01, US-RYI-06)
+  getReportePoisMasVisitados: (params?: {
+    fechaDesde?: string;
+    fechaHasta?: string;
+    categoriaId?: string;
+    departamentoId?: string;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    if (params?.categoriaId && params.categoriaId !== 'all') qs.set('categoriaId', params.categoriaId);
+    if (params?.departamentoId && params.departamentoId !== 'all') qs.set('departamentoId', params.departamentoId);
+    if (params?.search) qs.set('search', params.search);
+    if (params?.sortBy) qs.set('sortBy', params.sortBy);
+    if (params?.sortOrder) qs.set('sortOrder', params.sortOrder);
+    if (params?.page) qs.set('page', params.page.toString());
+    if (params?.limit) qs.set('limit', params.limit.toString());
+    const query = qs.toString();
+    return request<any>(`/admin/reportes/pois-mas-visitados${query ? `?${query}` : ''}`, 'GET', undefined, {}, REPORT_TIMEOUT_MS);
+  },
+  getDetalleMensualPoi: (poiId: string, params?: { fechaDesde?: string; fechaHasta?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    const query = qs.toString();
+    return request<any>(`/admin/reportes/pois-mas-visitados/${poiId}/detalle-mensual${query ? `?${query}` : ''}`, 'GET', undefined, {}, REPORT_TIMEOUT_MS);
+  },
+  // US-RYI-02: Reporte de Actividad de Usuarios
+  getReporteActividadUsuarios: (params?: {
+    fechaDesde?: string;
+    fechaHasta?: string;
+    granularidad?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    if (params?.granularidad && params.granularidad !== 'auto') qs.set('granularidad', params.granularidad);
+    const query = qs.toString();
+    return request<any>(`/admin/reportes/actividad-usuarios${query ? `?${query}` : ''}`, 'GET', undefined, {}, REPORT_TIMEOUT_MS);
+  },
+  // US-RYI-03: Reporte Negocios Locales (Admin y Prestador)
+  getReporteNegociosAdmin: (params?: {
+    fechaDesde?: string;
+    fechaHasta?: string;
+    categoriaId?: string;
+    departamentoId?: string;
+    estado?: string;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    if (params?.categoriaId && params.categoriaId !== 'all') qs.set('categoriaId', params.categoriaId);
+    if (params?.departamentoId && params.departamentoId !== 'all') qs.set('departamentoId', params.departamentoId);
+    if (params?.estado && params.estado !== 'all') qs.set('estado', params.estado);
+    if (params?.search) qs.set('search', params.search);
+    if (params?.sortBy) qs.set('sortBy', params.sortBy);
+    if (params?.sortOrder) qs.set('sortOrder', params.sortOrder);
+    if (params?.page) qs.set('page', params.page.toString());
+    if (params?.limit) qs.set('limit', params.limit.toString());
+    const query = qs.toString();
+    return request<any>(`/admin/reportes/negocios-locales${query ? `?${query}` : ''}`, 'GET', undefined, {}, REPORT_TIMEOUT_MS);
+  },
+  getReporteNegociosPrestador: (params?: {
+    fechaDesde?: string;
+    fechaHasta?: string;
+    categoriaId?: string;
+    departamentoId?: string;
+    search?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    if (params?.categoriaId && params.categoriaId !== 'all') qs.set('categoriaId', params.categoriaId);
+    if (params?.departamentoId && params.departamentoId !== 'all') qs.set('departamentoId', params.departamentoId);
+    if (params?.search) qs.set('search', params.search);
+    const query = qs.toString();
+    return request<any>(`/prestador/reportes/mi-negocio${query ? `?${query}` : ''}`, 'GET', undefined, {}, REPORT_TIMEOUT_MS);
+  },
+  // US-RYI-04: Reporte de Uso del Asistente IA
+  getReporteAsistenteIa: (params?: { fechaDesde?: string; fechaHasta?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    const query = qs.toString();
+    return request<any>(`/admin/reportes/asistente-ia${query ? `?${query}` : ''}`, 'GET', undefined, {}, REPORT_TIMEOUT_MS);
+  },
+  updateUmbralCostoAsistente: (umbralCostoAlerta: number) =>
+    request<{ umbralCostoAlerta: number }>('/admin/reportes/asistente-ia/umbral-costo', 'PATCH', {
+      umbralCostoAlerta,
+    }),
+  getFiltrosDisponiblesReportes: (rol: 'admin' | 'prestador' = 'admin') =>
+    request<FiltrosDisponiblesReportes>(`/${rol}/reportes/filtros-disponibles`, 'GET', undefined, {}, REPORT_TIMEOUT_MS),
+
+  // US-RYI-05: Exportación de Reportes (el archivo lo genera el backend con los filtros aplicados)
+  exportarReporte: async (
+    rol: 'admin' | 'prestador',
+    params: ExportReporteQuery
+  ): Promise<{ esAsincrono: boolean; blob?: Blob; filename?: string; asyncResponse?: ExportReporteAsyncResponse }> => {
+    const qs = new URLSearchParams();
+    qs.set('tipoReporte', rol === 'prestador' ? 'mi-negocio' : params.tipoReporte);
+    qs.set('formato', params.formato);
+    if (params.fechaDesde) qs.set('fechaDesde', params.fechaDesde);
+    if (params.fechaHasta) qs.set('fechaHasta', params.fechaHasta);
+    if (params.categoriaId && params.categoriaId !== 'all') qs.set('categoriaId', params.categoriaId);
+    if (params.departamento && params.departamento !== 'all') qs.set('departamento', params.departamento);
+    if (params.search) qs.set('search', params.search);
+    if (params.ordenarPor) qs.set('ordenarPor', params.ordenarPor);
+    if (params.orden) qs.set('orden', params.orden);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    let res: Response;
+    try {
+      res = await fetch(`${ENV.API_BASE_URL}/${rol}/reportes/exportar?${qs.toString()}`, {
+        method: 'GET',
+        headers,
+      });
+    } catch {
+      throw new ApiError('No se pudo conectar con el servidor. Revisá tu conexión e intentá nuevamente.');
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(mensajeDeError(err, 'No se pudo generar la exportación.'), res.status);
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const asyncData: ExportReporteAsyncResponse = await res.json();
+      return { esAsincrono: true, asyncResponse: asyncData };
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition') || '';
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+    const filename = filenameMatch ? filenameMatch[1] : `reporte-${params.tipoReporte}.${params.formato}`;
+    return { esAsincrono: false, blob, filename };
+  },
+
+  /** Descarga un archivo generado en segundo plano. Lanza ApiError con status 410 si el enlace venció. */
+  descargarExportacion: async (
+    token: string,
+    rol: 'admin' | 'prestador' = 'admin'
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const userToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    const headers: Record<string, string> = {};
+    if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
+
+    let res: Response;
+    try {
+      res = await fetch(`${ENV.API_BASE_URL}/${rol}/reportes/exportar/descargar/${token}`, {
+        method: 'GET',
+        headers,
+      });
+    } catch {
+      throw new ApiError('No se pudo conectar con el servidor. Revisá tu conexión e intentá nuevamente.');
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(mensajeDeError(err, 'No se pudo descargar el archivo.'), res.status);
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition') || '';
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+    const filename = filenameMatch ? filenameMatch[1] : 'reporte-exportado';
+    return { blob, filename };
+  },
+
+  // Moderación de contenido (US-PAD-03)
+  getModerationCases: (filters?: ModerationFilters) => {
+    const qs = new URLSearchParams();
+    if (filters?.origen) qs.set('origen', filters.origen);
+    if (filters?.entidad) qs.set('entidad', filters.entidad);
+    if (filters?.estado) qs.set('estado', filters.estado);
+    if (filters?.page) qs.set('page', String(filters.page));
+    if (filters?.limit) qs.set('limit', String(filters.limit));
+    const queryString = qs.toString();
+    return request<ModerationPage>(`/moderacion${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
+  getModerationCase: (id: string) => request<ModerationCase>(`/moderacion/${id}`, 'GET'),
+  desestimarReporte: (id: string) =>
+    request<{ message: string; reporte: ModerationCase }>(`/moderacion/${id}/desestimar`, 'PATCH'),
+  eliminarContenidoReportado: (id: string, motivoModeracion?: string) =>
+    request<{ message: string; reporte: ModerationCase }>(
+      `/moderacion/${id}/eliminar-contenido`,
+      'PATCH',
+      motivoModeracion ? { motivoModeracion } : {},
+    ),
+  suspenderAutorReporte: (id: string, motivo?: string) =>
+    request<{ message: string; autor: { id: string; email: string; nombre: string } }>(
+      `/moderacion/${id}/suspender-autor`,
+      'POST',
+      motivo ? { motivo } : {},
+    ),
+
+  // Actividad sospechosa (US-PAD-05)
+  getAlertasSospechosas: (filters?: AlertasFilters) => {
+    const qs = new URLSearchParams();
+    Object.entries(filters ?? {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    });
+    const queryString = qs.toString();
+    return request<AlertasPage>(`/actividades-sospechosas${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
+  getAlertasMetricas: () => request<AlertasMetricas>('/actividades-sospechosas/metricas', 'GET'),
+  getReglasSospecha: () => request<ReglaSospecha[]>('/actividades-sospechosas/reglas', 'GET'),
+  getAlertaSospechosa: (id: string) => request<AlertaSospechosa>(`/actividades-sospechosas/${id}`, 'GET'),
+  revisarAlerta: (id: string, comentario?: string) =>
+    request<AlertaSospechosa>(`/actividades-sospechosas/${id}/revisar`, 'PATCH', comentario ? { comentario } : {}),
+  cerrarAlerta: (id: string, comentario?: string) =>
+    request<AlertaSospechosa>(`/actividades-sospechosas/${id}/cerrar`, 'PATCH', comentario ? { comentario } : {}),
+
+  // Gestión de validaciones de usuario (US-PAD-04)
+  getValidacionesUsuario: (filters?: ValidacionesFilters) => {
+    const qs = new URLSearchParams();
+    Object.entries(filters ?? {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    });
+    const queryString = qs.toString();
+    return request<ValidacionesPage>(`/validaciones${queryString ? `?${queryString}` : ''}`, 'GET');
+  },
+  getValidacionUsuario: (id: string) => request<SolicitudValidacion>(`/validaciones/${id}`, 'GET'),
+  aprobarValidacionUsuario: (id: string) =>
+    request<{ message: string; solicitud: SolicitudValidacion }>(`/validaciones/${id}/aprobar`, 'PATCH'),
+  rechazarValidacionUsuario: (id: string, motivo: string) =>
+    request<{ message: string; solicitud: SolicitudValidacion }>(`/validaciones/${id}/rechazar`, 'PATCH', { motivo }),
 
   // Storage / Cloudflare R2 Uploads
   getPresignedUrl: (fileName: string, contentType: string) =>
     request<{ uploadUrl: string; key: string }>('/storage/presigned-url', 'POST', { fileName, contentType }),
+
+  // Auditoría y Trazabilidad (US-AYT-01)
+  getAuditLogs: (params?: QueryAuditLogsParams) => {
+    const query = new URLSearchParams();
+    if (params?.fechaDesde) query.append('fechaDesde', params.fechaDesde);
+    if (params?.fechaHasta) query.append('fechaHasta', params.fechaHasta);
+    if (params?.tipoEvento && params.tipoEvento !== 'all') query.append('tipoEvento', params.tipoEvento);
+    if (params?.accion) query.append('accion', params.accion);
+    if (params?.entidad) query.append('entidad', params.entidad);
+    if (params?.usuarioId && params.usuarioId !== 'all') query.append('usuarioId', params.usuarioId);
+    if (params?.search) query.append('search', params.search);
+    if (params?.page) query.append('page', params.page.toString());
+    if (params?.limit) query.append('limit', params.limit.toString());
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return request<PaginatedAuditLogsResponseDto>(`/audit/logs${qs}`, 'GET');
+  },
+
+  // Soporte y Onboarding (US-AYS-04 & US-AYS-05)
+  completeOnboarding: () =>
+    request<{ onboardingCompletado: boolean }>('/user/profile/onboarding', 'PATCH'),
+
+  // Ayuda y Soporte — Gestión de Contenidos (US-AYS-01 & US-AYS-06)
+  getAyudaCategorias: () =>
+    request<AyudaCategoria[]>('/ayuda/categorias', 'GET'),
+  createAyudaCategoria: (body: { nombre: string; descripcion?: string; activo?: boolean }) =>
+    request<AyudaCategoria>('/ayuda/categorias', 'POST', body),
+  updateAyudaCategoria: (id: string, body: Partial<{ nombre: string; descripcion: string; activo: boolean }>) =>
+    request<AyudaCategoria>(`/ayuda/categorias/${id}`, 'PATCH', body),
+  getAyudaArticulos: (params?: { search?: string; q?: string; categoriaId?: string; tipo?: AyudaArticuloTipo }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.q) query.append('q', params.q);
+    if (params?.categoriaId) query.append('categoriaId', params.categoriaId);
+    if (params?.tipo) query.append('tipo', params.tipo);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return request<AyudaArticulo[]>(`/ayuda/articulos${qs}`, 'GET');
+  },
+  getAyudaCategoriasAdmin: () =>
+    request<AyudaCategoria[]>('/ayuda/admin/categorias', 'GET'),
+  getAyudaArticulosAdmin: () =>
+    request<AyudaArticulo[]>('/ayuda/admin/articulos', 'GET'),
+  deleteAyudaCategoria: (id: string) =>
+    request<{ id: string; eliminado: boolean }>(`/ayuda/categorias/${id}`, 'DELETE'),
+  deleteAyudaArticulo: (id: string) =>
+    request<{ id: string; eliminado: boolean }>(`/ayuda/articulos/${id}`, 'DELETE'),
+  getAyudaArticulo: (id: string) =>
+    request<AyudaArticulo>(`/ayuda/articulos/${id}`, 'GET'),
+  createAyudaArticulo: (body: {
+    categoriaId: string;
+    tipo: AyudaArticuloTipo;
+    titulo: string;
+    contenido: string;
+    palabrasClave: string[];
+    rolesPermitidos: string[];
+    activo?: boolean;
+  }) => request<AyudaArticulo>('/ayuda/articulos', 'POST', body),
+  updateAyudaArticulo: (
+    id: string,
+    body: Partial<{
+      categoriaId: string;
+      tipo: AyudaArticuloTipo;
+      titulo: string;
+      contenido: string;
+      palabrasClave: string[];
+      rolesPermitidos: string[];
+      activo: boolean;
+    }>
+  ) => request<AyudaArticulo>(`/ayuda/articulos/${id}`, 'PATCH', body),
+
+  // Parámetros Generales (US-CYP-01)
+  getParametrosGenerales: () => request<any[]>('/parametros', 'GET'),
+  updateParametro: (identifier: string, valor: string) =>
+    request<any>(`/parametros/${identifier}`, 'PATCH', { valor }),
+  resetParametro: (identifier: string) => request<any>(`/parametros/${identifier}/reset`, 'POST'),
+
+  // Integraciones (US-CYP-07)
+  getIntegraciones: () => request<any[]>('/integraciones', 'GET'),
+  updateIntegracion: (id: string, body: any) =>
+    request<any>(`/integraciones/${id}`, 'PATCH', body),
+  toggleIntegracion: (id: string, habilitada: boolean) =>
+    request<any>(`/integraciones/${id}/estado`, 'PATCH', { habilitada }),
+  testIntegracion: (id: string, confirmarConsumo?: boolean) =>
+    request<any>(`/integraciones/${id}/prueba-conexion`, 'POST', { confirmarConsumo }),
+
+  // Notifications (US-NYA-04, 05, 07)
+  getNotifications: () => request<any[]>('/notifications', 'GET'),
+  getUnreadNotificationsCount: () => request<number>('/notifications/unread-count', 'GET'),
+  markNotificationAsRead: (id: string) => request<any>(`/notifications/${id}/read`, 'PATCH'),
+  markAllNotificationsAsRead: () => request<any>('/notifications/read-all', 'PATCH'),
+  getNotificationPreferences: () => request<any>('/notifications/preferences', 'GET'),
+  updateNotificationPreferences: (preferencias: any[]) => request<any>('/notifications/preferences', 'PUT', { preferencias }),
+  
+  // Platform Updates (US-NYA-06)
+  publishPlatformUpdate: (body: { titulo: string; mensaje: string; urlAccion?: string }) =>
+    request<any>('/notifications/platform-update', 'POST', body),
 };
 
 /**

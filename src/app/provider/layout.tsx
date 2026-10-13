@@ -13,10 +13,14 @@ import {
   User,
   Layers,
   MessageSquare,
-  HelpCircle
+  HelpCircle,
+  BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationCenter from '@/components/NotificationCenter';
+import OnboardingTutorialModal from '@/components/common/OnboardingTutorialModal';
+import ErrorReportModal from '@/components/common/ErrorReportModal';
+import { Sparkles, AlertTriangle } from 'lucide-react';
 
 export default function ProviderLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -26,6 +30,8 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isErrorReportOpen, setIsErrorReportOpen] = useState(false);
 
   // Verificar autenticación real — sin auto-login mock
   useEffect(() => {
@@ -40,7 +46,25 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
     return () => clearTimeout(timer);
   }, [currentUser, router]);
 
-  if (!mounted || !currentUser) {
+  useEffect(() => {
+    if (!mounted || isAuthLoading || !currentUser) return;
+    const localDone = typeof window !== 'undefined'
+      ? localStorage.getItem(`ando_onboarding_completed_${currentUser.id}`) === 'true'
+      : false;
+    if (!currentUser.onboardingCompletado && !localDone) {
+      setIsOnboardingOpen(true);
+    }
+  }, [mounted, isAuthLoading, currentUser]);
+
+  useEffect(() => {
+    if (!mounted || isAuthLoading) return;
+
+    if (!currentUser || currentUser.role !== 'provider') {
+      router.push('/');
+    }
+  }, [mounted, isAuthLoading, currentUser, router]);
+
+  if (!mounted || isAuthLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-bgPrimary text-textDark">
         <div className="flex flex-col items-center space-y-4">
@@ -81,6 +105,12 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       path: '/provider/reviews',
       icon: MessageSquare,
       desc: 'Opiniones y respuestas'
+    },
+    {
+      name: 'Reportes y Métricas',
+      path: '/provider/reports',
+      icon: BarChart3,
+      desc: 'Desempeño y ranking'
     },
     {
       name: 'Mi Perfil y Cuenta',
@@ -135,7 +165,8 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 space-y-1.5 px-3 py-6">
+        {/* El menú se desplaza por dentro cuando no entra en el alto de la pantalla */}
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 px-3 py-6">
           {menuItems.map((item) => {
             const isActive = pathname === item.path;
             const Icon = item.icon;
@@ -144,6 +175,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
               <Link
                 key={item.path}
                 href={item.path}
+                data-tour={item.path}
                 className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 ${
                   isActive
                     ? 'bg-fillPrimary text-white shadow-md shadow-fillPrimary/10'
@@ -195,14 +227,39 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           </div>
           
           {/* Header Actions */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             {currentUser.businessName && (
               <div className="hidden lg:flex items-center space-x-1.5 bg-fillPrimary/5 text-fillPrimary px-3 py-1 rounded-full text-xs font-semibold border border-fillPrimary/10">
                 <Store className="h-3.5 w-3.5" />
                 <span>{currentUser.businessName}</span>
               </div>
             )}
-            <NotificationCenter />
+
+            <button
+              type="button"
+              onClick={() => setIsOnboardingOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-fillPrimary/20 bg-fillPrimary/5 text-fillPrimary hover:bg-fillPrimary/10 text-xs font-bold transition cursor-pointer"
+              data-tour="tutorial"
+              title="Ver Tutorial de Onboarding"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Tutorial</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsErrorReportOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-xs font-bold transition cursor-pointer"
+              data-tour="report-error"
+              title="Reportar Error del Sistema"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+              <span className="hidden md:inline">Reportar Error</span>
+            </button>
+
+            <div data-tour="notifications">
+              <NotificationCenter />
+            </div>
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">
@@ -252,6 +309,19 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           </div>
         </div>
       )}
+
+      {/* Interactive Onboarding Tutorial (US-AYS-04) */}
+      <OnboardingTutorialModal
+        role="provider"
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+      />
+
+      {/* User Error Reporting Modal (US-AYS-05) */}
+      <ErrorReportModal
+        isOpen={isErrorReportOpen}
+        onClose={() => setIsErrorReportOpen(false)}
+      />
     </div>
   );
 }

@@ -13,10 +13,18 @@ import {
   Users,
   BarChart3,
   FileText,
-  HelpCircle
+  HelpCircle,
+  ShieldAlert,
+  Activity,
+  BadgeCheck,
+  Bug
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationCenter from '@/components/NotificationCenter';
+import OnboardingTutorialModal from '@/components/common/OnboardingTutorialModal';
+import { MENSAJE_SIN_PERMISOS, setFlashMessage } from '@/components/common/FlashMessage';
+import ErrorReportModal from '@/components/common/ErrorReportModal';
+import { Sparkles, AlertTriangle } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -26,6 +34,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isErrorReportOpen, setIsErrorReportOpen] = useState(false);
 
   // Verificar autenticación real — sin auto-login mock
   useEffect(() => {
@@ -40,7 +50,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => clearTimeout(timer);
   }, [currentUser, router]);
 
-  if (!mounted || !currentUser) {
+  useEffect(() => {
+    if (!mounted || isAuthLoading || !currentUser) return;
+    const localDone = typeof window !== 'undefined'
+      ? localStorage.getItem(`ando_onboarding_completed_${currentUser.id}`) === 'true'
+      : false;
+    if (!currentUser.onboardingCompletado && !localDone) {
+      setIsOnboardingOpen(true);
+    }
+  }, [mounted, isAuthLoading, currentUser]);
+
+  useEffect(() => {
+    if (!mounted || isAuthLoading) return;
+
+    if (!currentUser || currentUser.role !== 'admin') {
+      if (currentUser) setFlashMessage(MENSAJE_SIN_PERMISOS);
+      router.push('/');
+    }
+  }, [mounted, isAuthLoading, currentUser, router]);
+
+  if (!mounted || isAuthLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-bgPrimary text-textDark">
         <div className="flex flex-col items-center space-y-4">
@@ -65,22 +94,46 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       desc: 'Atractivos y moderación'
     },
     {
+      name: 'Validaciones de Usuario',
+      path: '/admin/validaciones',
+      icon: BadgeCheck,
+      desc: 'Documentación y verificación de cuentas'
+    },
+    {
+      name: 'Moderación de Contenido',
+      path: '/admin/moderacion',
+      icon: ShieldAlert,
+      desc: 'Reportes y contenido detectado por IA'
+    },
+    {
+      name: 'Actividad Sospechosa',
+      path: '/admin/actividad-sospechosa',
+      icon: Activity,
+      desc: 'Alertas de seguridad y fraude'
+    },
+    {
       name: 'Gestión de Usuarios',
       path: '/admin/users',
       icon: Users,
       desc: 'Prestadores y administradores'
     },
     {
-      name: 'Reportes y Estadísticas',
+      name: 'Reportes e Informes',
       path: '/admin/reports',
       icon: BarChart3,
-      desc: 'Métricas de la plataforma'
+      desc: 'Métricas, visitas y analíticas'
     },
     {
       name: 'Auditoría y Logs',
       path: '/admin/logs',
       icon: FileText,
       desc: 'Historial de actividades'
+    },
+    {
+      name: 'Reportes de Error',
+      path: '/admin/error-reports',
+      icon: Bug,
+      desc: 'Errores reportados por usuarios'
     },
     {
       name: 'Configuración del Sistema',
@@ -135,7 +188,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 space-y-1.5 px-3 py-6">
+        {/* El menú se desplaza por dentro cuando no entra en el alto de la pantalla */}
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 px-3 py-6">
           {menuItems.map((item) => {
             const isActive = pathname === item.path;
             const Icon = item.icon;
@@ -144,6 +198,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={item.path}
                 href={item.path}
+                data-tour={item.path}
                 className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine focus-visible:ring-offset-2 ${
                   isActive
                     ? 'bg-accentWine text-white shadow-md shadow-accentWine/10'
@@ -195,8 +250,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           
           {/* Header Actions */}
-          <div className="flex items-center space-x-4">
-            <NotificationCenter />
+          <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={() => setIsOnboardingOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-accentWine/20 bg-accentWine/5 text-accentWine hover:bg-accentWine/10 text-xs font-bold transition cursor-pointer"
+              data-tour="tutorial"
+              title="Ver Tutorial de Onboarding"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Tutorial</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsErrorReportOpen(true)}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-xs font-bold transition cursor-pointer"
+              data-tour="report-error"
+              title="Reportar Error del Sistema"
+            >
+              <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+              <span className="hidden md:inline">Reportar Error</span>
+            </button>
+
+            <div data-tour="notifications">
+              <NotificationCenter />
+            </div>
             <div className="h-6 w-px bg-black/10" />
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">
@@ -246,6 +325,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       )}
+
+      {/* Interactive Onboarding Tutorial (US-AYS-04) */}
+      <OnboardingTutorialModal
+        role="admin"
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+      />
+
+      {/* User Error Reporting Modal (US-AYS-05) */}
+      <ErrorReportModal
+        isOpen={isErrorReportOpen}
+        onClose={() => setIsErrorReportOpen(false)}
+      />
     </div>
   );
 }

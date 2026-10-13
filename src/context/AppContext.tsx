@@ -27,6 +27,7 @@ import {
   TranslationDict
 } from '../utils/mockData';
 import { api } from '../utils/api';
+import { clearReportCache } from '../utils/reportCache';
 import { DEFAULT_GENERAL_PARAMS } from '../config/constants';
 import { USER_ROLES } from '../constants/enums';
 import { mapBackendRoleToFrontend, mapBackendStatusToFrontend } from '../utils/roleUtils';
@@ -99,6 +100,7 @@ interface AppContextProps {
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   addNotification: (notification: Omit<NotificationItem, 'id' | 'createdAt' | 'isRead'>) => void;
+  completeOnboarding: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
@@ -240,11 +242,10 @@ function mapBackendUser(u: any): User {
     email: u.email,
     role: mappedRole,
     phone: u.telefono || '',
-    businessName: u.usuarioOrganizaciones?.[0]?.organizacion?.nombre || '',
-    cuit: u.usuarioOrganizaciones?.[0]?.organizacion?.cuit || '',
-    status: u.fechaBaja
-      ? 'inactive'
-      : (u.estado === 'pendiente' || u.status === 'pending' ? 'pending' : 'active'),
+    businessName: orgNombre,
+    cuit: orgCuit,
+    status: calculatedStatus,
+    onboardingCompletado: u.onboardingCompletado ?? false,
   };
 }
 
@@ -559,6 +560,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             cuit: cuit || undefined,
             phone: phone || undefined,
             status: 'active',
+            onboardingCompletado: profile?.onboardingCompletado ?? false,
           };
 
           setCurrentUser(loggedUser);
@@ -635,6 +637,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           cuit: cuit || undefined,
           phone: phone || undefined,
           status: 'active',
+          onboardingCompletado: data.user?.onboardingCompletado ?? false,
         };
         
         setCurrentUser(loggedUser);
@@ -651,10 +654,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (token) {
-      api.logout().catch(err => console.error('Error logging out from server:', err));
+      api.logout().catch((err) => console.error('Error logging out from server:', err));
     }
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('ando_user');
+      localStorage.removeItem('ando_real_pois');
+      localStorage.removeItem('selectedProviderPoiId');
+      localStorage.removeItem('ando_estado_aprobado_id');
+      sessionStorage.removeItem('ando_ryi_global_filters');
+    }
+    clearReportCache();
     setCurrentUser(null);
     setPois([]);
     setUsers([]);
@@ -1689,6 +1700,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const completeOnboarding = async () => {
+    try {
+      await api.completeOnboarding();
+    } catch (e) {
+      console.warn('No se pudo marcar onboarding en backend:', e);
+    }
+    if (currentUser) {
+      const updated = { ...currentUser, onboardingCompletado: true };
+      setCurrentUser(updated);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ando_user', JSON.stringify(updated));
+        localStorage.setItem(`ando_onboarding_completed_${currentUser.id}`, 'true');
+      }
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1754,6 +1781,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         markNotificationAsRead,
         markAllNotificationsAsRead,
         addNotification,
+        completeOnboarding,
       }}
     >
       {children}
