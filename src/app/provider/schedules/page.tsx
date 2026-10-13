@@ -90,6 +90,10 @@ export default function BusinessSchedules() {
   const [toastMessage, setToastMessage] = useState('Horarios actualizados exitosamente');
   const [touristAlert, setTouristAlert] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Modal de confirmación de eliminación (US-GIT-03)
+  const [scheduleToDelete, setScheduleToDelete] = useState<Schedule | null>(null);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
 
   // Verificar si hay cambios sin guardar en el formulario
   const hasUnsavedChanges = selectedDays.length > 0 || description !== '' || editingScheduleId !== null;
@@ -333,6 +337,65 @@ export default function BusinessSchedules() {
     setValidationError('');
   };
 
+  const getScheduleLabel = (sch: Schedule) => {
+    const daysText = sch.daysOfWeek
+      .sort((a, b) => a - b)
+      .map((d) => DAYS_OF_WEEK.find((day) => day.value === d)?.name || `Día ${d}`)
+      .join(', ');
+    const timesText = sch.timeRanges
+      .map((r) => `${r.start} a ${r.end} hs`)
+      .join(' / ');
+    return `${daysText} (${timesText})`;
+  };
+
+  const handleRequestDeleteRule = (sch: Schedule) => {
+    setScheduleToDelete(sch);
+  };
+
+  const handleConfirmDeleteRule = async () => {
+    if (!scheduleToDelete) return;
+    const schId = scheduleToDelete.id;
+    setScheduleToDelete(null);
+    await handleDeleteRule(schId);
+  };
+
+  const handleCancelDeleteRule = () => {
+    setScheduleToDelete(null);
+    setToastType('error');
+    setToastMessage('Operación cancelada');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
+  // Eliminación masiva de todos los horarios (US-GIT-03)
+  const handleConfirmDeleteAll = async () => {
+    if (!selectedPoi) return;
+    setShowDeleteAllModal(false);
+    resetForm();
+    const res = await saveSchedules(selectedPoi.id, []);
+
+    if (res && !res.success) {
+      setToastType('error');
+      setToastMessage(res.error || 'Error al eliminar los horarios del servidor');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+      return;
+    }
+
+    setToastType('success');
+    setToastMessage('Todos los horarios fueron eliminados exitosamente');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
+  const handleCancelDeleteAll = () => {
+    setShowDeleteAllModal(false);
+    setToastType('error');
+    setToastMessage('Operación cancelada');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
   // Eliminación de una regla (US-GIT-03)
   const handleDeleteRule = async (id: string) => {
     if (!selectedPoi) return;
@@ -358,6 +421,71 @@ export default function BusinessSchedules() {
 
   return (
     <div className="space-y-8 relative">
+      {/* Modal de confirmación de eliminación (US-GIT-03) */}
+      {scheduleToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-black/10">
+            <div className="flex items-center space-x-3 text-red-600">
+              <AlertTriangle className="h-6 w-6 flex-shrink-0" />
+              <h3 className="text-lg font-bold text-textDark">Confirmar eliminación</h3>
+            </div>
+            <p className="text-sm font-semibold text-textDark/80">
+              ¿Confirmás la eliminación del rango de atención seleccionado?
+            </p>
+            <div className="p-3 bg-red-50 rounded-xl border border-red-200 text-xs font-bold text-red-900 space-y-1">
+              <p>{getScheduleLabel(scheduleToDelete)}</p>
+            </div>
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelDeleteRule}
+                className="px-4 py-2 bg-bgPrimary hover:bg-black/5 text-textDark/80 font-bold rounded-xl text-xs transition-all border border-black/10 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteRule}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
+              >
+                Confirmar eliminación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación de eliminación masiva de todos los horarios (US-GIT-03) */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-black/10">
+            <div className="flex items-center space-x-3 text-red-600">
+              <AlertTriangle className="h-6 w-6 flex-shrink-0" />
+              <h3 className="text-lg font-bold text-textDark">Eliminar todos los horarios</h3>
+            </div>
+            <p className="text-sm font-semibold text-textDark/80">
+              Estas por eliminar TODOS los rangos de atención de este punto de interés. El lugar quedará marcado como Horario no disponible y el motor de recomendación no sugerirá este POI para itinerarios automáticos
+            </p>
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelDeleteAll}
+                className="px-4 py-2 bg-bgPrimary hover:bg-black/5 text-textDark/80 font-bold rounded-xl text-xs transition-all border border-black/10 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteAll}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
+              >
+                Eliminar todos los horarios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast Notification de Popup de guardado (Criterio de Aceptación US-GIT-01 y US-GIT-02) */}
       {showToast && (
         <div className={`fixed bottom-8 right-8 z-50 flex items-center space-x-3 text-white px-6 py-4 rounded-xl shadow-2xl border border-white/10 animate-slide-in ${
@@ -392,7 +520,7 @@ export default function BusinessSchedules() {
             >
               {providerPois.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.category})
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -711,15 +839,29 @@ export default function BusinessSchedules() {
         {/* Right Column: Active Schedules list for Selected POI */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-black/5 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-black/5">
-              <h4 className="font-wixDisplay text-sm font-bold text-textDark uppercase tracking-wider">
-                Horarios activos ({mySchedules.length})
-              </h4>
-              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                hasValidPoi ? 'bg-fillPrimary/10 text-fillPrimary' : 'bg-amber-100 text-amber-800'
-              }`}>
-                {hasValidPoi ? selectedPoi?.name : 'Sin negocio'}
-              </span>
+            <div className="flex flex-col space-y-2 pb-2 border-b border-black/5">
+              <div className="flex items-center justify-between">
+                <h4 className="font-wixDisplay text-sm font-bold text-textDark uppercase tracking-wider">
+                  Horarios activos ({mySchedules.length})
+                </h4>
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                  hasValidPoi ? 'bg-fillPrimary/10 text-fillPrimary' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {hasValidPoi ? selectedPoi?.name : 'Sin negocio'}
+                </span>
+              </div>
+              {mySchedules.length > 0 && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteAllModal(true)}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Eliminar todos los horarios</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4 max-h-[550px] overflow-y-auto pr-1">
@@ -743,7 +885,7 @@ export default function BusinessSchedules() {
                       <Edit3 className="h-3.5 w-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDeleteRule(sch.id)}
+                      onClick={() => handleRequestDeleteRule(sch)}
                       className="p-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                       title="Eliminar horario"
                       aria-label="Eliminar horario"

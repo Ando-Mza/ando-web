@@ -3,26 +3,26 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { ServiceItem } from '@/types';
-import { 
-  Plus, 
-  Sparkles, 
-  Store, 
-  Clock, 
-  DollarSign, 
-  Users, 
-  Edit2, 
-  Trash2, 
-  Power, 
-  Check, 
-  AlertTriangle, 
-  X, 
-  Layers, 
+import {
+  Plus,
+  Sparkles,
+  Store,
+  Clock,
+  DollarSign,
+  Users,
+  Edit2,
+  Trash2,
+  Power,
+  Check,
+  AlertTriangle,
+  X,
+  Layers,
   Info,
   ShieldCheck
 } from 'lucide-react';
 
 export default function ProviderServicesPage() {
-  const { pois, services, saveService, deleteService, toggleServiceAvailability, currentUser } = useApp();
+  const { pois, services, loadServicesForPoi, saveService, deleteService, toggleServiceAvailability, currentUser } = useApp();
 
   const providerPois = currentUser?.role === 'provider' ? pois : pois.filter((p) => currentUser?.role === 'admin' || !p.createdBy || p.createdBy === currentUser?.id);
 
@@ -47,17 +47,25 @@ export default function ProviderServicesPage() {
   }, [providerPois]);
 
   const selectedPoi = providerPois.find((p) => p.id === selectedPoiId) || providerPois[0];
+
+  useEffect(() => {
+    if (selectedPoi?.id) {
+      loadServicesForPoi(selectedPoi.id);
+    }
+  }, [selectedPoi?.id]);
+
   const poiServices = services.filter((s) => s.poiId === selectedPoi?.id);
 
   // Form States (Modal)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [price, setPrice] = useState<number>(0);
-  const [durationMinutes, setDurationMinutes] = useState<number>(60);
+  const [price, setPrice] = useState<number | string>(0);
+  const [durationMinutes, setDurationMinutes] = useState<number | string>(60);
   const [maxCapacity, setMaxCapacity] = useState<number | undefined>(undefined);
   const [terms, setTerms] = useState('');
   const [isAvailable, setIsAvailable] = useState(true);
@@ -66,6 +74,12 @@ export default function ProviderServicesPage() {
   const [validationError, setValidationError] = useState('');
   const [deleteModalService, setDeleteModalService] = useState<ServiceItem | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'error' } | null>(null);
+
+  const durationNum = Number(durationMinutes);
+  const isDurationValid = durationMinutes !== '' && !isNaN(durationNum) && durationNum > 0;
+  const isNameValid = name.trim().length > 0;
+  const isPriceValid = price !== '' && !isNaN(Number(price)) && Number(price) >= 0;
+  const isFormValid = isNameValid && isDurationValid && isPriceValid;
 
   const triggerToast = (message: string, type: 'success' | 'warning' | 'error' = 'success') => {
     setToast({ message, type });
@@ -76,7 +90,7 @@ export default function ProviderServicesPage() {
     setEditingServiceId(null);
     setName('');
     setDescription('');
-    setCategory(selectedPoi?.category || 'General');
+    setCategory('');
     setPrice(0);
     setDurationMinutes(60);
     setMaxCapacity(undefined);
@@ -90,7 +104,7 @@ export default function ProviderServicesPage() {
     setEditingServiceId(service.id);
     setName(service.name);
     setDescription(service.description);
-    setCategory(service.category || selectedPoi?.category || 'General');
+    setCategory(service.category || '');
     setPrice(service.price);
     setDurationMinutes(service.durationMinutes);
     setMaxCapacity(service.maxCapacity);
@@ -114,32 +128,35 @@ export default function ProviderServicesPage() {
       return;
     }
 
-    if (price < 0) {
+    if (durationMinutes === '' || isNaN(durationNum) || durationNum <= 0) {
+      setValidationError('La duración del servicio debe ser mayor a cero');
+      return;
+    }
+
+    if (price !== '' && Number(price) < 0) {
       setValidationError('El precio del servicio no puede ser negativo.');
       return;
     }
 
-    if (!durationMinutes || durationMinutes <= 0) {
-      setValidationError('La duración del servicio debe ser mayor a cero.');
-      return;
-    }
-
+    setIsSubmitting(true);
     const payload: Omit<ServiceItem, 'id'> & { id?: string } = {
       id: editingServiceId || undefined,
       poiId: selectedPoi.id,
       name: name.trim(),
       description: description.trim(),
-      category: category.trim() || selectedPoi.category,
-      price: Number(price),
-      durationMinutes: Number(durationMinutes),
+      category: category.trim() || undefined,
+      price: Number(price || 0),
+      durationMinutes: durationNum,
       maxCapacity: maxCapacity ? Number(maxCapacity) : undefined,
       terms: terms.trim() || undefined,
       isAvailable,
     };
 
     const res = await saveService(payload);
+    setIsSubmitting(false);
+
     if (res.success) {
-      triggerToast(editingServiceId ? 'Servicio actualizado correctamente.' : 'Servicio guardado correctamente.');
+      triggerToast(editingServiceId ? 'Servicio actualizado correctamente' : 'Servicio guardado correctamente');
       setIsModalOpen(false);
     } else {
       setValidationError(res.error || 'Ocurrió un error al guardar el servicio.');
@@ -149,7 +166,12 @@ export default function ProviderServicesPage() {
   const handleToggleActive = async (service: ServiceItem) => {
     const res = await toggleServiceAvailability(service.id);
     if (res.success) {
-      triggerToast(`Servicio "${service.name}" ${service.isAvailable ? 'desactivado' : 'activado'}.`);
+      const isNowAvailable = !service.isAvailable;
+      triggerToast(
+        isNowAvailable
+          ? `Servicio "${service.name}" activado correctamente`
+          : `Servicio "${service.name}" desactivado correctamente`
+      );
     }
   };
 
@@ -157,14 +179,16 @@ export default function ProviderServicesPage() {
     if (deleteModalService) {
       const res = await deleteService(deleteModalService.id);
       if (res.success) {
-        triggerToast('Servicio eliminado correctamente.');
+        triggerToast('Servicio eliminado correctamente');
+      } else {
+        triggerToast(res.error || 'Error al eliminar el servicio', 'error');
       }
       setDeleteModalService(null);
     }
   };
 
   const cancelDelete = () => {
-    triggerToast('Operación cancelada.', 'warning');
+    triggerToast('Operación cancelada', 'warning');
     setDeleteModalService(null);
   };
 
@@ -172,13 +196,12 @@ export default function ProviderServicesPage() {
     <div className="space-y-8 font-wixText">
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-8 right-8 z-50 flex items-center space-x-2.5 px-5 py-3 rounded-xl shadow-2xl border transition-all duration-300 ${
-          toast.type === 'success' 
+        <div className={`fixed bottom-8 right-8 z-50 flex items-center space-x-2.5 px-5 py-3 rounded-xl shadow-2xl border transition-all duration-300 ${toast.type === 'success'
             ? 'bg-green-600 text-white border-green-500'
             : toast.type === 'warning'
-            ? 'bg-amber-600 text-white border-amber-500'
-            : 'bg-red-600 text-white border-red-500'
-        }`}>
+              ? 'bg-amber-600 text-white border-amber-500'
+              : 'bg-red-600 text-white border-red-500'
+          }`}>
           <Check className="h-4.5 w-4.5 flex-shrink-0" />
           <span className="text-xs font-semibold">{toast.message}</span>
         </div>
@@ -206,7 +229,7 @@ export default function ProviderServicesPage() {
             className="px-5 py-3 bg-fillPrimary hover:bg-fillPrimary/90 disabled:opacity-50 text-white rounded-2xl text-xs font-bold shadow-lg shadow-fillPrimary/20 transition-all flex items-center space-x-2 cursor-pointer flex-shrink-0"
           >
             <Plus className="h-4 w-4" />
-            <span>Agregar nuevo servicio</span>
+            <span>Agregar Servicio</span>
           </button>
         </div>
       </div>
@@ -260,7 +283,7 @@ export default function ProviderServicesPage() {
                 disabled={!selectedPoi}
                 className="px-5 py-2.5 bg-fillPrimary hover:bg-fillPrimary/90 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
               >
-                Crear primer servicio
+                Agregar Servicio
               </button>
             </div>
           </div>
@@ -269,9 +292,8 @@ export default function ProviderServicesPage() {
             {poiServices.map((service) => (
               <div
                 key={service.id}
-                className={`bg-white rounded-2xl border p-5 shadow-xs space-y-4 transition-all ${
-                  service.isAvailable ? 'border-black/5' : 'border-black/10 opacity-70 bg-bgPrimary/30'
-                }`}
+                className={`bg-white rounded-2xl border p-5 shadow-xs space-y-4 transition-all ${service.isAvailable ? 'border-black/5' : 'border-black/10 opacity-70 bg-bgPrimary/30'
+                  }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
@@ -279,12 +301,11 @@ export default function ProviderServicesPage() {
                       <span className="text-[10px] font-bold bg-fillPrimary/10 text-fillPrimary px-2.5 py-0.5 rounded-md">
                         {service.category || 'General'}
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        service.isAvailable
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${service.isAvailable
                           ? 'bg-green-50 text-green-700 border-green-200'
                           : 'bg-red-50 text-red-700 border-red-200'
-                      }`}>
-                        {service.isAvailable ? 'Disponible' : 'Pausado'}
+                        }`}>
+                        {service.isAvailable ? 'Disponible' : 'Desactivado'}
                       </span>
                     </div>
                     <h4 className="font-wixDisplay text-base font-bold text-textDark">{service.name}</h4>
@@ -293,11 +314,10 @@ export default function ProviderServicesPage() {
                   <div className="flex items-center space-x-1.5 flex-shrink-0">
                     <button
                       onClick={() => handleToggleActive(service)}
-                      className={`p-2 rounded-lg border transition-all cursor-pointer ${
-                        service.isAvailable 
-                          ? 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200' 
+                      className={`p-2 rounded-lg border transition-all cursor-pointer ${service.isAvailable
+                          ? 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'
                           : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-200'
-                      }`}
+                        }`}
                       title={service.isAvailable ? 'Desactivar servicio' : 'Activar servicio'}
                     >
                       <Power className="h-3.5 w-3.5" />
@@ -402,9 +422,9 @@ export default function ProviderServicesPage() {
                   <input
                     type="number"
                     min="0"
-                    step="100"
+                    step="any"
                     value={price}
-                    onChange={(e) => setPrice(Number(e.target.value))}
+                    onChange={(e) => setPrice(e.target.value === '' ? '' : Number(e.target.value))}
                     required
                     className="w-full text-xs p-3 rounded-xl bg-bgPrimary/60 border border-black/10 text-textDark font-medium font-mono focus:outline-none focus:ring-2 focus:ring-fillPrimary/20"
                   />
@@ -414,13 +434,19 @@ export default function ProviderServicesPage() {
                   <label className="block text-xs font-bold text-textDark">Duración estimada (minutos) *</label>
                   <input
                     type="number"
-                    min="1"
-                    step="15"
+                    min="0"
+                    step="1"
                     value={durationMinutes}
-                    onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDurationMinutes(val === '' ? '' : Number(val));
+                    }}
                     required
                     className="w-full text-xs p-3 rounded-xl bg-bgPrimary/60 border border-black/10 text-textDark font-medium font-mono focus:outline-none focus:ring-2 focus:ring-fillPrimary/20"
                   />
+                  {durationMinutes !== '' && Number(durationMinutes) <= 0 && (
+                    <p className="text-[11px] font-bold text-red-600 mt-1">La duración del servicio debe ser mayor a cero</p>
+                  )}
                 </div>
               </div>
 
@@ -438,7 +464,7 @@ export default function ProviderServicesPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-xs font-bold text-textDark">Categoría</label>
+                  <label className="block text-xs font-bold text-textDark">Categoría (opcional)</label>
                   <input
                     type="text"
                     value={category}
@@ -473,6 +499,12 @@ export default function ProviderServicesPage() {
                 </label>
               </div>
 
+              {!isFormValid && (
+                <p className="text-[11px] font-semibold text-textDark/60 italic pt-1">
+                  Completá los campos obligatorios (*) marcados arriba para habilitar el botón de guardado.
+                </p>
+              )}
+
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-black/5">
                 <button
                   type="button"
@@ -483,9 +515,10 @@ export default function ProviderServicesPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-fillPrimary hover:bg-fillPrimary/90 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+                  disabled={!isFormValid || isSubmitting}
+                  className="px-5 py-2.5 bg-fillPrimary hover:bg-fillPrimary/90 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Guardar Servicio
+                  {isSubmitting ? 'Guardando...' : 'Guardar Servicio'}
                 </button>
               </div>
             </form>
@@ -496,21 +529,23 @@ export default function ProviderServicesPage() {
       {/* Modal: Confirmación de Eliminación */}
       {deleteModalService && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-black/10 shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-3xl border border-black/10 shadow-2xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center space-x-3 text-red-600">
-              <div className="p-2.5 rounded-full bg-red-50 border border-red-200">
+              <div className="p-2.5 rounded-full bg-red-50 border border-red-200 flex-shrink-0">
                 <AlertTriangle className="h-6 w-6" />
               </div>
-              <h4 className="font-wixDisplay text-lg font-bold text-textDark">¿Eliminar servicio?</h4>
+              <h4 className="font-wixDisplay text-base font-bold text-textDark">
+                ¿Está seguro que desea eliminar este servicio?
+              </h4>
             </div>
-            <p className="text-xs text-textDark/70 leading-relaxed">
-              ¿Está seguro que desea eliminar este servicio? Dejará de estar disponible para todos los turistas.
+            <p className="text-xs text-textDark/70 leading-relaxed pl-1">
+              Esta acción dará de baja el servicio "{deleteModalService.name}" del negocio. Dejará de mostrarse a los turistas y en las recomendaciones.
             </p>
-            <div className="flex items-center justify-end space-x-2 pt-2">
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-black/5">
               <button
                 type="button"
                 onClick={cancelDelete}
-                className="px-4 py-2 text-xs font-bold text-textDark/60 hover:bg-black/5 rounded-xl transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs font-bold text-textDark/70 hover:bg-black/5 rounded-xl transition-colors cursor-pointer"
               >
                 Cancelar
               </button>

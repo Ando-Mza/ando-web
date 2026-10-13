@@ -33,7 +33,8 @@ export default function UserManagementPage() {
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'provider' | 'tourist'>('all');
 
   // Form States
-  const [formName, setFormName] = useState('');
+  const [formFirstName, setFormFirstName] = useState('');
+  const [formLastName, setFormLastName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('provider');
@@ -58,6 +59,8 @@ export default function UserManagementPage() {
   const filteredUsers = users.filter((u) => {
     const matchesSearch = 
       u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.firstName && u.firstName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (u.lastName && u.lastName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (u.cuit && u.cuit.includes(searchTerm)) ||
       (u.businessName && u.businessName.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -69,7 +72,8 @@ export default function UserManagementPage() {
 
   // 2. NAVIGATION AND INITIALIZATION
   const handleStartCreate = () => {
-    setFormName('');
+    setFormFirstName('');
+    setFormLastName('');
     setFormEmail('');
     setFormPhone('');
     setFormRole('provider');
@@ -88,7 +92,10 @@ export default function UserManagementPage() {
 
   const handleStartEdit = (user: User) => {
     setSelectedUser(user);
-    setFormName(user.name);
+    const userFirstName = user.firstName !== undefined ? user.firstName : (user.name ? user.name.split(' ')[0] : '');
+    const userLastName = user.lastName !== undefined ? user.lastName : (user.name ? user.name.split(' ').slice(1).join(' ') : '');
+    setFormFirstName(userFirstName);
+    setFormLastName(userLastName);
     setFormEmail(user.email);
     setFormPhone(user.phone || '');
     setFormRole(user.role);
@@ -103,7 +110,8 @@ export default function UserManagementPage() {
   const isFormDirty = () => {
     if (viewMode === 'create') {
       return (
-        formName.trim() !== '' ||
+        formFirstName.trim() !== '' ||
+        formLastName.trim() !== '' ||
         formEmail.trim() !== '' ||
         formPhone.trim() !== '' ||
         formBusinessName.trim() !== '' ||
@@ -111,8 +119,11 @@ export default function UserManagementPage() {
         formPassword !== ''
       );
     } else if (viewMode === 'edit' && selectedUser) {
+      const origFirstName = selectedUser.firstName !== undefined ? selectedUser.firstName : (selectedUser.name ? selectedUser.name.split(' ')[0] : '');
+      const origLastName = selectedUser.lastName !== undefined ? selectedUser.lastName : (selectedUser.name ? selectedUser.name.split(' ').slice(1).join(' ') : '');
       return (
-        formName !== selectedUser.name ||
+        formFirstName !== origFirstName ||
+        formLastName !== origLastName ||
         formEmail !== selectedUser.email ||
         formPhone !== (selectedUser.phone || '') ||
         formRole !== selectedUser.role ||
@@ -144,20 +155,25 @@ export default function UserManagementPage() {
 
   const isEmailValid = emailRegex.test(formEmail.trim());
   const isCuitValid = formRole !== 'provider' || cuitRegex.test(formCuit.replace(/\D/g, ''));
-  const isNameFilled = formName.trim().length > 0;
+  const isFirstNameFilled = formFirstName.trim().length > 0;
+  const isLastNameFilled = formLastName.trim().length > 0;
   const isPasswordFilledForCreate = viewMode !== 'create' || formPassword.trim().length >= 6;
   const isBusinessNameFilled = formRole !== 'provider' || formBusinessName.trim().length > 0;
 
-  const isFormValid = isNameFilled && isEmailValid && isCuitValid && isPasswordFilledForCreate && isBusinessNameFilled;
+  const isFormValid = isFirstNameFilled && isLastNameFilled && isEmailValid && isCuitValid && isPasswordFilledForCreate && isBusinessNameFilled;
 
   // 5. SAVE HANDLER
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) return;
 
+    const fullName = `${formFirstName.trim()} ${formLastName.trim()}`.trim();
+
     if (viewMode === 'create') {
       const payload: Omit<User, 'id'> & { password?: string } = {
-        name: formName.trim(),
+        name: fullName,
+        firstName: formFirstName.trim(),
+        lastName: formLastName.trim(),
         email: formEmail.trim().toLowerCase(),
         phone: formPhone.trim() || undefined,
         role: formRole,
@@ -169,14 +185,16 @@ export default function UserManagementPage() {
 
       const res = await adminCreateUser(payload);
       if (res.success) {
-        triggerToast(`Usuario "${formName}" creado exitosamente.`);
+        triggerToast(`Usuario "${fullName}" creado exitosamente.`);
         setViewMode('list');
       } else {
         triggerToast(res.error || 'Ocurrió un error al crear la cuenta', 'error');
       }
     } else if (viewMode === 'edit' && selectedUser) {
       const updatedData: Partial<User> = {
-        name: formName.trim(),
+        name: fullName,
+        firstName: formFirstName.trim(),
+        lastName: formLastName.trim(),
         email: formEmail.trim().toLowerCase(),
         phone: formPhone.trim() || undefined,
         role: formRole,
@@ -191,7 +209,7 @@ export default function UserManagementPage() {
 
       const res = await updateProviderProfile(selectedUser.id, updatedData);
       if (res.success) {
-        triggerToast(`Usuario "${formName}" actualizado exitosamente.`);
+        triggerToast(`Usuario "${fullName}" actualizado exitosamente.`);
         setViewMode('list');
       } else {
         triggerToast(res.error || 'Ocurrió un error al guardar los cambios', 'error');
@@ -508,15 +526,29 @@ export default function UserManagementPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
-                  Nombre Completo
+                  Nombre
                 </label>
                 <input
                   type="text"
                   required
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  value={formFirstName}
+                  onChange={(e) => setFormFirstName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-black/10 text-xs"
-                  placeholder="Nombre y Apellido"
+                  placeholder="Nombre (ej: Juan)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
+                  Apellido
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formLastName}
+                  onChange={(e) => setFormLastName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-black/10 text-xs"
+                  placeholder="Apellido (ej: Pérez)"
                 />
               </div>
 
@@ -549,7 +581,7 @@ export default function UserManagementPage() {
                 />
               </div>
 
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
                   Estado de la Cuenta
                 </label>
@@ -775,6 +807,20 @@ export default function UserManagementPage() {
 
               {/* Attributes Grid */}
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-textDark/50">Nombre</span>
+                  <span className="text-xs font-semibold text-textDark block mt-0.5">
+                    {selectedUser.firstName || selectedUser.name.split(' ')[0] || '-'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-textDark/50">Apellido</span>
+                  <span className="text-xs font-semibold text-textDark block mt-0.5">
+                    {selectedUser.lastName || (selectedUser.name.split(' ').length > 1 ? selectedUser.name.split(' ').slice(1).join(' ') : '-')}
+                  </span>
+                </div>
+
                 <div>
                   <span className="block text-[9px] font-bold uppercase tracking-wider text-textDark/50">Rol en la Plataforma</span>
                   <span className="text-xs font-semibold text-textDark block mt-0.5">
