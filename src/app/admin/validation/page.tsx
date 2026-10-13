@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { POI, User } from '@/types';
 import {
@@ -50,6 +50,7 @@ const InstagramIcon = ({ className }: { className?: string }) => (
 
 import { ADMIN_REJECT_PRESETS, ADMIN_CORRECTION_PRESETS } from '@/config/constants';
 import { uploadFileToR2 } from '@/utils/api';
+import { useParametroDeEnlace } from '@/utils/notificationLinks';
 
 export default function ContentValidation() {
   const { 
@@ -502,19 +503,13 @@ export default function ContentValidation() {
   };
 
   // Enlace directo desde otras pantallas (p. ej. reportes): /admin/validation?poi=<id> abre su ficha
-  const poiEnlazadoAbierto = useRef(false);
-  useEffect(() => {
-    if (poiEnlazadoAbierto.current || pois.length === 0) return;
-    const poiId = new URLSearchParams(window.location.search).get('poi');
-    if (!poiId) return;
+  useParametroDeEnlace('poi', pois.length > 0, (poiId) => {
     const poi = pois.find((p) => String(p.id) === poiId);
-    if (!poi) return;
-    poiEnlazadoAbierto.current = true;
+    if (!poi) return false;
     setActiveSection('catalog');
     openDetailModal(poi);
-    window.history.replaceState(null, '', window.location.pathname);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pois]);
+    return true;
+  });
 
   const handleDeleteImage = (imageUrl: string) => {
     if (selectedPoi) {

@@ -517,18 +517,6 @@ export default function ExportReportModal({
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-black/5 bg-bgPrimary/20 flex items-center justify-end text-xs">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isExporting}
-            className="px-4 py-2 hover:bg-black/5 text-textDark font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-40"
-          >
-            Cerrar
-          </button>
-        </div>
       </div>
     </div>
   );

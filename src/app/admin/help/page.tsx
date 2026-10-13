@@ -43,6 +43,9 @@ export default function AdminHelpPage() {
   const [faqSearchQuery, setFaqSearchQuery] = useState('');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [openManualIndex, setOpenManualIndex] = useState<number | null>(0);
+  // Artículos del manual (US-AYS-01): el Administrador los gestiona desde la misma pestaña
+  const [manualRolFiltro, setManualRolFiltro] = useState<'all' | 'turista' | 'prestador' | 'administrador'>('all');
+  const [openManualArtId, setOpenManualArtId] = useState<string | null>(null);
 
   // Modales de herramientas existentes
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
@@ -279,7 +282,7 @@ export default function AdminHelpPage() {
   // ----------------------------------------------------
   // GESTIÓN DE ARTÍCULOS (US-AYS-06)
   // ----------------------------------------------------
-  const handleOpenArtModal = (art?: AyudaArticulo) => {
+  const handleOpenArtModal = (art?: AyudaArticulo, categoriaInicialId?: string) => {
     if (art) {
       setEditingArticle(art);
       setArtTitulo(art.titulo);
@@ -292,7 +295,7 @@ export default function AdminHelpPage() {
     } else {
       setEditingArticle(null);
       setArtTitulo('');
-      setArtCategoriaId(categorias[0]?.id || '');
+      setArtCategoriaId(categoriaInicialId || categorias[0]?.id || '');
       setArtTipo('MANUAL');
       setArtContenido('');
       setArtPalabrasClaveInput('');
@@ -422,6 +425,24 @@ export default function AdminHelpPage() {
       return true;
     });
   }, [articulos, selectedCategoriaFilter, selectedTipoFilter, searchFilter]);
+  // Categorías con sus artículos de tipo MANUAL, filtrados por el rol que los ve
+  const manualPorCategoria = useMemo(() => {
+    const delManual = articulos.filter(
+      (a) =>
+        a.tipo === 'MANUAL' &&
+        (manualRolFiltro === 'all' ||
+          (a.rolesPermitidos || []).some((rol) => rol.toLowerCase() === manualRolFiltro))
+    );
+    return categorias
+      .map((cat) => ({ cat, arts: delManual.filter((a) => a.categoriaId === cat.id) }))
+      .filter(
+        ({ cat, arts }) =>
+          arts.length > 0 ||
+          // Las categorías vacías se muestran para poder cargarles artículos
+          (manualRolFiltro === 'all' && !articulos.some((a) => a.categoriaId === cat.id))
+      );
+  }, [articulos, categorias, manualRolFiltro]);
+
   useEffect(() => {
     fetch('/manual/manual_usuario_ando_admin.md')
       .then((r) => r.text())
@@ -617,6 +638,197 @@ export default function AdminHelpPage() {
             );
           })() : (
             <div className="py-8 text-center text-textDark/50 text-xs">Cargando manual...</div>
+          )}
+        </div>
+      )}
+
+      {/* PESTAÑA MANUAL: ARTÍCULOS Y CATEGORÍAS DEL MANUAL DE USUARIO, EDITABLES POR EL ADMINISTRADOR (US-AYS-01) */}
+      {activeTab === 'manual' && isAdmin && (
+        <div className="bg-white rounded-3xl border border-black/5 shadow-xs p-6 sm:p-8 space-y-5 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="font-wixDisplay text-lg font-bold text-textDark flex items-center space-x-2">
+                <BookOpen className="h-5 w-5 text-accentWine" />
+                <span>Artículos del Manual de Usuario</span>
+              </h3>
+              <p className="text-xs text-textDark/60 leading-relaxed max-w-xl">
+                Son los artículos que ven turistas y prestadores en su Centro de Ayuda. Como Administrador podés crearlos, editarlos y organizarlos en categorías.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => handleOpenCatModal()}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl border border-accentWine/30 text-accentWine font-bold text-xs hover:bg-accentWine/5 transition cursor-pointer"
+              >
+                <Layers className="h-4 w-4" />
+                <span>Nueva categoría</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenArtModal()}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-accentWine text-white font-bold text-xs shadow-md hover:bg-accentWine/90 transition cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Nuevo artículo</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por rol">
+            {([
+              ['all', 'Todos'],
+              ['turista', 'Turista'],
+              ['prestador', 'Prestador'],
+              ['administrador', 'Administrador'],
+            ] as const).map(([valor, etiqueta]) => (
+              <button
+                key={valor}
+                type="button"
+                onClick={() => setManualRolFiltro(valor)}
+                aria-pressed={manualRolFiltro === valor}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer ${
+                  manualRolFiltro === valor
+                    ? 'bg-accentWine text-white border-accentWine'
+                    : 'bg-white text-textDark/70 border-black/10 hover:border-accentWine/40'
+                }`}
+              >
+                {etiqueta}
+              </button>
+            ))}
+          </div>
+
+          {isLoadingData ? (
+            <div className="py-8 text-center text-textDark/50 text-xs">Cargando artículos del manual...</div>
+          ) : dataError ? (
+            <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center justify-between gap-3" role="alert">
+              <span className="font-semibold">{dataError}</span>
+              <button
+                type="button"
+                onClick={loadAyudaData}
+                className="inline-flex items-center space-x-1 font-bold hover:underline cursor-pointer flex-shrink-0"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Reintentar</span>
+              </button>
+            </div>
+          ) : manualPorCategoria.length === 0 ? (
+            <div className="py-8 text-center text-textDark/50 text-xs">
+              No hay artículos del manual para este rol. Creá uno con &quot;Nuevo artículo&quot;.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {manualPorCategoria.map(({ cat, arts }) => (
+                <div
+                  key={cat.id}
+                  className={`rounded-2xl border border-black/5 overflow-hidden ${cat.activo ? '' : 'opacity-60'}`}
+                >
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 bg-bgPrimary/40">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-wixDisplay text-sm font-bold text-textDark truncate">{cat.nombre}</span>
+                        {!cat.activo && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/5 text-textDark/60">Inactiva</span>
+                        )}
+                        <span className="text-[10px] text-textDark/50 flex-shrink-0">
+                          {arts.length} artículo{arts.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      {cat.descripcion && (
+                        <p className="text-[11px] text-textDark/55 truncate">{cat.descripcion}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenArtModal(undefined, cat.id)}
+                        title="Agregar artículo a esta categoría"
+                        aria-label={`Agregar artículo a ${cat.nombre}`}
+                        className="p-2 rounded-lg text-accentWine hover:bg-accentWine/10 transition cursor-pointer"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCatModal(cat)}
+                        title="Editar categoría"
+                        aria-label={`Editar categoría ${cat.nombre}`}
+                        className="p-2 rounded-lg text-textDark/60 hover:text-accentWine hover:bg-accentWine/10 transition cursor-pointer"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {arts.length > 0 && (
+                    <div className="divide-y divide-black/5">
+                      {arts.map((art) => {
+                        const abierto = openManualArtId === art.id;
+                        return (
+                          <div key={art.id} className={art.activo ? '' : 'opacity-60'}>
+                            <div className="flex items-center justify-between gap-3 px-4 py-3">
+                              <button
+                                type="button"
+                                onClick={() => setOpenManualArtId(abierto ? null : art.id)}
+                                aria-expanded={abierto}
+                                className="flex-1 min-w-0 flex items-center gap-2 text-left cursor-pointer group"
+                              >
+                                {abierto ? (
+                                  <ChevronUp className="h-4 w-4 text-accentWine flex-shrink-0" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 text-textDark/40 flex-shrink-0 group-hover:text-accentWine" />
+                                )}
+                                <span className="text-xs font-bold text-textDark truncate group-hover:text-accentWine transition-colors">
+                                  {art.titulo}
+                                </span>
+                                {!art.activo && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/5 text-textDark/60 flex-shrink-0">Inactivo</span>
+                                )}
+                              </button>
+                              <div className="hidden sm:flex flex-wrap gap-1 flex-shrink-0">
+                                {(art.rolesPermitidos || []).map((r) => (
+                                  <span
+                                    key={r}
+                                    className="text-[9px] bg-bgPrimary border border-black/10 px-1.5 py-0.5 rounded-md font-semibold text-textDark/70"
+                                  >
+                                    {r}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenArtModal(art)}
+                                  title="Editar artículo"
+                                  aria-label={`Editar ${art.titulo}`}
+                                  className="p-1.5 rounded-lg text-textDark/60 hover:text-accentWine hover:bg-accentWine/10 transition cursor-pointer"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteArticle(art)}
+                                  title="Eliminar artículo"
+                                  aria-label={`Eliminar ${art.titulo}`}
+                                  className="p-1.5 rounded-lg text-textDark/60 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            {abierto && (
+                              <div className="px-4 pb-4 pl-10 text-xs text-textDark/75 leading-relaxed whitespace-pre-line animate-fade-in">
+                                {art.contenido}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

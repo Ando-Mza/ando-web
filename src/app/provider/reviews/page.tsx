@@ -19,6 +19,7 @@ import {
   Check,
   X
 } from 'lucide-react';
+import { useParametroDeEnlace } from '@/utils/notificationLinks';
 
 export default function ProviderReviewsPage() {
   const { 
@@ -38,6 +39,12 @@ export default function ProviderReviewsPage() {
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Notificación "Nueva reseña recibida": /provider/reviews?poi=<id> filtra por ese negocio
+  useParametroDeEnlace('poi', true, (poiId) => {
+    setSelectedPoiId(poiId);
+    return true;
+  });
 
   // Cargar reseñas reales del prestador al montar
   useEffect(() => {

@@ -29,6 +29,7 @@ import {
   CheckSquare,
   Square
 } from 'lucide-react';
+import { useParametroDeEnlace } from '@/utils/notificationLinks';
 
 const InstagramIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -615,6 +616,27 @@ export default function BusinessProfile() {
     setViewMode('edit');
   };
 
+  // Notificación "Corrección solicitada": /provider/business?editar=<id> abre ese negocio en edición
+  useParametroDeEnlace('editar', pois.length > 0, (poiId) => {
+    const poi = pois.find((p) => String(p.id) === poiId);
+    if (!poi) return false;
+    handleStartEdit(poi);
+    return true;
+  });
+
+  // Notificaciones "Negocio aprobado / rechazado": /provider/business?poi=<id> resalta su tarjeta
+  const [poiResaltadoId, setPoiResaltadoId] = useState<string | null>(null);
+  useParametroDeEnlace('poi', myPois.length > 0, (poiId) => {
+    if (!myPois.some((p) => String(p.id) === poiId)) return false;
+    setViewMode('list');
+    setPoiResaltadoId(poiId);
+    setTimeout(() => {
+      document.getElementById(`poi-card-${poiId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    setTimeout(() => setPoiResaltadoId(null), 4000);
+    return true;
+  });
+
   const isFormDirty = () => {
     if (viewMode === 'create') {
       return (
@@ -792,9 +814,12 @@ export default function BusinessProfile() {
           {/* Grid of existing businesses */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {myPois.map((poi) => (
-              <div 
+              <div
                 key={poi.id}
-                className="bg-white rounded-2xl border border-black/5 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
+                id={`poi-card-${poi.id}`}
+                className={`bg-white rounded-2xl border overflow-hidden shadow-sm hover:shadow-md transition-all duration-500 flex flex-col justify-between ${
+                  poiResaltadoId === String(poi.id) ? 'border-accentWine ring-4 ring-accentWine/30' : 'border-black/5'
+                }`}
               >
                 <div className="relative h-44 bg-bgPrimary border-b border-black/5 overflow-hidden">
                   {poi.images && poi.images.length > 0 ? (

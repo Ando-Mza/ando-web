@@ -1,23 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  DetalleNegocioPrestador, 
-  ResenaRecientePrestador 
+import {
+  DetalleNegocioPrestador,
+  ResenaRecientePrestador
 } from '@/types/reportes';
-import { 
-  Store, 
-  TrendingUp, 
-  AlertTriangle, 
-  Star, 
-  MessageSquare, 
-  CheckCircle2, 
-  MapPin, 
-  PlusCircle, 
-  ArrowUpRight, 
-  CornerDownRight, 
-  Send, 
-  Clock, 
+import {
+  Store,
+  TrendingUp,
+  AlertTriangle,
+  Star,
+  MessageSquare,
+  CheckCircle2,
+  MapPin,
+  PlusCircle,
+  ArrowUpRight,
+  CornerDownRight,
+  Send,
+  Clock,
   Sparkles,
   BarChart3,
   Award,
@@ -119,11 +119,10 @@ export default function ProviderBusinessReportView({
             <button
               key={neg.poiId}
               onClick={() => setSelectedPoiIndex(idx)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                selectedPoiIndex === idx
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedPoiIndex === idx
                   ? 'bg-accentWine text-white shadow-xs'
                   : 'text-textDark/70 hover:bg-black/5'
-              }`}
+                }`}
             >
               {neg.nombre}
             </button>
@@ -206,9 +205,8 @@ export default function ProviderBusinessReportView({
         </div>
 
         {/* KPI 3: Tasa de Abandono (Criterio 3: Identificar visualmente alta deserción) */}
-        <div className={`p-5 rounded-3xl border shadow-xs space-y-2 ${
-          isHighAbandonment ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-black/5'
-        }`}>
+        <div className={`p-5 rounded-3xl border shadow-xs space-y-2 ${isHighAbandonment ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-black/5'
+          }`}>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-textDark/50">
               Tasa de Abandono
@@ -221,15 +219,13 @@ export default function ProviderBusinessReportView({
             )}
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className={`font-wixDisplay text-3xl font-black ${
-              isHighAbandonment ? 'text-amber-800' : 'text-textDark'
-            }`}>
+            <span className={`font-wixDisplay text-3xl font-black ${isHighAbandonment ? 'text-amber-800' : 'text-textDark'
+              }`}>
               {currentNegocio.tasaAbandono.toFixed(1)}%
             </span>
           </div>
-          <p className={`text-[11px] pt-2 border-t ${
-            isHighAbandonment ? 'border-amber-200 text-amber-800' : 'border-black/5 text-textDark/50'
-          }`}>
+          <p className={`text-[11px] pt-2 border-t ${isHighAbandonment ? 'border-amber-200 text-amber-800' : 'border-black/5 text-textDark/50'
+            }`}>
             {isHighAbandonment
               ? 'Alta deserción (≥ 40%): Los turistas planifican tu negocio pero no concretan la visita.'
               : 'Nivel óptimo de concreción de visitas en viaje.'}
@@ -403,9 +399,8 @@ export default function ProviderBusinessReportView({
                     {Array.from({ length: 5 }, (_, i) => (
                       <Star
                         key={i}
-                        className={`h-3.5 w-3.5 ${
-                          i < (rev.puntuacion ?? 0) ? 'fill-amber-500 text-amber-500' : 'text-black/20'
-                        }`}
+                        className={`h-3.5 w-3.5 ${i < (rev.puntuacion ?? 0) ? 'fill-amber-500 text-amber-500' : 'text-black/20'
+                          }`}
                       />
                     ))}
                   </div>
