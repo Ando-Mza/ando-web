@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { POI, User } from '@/types';
 import {
@@ -500,6 +500,21 @@ export default function ContentValidation() {
     setSelectedPoi(poi);
     setShowDetailModal(true);
   };
+
+  // Enlace directo desde otras pantallas (p. ej. reportes): /admin/validation?poi=<id> abre su ficha
+  const poiEnlazadoAbierto = useRef(false);
+  useEffect(() => {
+    if (poiEnlazadoAbierto.current || pois.length === 0) return;
+    const poiId = new URLSearchParams(window.location.search).get('poi');
+    if (!poiId) return;
+    const poi = pois.find((p) => String(p.id) === poiId);
+    if (!poi) return;
+    poiEnlazadoAbierto.current = true;
+    setActiveSection('catalog');
+    openDetailModal(poi);
+    window.history.replaceState(null, '', window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pois]);
 
   const handleDeleteImage = (imageUrl: string) => {
     if (selectedPoi) {

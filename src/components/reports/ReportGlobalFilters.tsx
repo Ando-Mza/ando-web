@@ -211,7 +211,7 @@ export default function ReportGlobalFilters({
         {/* Selector de Período Preset */}
         <div>
           <label className="block text-[11px] font-bold text-textDark/70 mb-1.5">
-            Período predefinido
+            Período
           </label>
           <div className="relative">
             <select
@@ -309,7 +309,8 @@ export default function ReportGlobalFilters({
 
       {/* Rango de Fechas Específico con Calendarios */}
       <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-black/5">
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Las fechas solo se eligen a mano con "Rango personalizado"; los demás períodos las fijan solos */}
+        <div className={`flex flex-wrap items-center gap-3 ${preset === 'custom' ? '' : 'hidden'}`}>
           <div className="flex items-center space-x-2 text-xs">
             <Calendar className="h-4 w-4 text-accentWine" />
             <span className="font-bold text-textDark/70 text-[11px]">Fecha Inicio:</span>

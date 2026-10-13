@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { 
   NegocioLocalItem, 
   RankingTopCrecimiento, 
@@ -155,7 +156,7 @@ export default function AdminLocalBusinessesReport({
                   {item.nombre}
                 </h4>
                 <p className="text-[10px] text-textDark/50 truncate">
-                  {item.categoria || 'Turismo'}
+                  {item.categoria || 'Sin categoría'}
                 </p>
               </div>
 
@@ -291,11 +292,15 @@ export default function AdminLocalBusinessesReport({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-textDark text-xs truncate" title={item.nombre}>
+                          <Link
+                            href={`/admin/validation?poi=${encodeURIComponent(item.poiId)}`}
+                            className="block font-bold text-textDark text-xs truncate hover:text-accentWine hover:underline"
+                            title={`Ver "${item.nombre}" en Catálogo y Validación`}
+                          >
                             {item.nombre}
-                          </p>
+                          </Link>
                           <p className="text-[10px] text-textDark/50 truncate">
-                            {item.organizacion?.nombre || 'Prestador Individual'}
+                            {item.organizacion?.nombre || 'Sin organización'}
                           </p>
                         </div>
                       </div>
@@ -305,11 +310,11 @@ export default function AdminLocalBusinessesReport({
                     <td className="py-3.5 px-3">
                       <div className="space-y-1">
                         <span className="bg-accentWine/10 text-accentWine px-2 py-0.5 rounded-md font-bold text-[10px]">
-                          {item.categorias[0]?.nombre || 'Turismo'}
+                          {item.categorias[0]?.nombre || 'Sin categoría'}
                         </span>
                         <p className="text-[10px] text-textDark/60 flex items-center space-x-0.5">
                           <MapPin className="h-2.5 w-2.5 text-textDark/40 flex-shrink-0" />
-                          <span>{item.ubicacion.departamento || 'Mendoza'}</span>
+                          <span>{item.ubicacion.departamento || 'Sin departamento'}</span>
                         </p>
                       </div>
                     </td>
