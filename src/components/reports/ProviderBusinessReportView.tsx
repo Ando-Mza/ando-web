@@ -30,6 +30,15 @@ interface ProviderBusinessReportViewProps {
   onReplyReview?: (reviewId: string, replyComment: string) => Promise<void>;
 }
 
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+/** "2026-09" -> "Sep 2026", para que entren muchos meses en el eje */
+function etiquetaMesCorta(mes: string, respaldo: string): string {
+  const [anio, numero] = (mes || '').split('-');
+  const nombre = MESES_CORTOS[Number(numero) - 1];
+  return nombre && anio ? `${nombre} ${anio}` : respaldo;
+}
+
 export default function ProviderBusinessReportView({
   negocios,
   onReplyReview,
@@ -68,6 +77,16 @@ export default function ProviderBusinessReportView({
   const currentNegocio = negocios[selectedPoiIndex] || negocios[0];
   const ranking = currentNegocio.rankingCategoria;
   const isHighAbandonment = currentNegocio.esAltaTasaAbandono || currentNegocio.tasaAbandono >= 40;
+
+  // Desglose mensual del período elegido
+  const tendencia = currentNegocio.tendenciaMensual || [];
+  const totalPlanificadas = tendencia.reduce((acc, m) => acc + m.paradasPlanificadas, 0);
+  const totalCheckIns = tendencia.reduce((acc, m) => acc + m.checkIns, 0);
+  const maxMensual = Math.max(...tendencia.map((m) => m.paradasPlanificadas), 1);
+  const mesPico = tendencia.reduce<(typeof tendencia)[number] | null>(
+    (pico, m) => (m.paradasPlanificadas > (pico?.paradasPlanificadas ?? 0) ? m : pico),
+    null
+  );
 
   const handleSendReply = async (reviewId: string) => {
     const text = replyTextMap[reviewId]?.trim();
@@ -234,67 +253,104 @@ export default function ProviderBusinessReportView({
         </div>
       </div>
 
-      {/* TENDENCIA MENSUAL DE PARADAS PLANIFICADAS VS CHECK-INS */}
+      {/* VISITAS POR MES: PARADAS PLANIFICADAS VS CHECK-INS DEL PERÍODO ELEGIDO */}
       <div className="bg-white rounded-3xl border border-black/5 p-6 sm:p-7 shadow-xs space-y-6">
-        <div className="flex items-center justify-between pb-4 border-b border-black/5">
+        <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-black/5">
           <div className="space-y-1">
             <h3 className="font-wixDisplay text-lg font-bold text-textDark">
-              Tendencia Mensual de Visitas a Tu Negocio
+              Visitas a tu negocio, mes a mes
             </h3>
-            <p className="text-xs text-textDark/60">
-              Evolución de itinerarios planificados vs visitas completadas en los últimos meses
+            <p className="text-xs text-textDark/60 max-w-xl">
+              Cuántas veces te incluyeron en un itinerario y cuántas de esas visitas se concretaron, dentro del período elegido en los filtros.
             </p>
           </div>
 
           <div className="flex items-center space-x-4 text-xs font-semibold">
             <div className="flex items-center space-x-1.5">
-              <span className="h-3 w-3 rounded-full bg-accentWine/30" />
+              <span className="h-3 w-3 rounded-sm bg-accentWine/30" />
               <span className="text-textDark/70">Planificadas</span>
             </div>
             <div className="flex items-center space-x-1.5">
-              <span className="h-3 w-3 rounded-full bg-accentWine" />
+              <span className="h-3 w-3 rounded-sm bg-accentWine" />
               <span className="text-textDark font-bold">Check-ins</span>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {currentNegocio.tendenciaMensual.map((m) => {
-            const maxVal = Math.max(...currentNegocio.tendenciaMensual.map(t => t.paradasPlanificadas), 1);
-            const planHeight = (m.paradasPlanificadas / maxVal) * 100;
-            const checkHeight = (m.checkIns / maxVal) * 100;
-
-            return (
-              <div key={m.mes} className="p-3.5 rounded-2xl bg-bgPrimary/50 border border-black/5 flex flex-col justify-between space-y-3">
-                <span className="text-xs font-bold text-textDark truncate">
-                  {m.etiquetaMes}
-                </span>
-
-                {/* Mini barras verticales */}
-                <div className="h-28 flex items-end justify-center space-x-2 pt-2">
-                  {/* Barra planificadas */}
-                  <div
-                    className="w-4 bg-accentWine/30 rounded-t-md transition-all duration-500"
-                    style={{ height: `${planHeight}%` }}
-                    title={`Planificadas: ${m.paradasPlanificadas}`}
-                  />
-                  {/* Barra check-ins */}
-                  <div
-                    className="w-4 bg-accentWine rounded-t-md transition-all duration-500"
-                    style={{ height: `${checkHeight}%` }}
-                    title={`Check-ins: ${m.checkIns}`}
-                  />
-                </div>
-
-                <div className="text-[11px] font-mono text-center border-t border-black/5 pt-1.5">
-                  <span className="font-bold text-accentWine">{m.checkIns}</span>
-                  <span className="text-textDark/40"> / </span>
-                  <span className="text-textDark/60">{m.paradasPlanificadas}</span>
-                </div>
+        {tendencia.length === 0 || totalPlanificadas === 0 ? (
+          <p className="text-xs text-textDark/60 text-center py-8">
+            Ningún turista incluyó este negocio en un itinerario durante el período elegido.
+          </p>
+        ) : (
+          <>
+            {/* Resumen del período */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-bgPrimary/50 border border-black/5">
+                <p className="text-[11px] font-bold text-textDark/50">Paradas planificadas</p>
+                <p className="font-wixDisplay text-xl font-black text-textDark">{totalPlanificadas}</p>
               </div>
-            );
-          })}
-        </div>
+              <div className="p-3.5 rounded-2xl bg-bgPrimary/50 border border-black/5">
+                <p className="text-[11px] font-bold text-textDark/50">Visitas concretadas</p>
+                <p className="font-wixDisplay text-xl font-black text-accentWine">
+                  {totalCheckIns}{' '}
+                  <span className="text-xs font-semibold text-textDark/60">
+                    ({Math.round((totalCheckIns / totalPlanificadas) * 100)}%)
+                  </span>
+                </p>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-bgPrimary/50 border border-black/5">
+                <p className="text-[11px] font-bold text-textDark/50">Mes con más paradas</p>
+                <p className="font-wixDisplay text-xl font-black text-textDark">
+                  {mesPico ? mesPico.etiquetaMes : '—'}
+                </p>
+              </div>
+            </div>
+
+            {/* Barras por mes (se desplaza de costado si el período abarca muchos meses) */}
+            <div className="overflow-x-auto">
+              <div className="flex items-end gap-3 min-w-fit pt-2">
+                {tendencia.map((m) => {
+                  // Se reserva el 15 % superior para el número que va sobre cada barra
+                  const planHeight = (m.paradasPlanificadas / maxMensual) * 85;
+                  const checkHeight = (m.checkIns / maxMensual) * 85;
+                  const sinActividad = m.paradasPlanificadas === 0;
+
+                  return (
+                    <div
+                      key={m.mes}
+                      className="flex-1 min-w-[64px] flex flex-col items-center space-y-2"
+                      title={`${m.etiquetaMes}: ${m.paradasPlanificadas} planificadas, ${m.checkIns} check-ins`}
+                    >
+                      <div className="h-40 w-full flex items-end justify-center space-x-1.5 border-b border-black/10">
+                        <div className="flex flex-col items-center justify-end h-full">
+                          <span className="text-[10px] font-mono font-bold text-textDark/60 mb-1">
+                            {m.paradasPlanificadas}
+                          </span>
+                          <div
+                            className="w-5 bg-accentWine/30 rounded-t-md transition-all duration-500"
+                            style={{ height: `${planHeight}%`, minHeight: sinActividad ? 0 : 3 }}
+                          />
+                        </div>
+                        <div className="flex flex-col items-center justify-end h-full">
+                          <span className="text-[10px] font-mono font-bold text-accentWine mb-1">
+                            {m.checkIns}
+                          </span>
+                          <div
+                            className="w-5 bg-accentWine rounded-t-md transition-all duration-500"
+                            style={{ height: `${checkHeight}%`, minHeight: m.checkIns === 0 ? 0 : 3 }}
+                          />
+                        </div>
+                      </div>
+                      <span className={`text-[11px] font-bold ${sinActividad ? 'text-textDark/40' : 'text-textDark'}`}>
+                        {etiquetaMesCorta(m.mes, m.etiquetaMes)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ÚLTIMAS 5 RESEÑAS CON FLUJO DE RESPUESTA DIRECTA (US-RYV) */}

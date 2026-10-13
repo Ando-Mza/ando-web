@@ -160,7 +160,8 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 space-y-1.5 px-3 py-6">
+        {/* El menú se desplaza por dentro cuando no entra en el alto de la pantalla */}
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 px-3 py-6">
           {menuItems.map((item) => {
             const isActive = pathname === item.path;
             const Icon = item.icon;
