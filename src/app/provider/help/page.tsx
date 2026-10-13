@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useApp } from '@/context/AppContext';
 import { api, uploadFileToR2 } from '@/utils/api';
 import { AyudaArticulo } from '@/types';
@@ -27,6 +29,9 @@ import ErrorReportModal from '@/components/common/ErrorReportModal';
 export default function ProviderHelpPage() {
   const { currentUser } = useApp();
 
+  const [activeTab, setActiveTab] = useState<'faq' | 'manual'>('manual');
+  const [manualContent, setManualContent] = useState('');
+  const [faqSearchQuery, setFaqSearchQuery] = useState('');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [openManualIndex, setOpenManualIndex] = useState<number | null>(0);
 
@@ -37,6 +42,7 @@ export default function ProviderHelpPage() {
   const [reportType, setReportType] = useState('');
   const [reportSubject, setReportSubject] = useState('');
   const [reportDescription, setReportDescription] = useState('');
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -108,16 +114,37 @@ export default function ProviderHelpPage() {
 
   const handleSendReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportDescription.trim() || isSubmitting) return;
+    if (!reportType || !reportSubject.trim() || !reportDescription.trim() || isSubmitting) {
+      triggerToast('Por favor completá todos los campos obligatorios.', 'error');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      await api.createReporteContenido({
-        motivo: reportType,
-        descripcion: reportDescription.trim(),
-      });
-      triggerToast('Gracias por tu reporte. El equipo técnico lo revisará a la brevedad.');
+      let evidenciaUrl = '';
+      if (evidenceFile) {
+        evidenciaUrl = await uploadFileToR2(evidenceFile);
+      }
+
+      if (reportType === 'problema_tecnico') {
+        await api.createReporteError({
+          asunto: reportSubject.trim(),
+          descripcion: reportDescription.trim(),
+          evidencias: evidenciaUrl ? [evidenciaUrl] : [],
+        });
+      } else {
+        await api.createConsultaSoporte({
+          asunto: reportSubject.trim(),
+          descripcion: reportDescription.trim(),
+          evidencia: evidenciaUrl || undefined,
+        });
+      }
+
+      triggerToast('Gracias por tu consulta. El equipo de soporte te responderá a la brevedad.');
+      setReportType('');
+      setReportSubject('');
       setReportDescription('');
+      setEvidenceFile(null);
     } catch (err: any) {
       triggerToast(err.message || 'No se pudo enviar el reporte. Por favor intentá más tarde.', 'error');
     } finally {
@@ -212,7 +239,7 @@ export default function ProviderHelpPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* FAQs Accordion (2 cols) */}
+        {/* Main Content (2 cols) */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex bg-white rounded-xl border border-black/5 p-1 shadow-sm overflow-x-auto">
             <button
@@ -364,20 +391,35 @@ export default function ProviderHelpPage() {
 
             <form onSubmit={handleSendReport} className="space-y-4">
               <div className="space-y-1">
-                <label className="block text-[11px] font-bold text-textDark/70">Motivo del reporte</label>
+                <label className="block text-[11px] font-bold text-textDark/70">Motivo del contacto</label>
                 <select
                   value={reportType}
                   onChange={(e) => setReportType(e.target.value)}
+                  required
                   className="w-full text-xs py-2.5 px-3 rounded-xl bg-bgPrimary/60 border border-black/10 text-textDark font-semibold focus:outline-none focus:ring-2 focus:ring-fillPrimary/20"
                 >
-                  <option value="problema_tecnico">Problema técnico en la web</option>
+                  <option value="" disabled>Seleccioná un motivo</option>
+                  <option value="duda_general">Consulta o duda general</option>
+                  <option value="problema_tecnico">Problema técnico en la plataforma</option>
                   <option value="duda_validacion">Consulta sobre validación de POI</option>
                   <option value="sugerencia">Sugerencia de mejora</option>
                 </select>
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[11px] font-bold text-textDark/70">Descripción del inconveniente *</label>
+                <label className="block text-[11px] font-bold text-textDark/70">Asunto *</label>
+                <input
+                  type="text"
+                  value={reportSubject}
+                  onChange={(e) => setReportSubject(e.target.value)}
+                  placeholder="Ej. Problema al guardar horarios"
+                  required
+                  className="w-full text-xs p-3 rounded-xl bg-bgPrimary/60 border border-black/10 text-textDark placeholder-textDark/40 focus:outline-none focus:ring-2 focus:ring-fillPrimary/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-bold text-textDark/70">Descripción detallada *</label>
                 <textarea
                   value={reportDescription}
                   onChange={(e) => setReportDescription(e.target.value)}

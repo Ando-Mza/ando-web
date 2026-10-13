@@ -42,6 +42,7 @@ export default function AdminHelpPage() {
   const [manualContent, setManualContent] = useState('');
   const [faqSearchQuery, setFaqSearchQuery] = useState('');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [openManualIndex, setOpenManualIndex] = useState<number | null>(0);
 
   // Modales de herramientas existentes
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
