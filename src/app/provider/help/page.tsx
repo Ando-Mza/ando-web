@@ -68,26 +68,48 @@ export default function ProviderHelpPage() {
       .catch(() => setManualContent('No se pudo cargar el manual de usuario.'));
   }, []);
 
+  // Respaldo si el backend no responde: mismas preguntas que publica la gestión de ayuda
+  // (antes estaban también al final del manual de usuario)
   const defaultFaqs = [
     {
-      q: '¿Cómo publico un nuevo atractivo turístico o negocio?',
-      a: 'Accedé a la sección "Mis Negocios", hacé clic en "Nuevo Atractivo" y completá todos los campos obligatorios: nombre, categoría, descripción, dirección física y al menos una fotografía. Tu publicación quedará en estado "Pendiente" hasta que el equipo de moderación la apruebe.',
+      q: '¿Cuánto tarda en aprobarse mi cuenta de Prestador?',
+      a: 'La validación la realiza el equipo de administradores de ANDO y los tiempos pueden variar según el volumen de solicitudes. Recibirás una notificación cuando tu cuenta sea aprobada.',
+    },
+    {
+      q: '¿Por qué mi negocio no aparece en el mapa si ya lo registré?',
+      a: 'Tu negocio solo es visible en el mapa cuando el Administrador lo revisa y cambia su estado a "Aprobado". Mientras esté "Pendiente de validación", los turistas no lo verán.',
     },
     {
       q: '¿Por qué mi POI figura en estado "Corrección solicitada"?',
       a: 'Si un administrador detecta inconsistencias en la dirección, horarios o fotografías, te enviará observaciones específicas. Podés revisar el motivo en tu panel, editar la ficha y reenviarla a revisión sin perder tu información.',
     },
     {
-      q: '¿Cómo configuro los horarios de atención y feriados?',
-      a: 'En "Gestión de Horarios", seleccioná tu negocio y definí las franjas horarias por día de la semana. Podés indicar si abrís en temporada alta/baja y marcar excepciones para feriados nacionales o provinciales.',
+      q: '¿Puedo tener más de un negocio en ANDO?',
+      a: 'Sí. Podés registrar varios negocios turísticos con tu cuenta de Prestador. Cada uno se gestiona de forma independiente desde el panel "Mis Negocios".',
     },
     {
-      q: '¿Cómo respondo a las opiniones de los turistas?',
-      a: 'Desde la sección "Reseñas y Opiniones", podés visualizar las calificaciones que dejaron los turistas y redactar una respuesta oficial de hasta 1000 caracteres. Tu respuesta se mostrará públicamente con la insignia de "Respuesta del propietario".',
+      q: '¿Qué pasa con los itinerarios de los turistas si cambio mis horarios?',
+      a: 'El sistema detecta qué turistas tienen tu negocio en un itinerario planificado y les envía una notificación para que revisen su viaje. La parada queda marcada como "requiere revisión".',
     },
     {
-      q: '¿Qué formato y tamaño deben tener las fotografías?',
-      a: 'Soportamos archivos JPG, PNG y WEBP de hasta 10 MB. Las imágenes son optimizadas automáticamente y almacenadas de forma segura en la nube para garantizar una carga veloz en la aplicación móvil.',
+      q: '¿Puedo eliminar una reseña negativa?',
+      a: 'No. Como Prestador no podés eliminar las reseñas que publican los turistas, pero sí podés responderlas públicamente para aclarar la situación. Si la reseña viola las normas de la comunidad (contenido ofensivo, spam, etc.), podés reportarla para que el equipo administrativo la revise.',
+    },
+    {
+      q: '¿Puedo responder la misma reseña más de una vez?',
+      a: 'Cada reseña admite una única respuesta del propietario. Si necesitás cambiar tu respuesta, usá el ícono de edición que aparece junto a ella, si la opción está disponible.',
+    },
+    {
+      q: '¿Mis servicios se usan en las recomendaciones de IA?',
+      a: 'Sí. Los servicios que cargás (con precio, duración y disponibilidad) los usa el motor de recomendación de ANDO para sugerir tu negocio a turistas según sus preferencias, presupuesto e intereses. Mantené la información actualizada para ganar visibilidad.',
+    },
+    {
+      q: '¿Qué formatos acepta la galería de imágenes?',
+      a: 'La galería acepta archivos JPG, PNG y WEBP de hasta 30 MB por imagen. Las imágenes se procesan automáticamente en distintas resoluciones para verse bien en todos los dispositivos.',
+    },
+    {
+      q: '¿Cómo puedo ver cómo luce mi negocio para los turistas?',
+      a: 'Abrí el Mapa en la app. Si tu negocio está aprobado, vas a encontrar su pin; al presionarlo verás exactamente la información que ve un turista: fotos, descripción, horarios, reseñas y categorías.',
     },
   ];
 

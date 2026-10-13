@@ -22,6 +22,9 @@ import {
   RotateCcw,
   Tag
 } from 'lucide-react';
+import { useParametroDeEnlace } from '@/utils/notificationLinks';
+
+const PESTANAS_SETTINGS = ['params', 'languages', 'categories', 'tags', 'states', 'integrations', 'updates'];
 
 export default function AdminSettings() {
   const {
@@ -72,6 +75,13 @@ export default function AdminSettings() {
   });
 
   const [activeTab, setActiveTab] = useState<'params' | 'languages' | 'categories' | 'tags' | 'states' | 'integrations' | 'updates'>('params');
+
+  // Enlace desde notificaciones: /admin/settings?tab=integrations abre esa pestaña
+  useParametroDeEnlace('tab', true, (tab) => {
+    if (!PESTANAS_SETTINGS.includes(tab)) return false;
+    setActiveTab(tab as typeof activeTab);
+    return true;
+  });
   const [selectedLang, setSelectedLang] = useState<'es' | 'en' | 'pt'>('es');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');

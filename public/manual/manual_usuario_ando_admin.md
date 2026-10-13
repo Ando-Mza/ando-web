@@ -130,26 +130,4 @@ El módulo de parámetros del sistema permite ajustar reglas globales sin necesi
 
 ---
 
-## 10. Preguntas Frecuentes (FAQ)
-
-**¿Qué pasa si apruebo por error un negocio falso?**
-Podés buscar el POI en el sistema, ingresar a su detalle y cambiar su estado manualmente a "Suspendido" o "Rechazado", lo que lo ocultará inmediatamente del mapa público.
-
----
-
-**¿Por qué hay reportes sin "Usuario reportante"?**
-Son los reportes generados automáticamente por la Inteligencia Artificial de ANDO al detectar lenguaje inapropiado durante la publicación de una reseña.
-
----
-
-**¿La eliminación de usuarios borra sus datos de la base de datos?**
-No. Por cuestiones de auditoría e integridad referencial, las eliminaciones son "lógicas". La cuenta se desactiva y se oculta su contenido, pero los registros persisten en la base de datos.
-
----
-
-**¿Puedo crear otro usuario Administrador?**
-Sí. Desde el módulo de Administración de Usuarios, usando el botón "+ Nuevo Usuario" y asignándole el rol `Administrador`. Tienen los mismos privilegios que tu cuenta.
-
----
-
 *Manual de Usuario — ANDO App (Admin Web) v1.0 | UTN FRM 2026*
