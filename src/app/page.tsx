@@ -17,8 +17,7 @@ import {
   Phone, 
   Lock, 
   Briefcase, 
-  FileText,
-  Key
+  FileText
 } from 'lucide-react';
 import { api } from '@/utils/api';
 
@@ -409,35 +408,6 @@ export default function LoginPage() {
                 >
                   ¿Es un prestador y no tiene cuenta? Regístrese aquí
                 </button>
-              </div>
-
-              {/* Developer Quick Links */}
-              <div className="bg-bgPrimary/60 border border-black/5 rounded-2xl p-4 text-[10px] text-textDark/70 space-y-2 mt-4">
-                <p className="font-bold text-accentWine">Acceso rápido de prueba (demo)</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginEmail('admin@ando.com');
-                      setLoginPassword('Admin123!');
-                    }}
-                    className="py-1.5 px-2 bg-white hover:bg-black/5 rounded-lg border border-black/5 font-semibold text-center cursor-pointer transition-colors text-textDark inline-flex items-center justify-center space-x-1.5"
-                  >
-                    <Key className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" />
-                    <span>Admin Demo</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginEmail('prestador@ando.com');
-                      setLoginPassword('Prestador123!');
-                    }}
-                    className="py-1.5 px-2 bg-white hover:bg-black/5 rounded-lg border border-black/5 font-semibold text-center cursor-pointer transition-colors text-textDark inline-flex items-center justify-center space-x-1.5"
-                  >
-                    <Store className="h-3.5 w-3.5 text-fillPrimary flex-shrink-0" />
-                    <span>Prestador Demo</span>
-                  </button>
-                </div>
               </div>
             </div>
           )}

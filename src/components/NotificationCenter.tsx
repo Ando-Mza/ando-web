@@ -15,7 +15,13 @@ import {
   Download
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { descargarEnlaceExportacion, getEnlacesExportacion } from '@/utils/exportDownloads';
+import { api, ApiError } from '@/utils/api';
+import {
+  descargarEnlaceExportacion,
+  getEnlacesExportacion,
+  triggerBlobDownload,
+} from '@/utils/exportDownloads';
+import { EVENTO_ENLACE_NOTIFICACION, resolverDestinoNotificacion } from '@/utils/notificationLinks';
 
 const PREFIJO_DESCARGA = '#download-report:';
 
@@ -68,27 +74,65 @@ export default function NotificationCenter() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleNotificationClick = (id: string, actionUrl?: string | null) => {
-    markNotificationAsRead(id);
-    if (actionUrl) {
-      setIsOpen(false);
-      
-      let finalUrl = actionUrl;
-      // Handle legacy integration URL
-      if (finalUrl === '/admin/integraciones') {
-        finalUrl = '/admin/settings';
-      }
-      
-      if (finalUrl.startsWith('http') || finalUrl.startsWith('/api')) {
-        // Build absolute url for backend API if it's a relative /api route
-        const targetUrl = finalUrl.startsWith('/api') 
-          ? `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}${finalUrl}`
-          : finalUrl;
-        
-        window.open(targetUrl, '_blank');
+  // Exportación avisada por el backend: el enlace trae el token, no la fecha de vencimiento
+  const handleDescargaBackend = async (notifId: string, token: string, rol: 'admin' | 'prestador') => {
+    if (descargandoId) return;
+    const guardado = getEnlacesExportacion(currentUser?.id).find((e) => e.token === token);
+    setDescargandoId(notifId);
+    try {
+      if (guardado) {
+        const resultado = await descargarEnlaceExportacion(guardado);
+        if (resultado.estado !== 'descargado') {
+          throw resultado.estado === 'expirado' ? new ApiError('expirado', 410) : new Error(resultado.mensaje);
+        }
       } else {
-        router.push(finalUrl);
+        const { blob, filename } = await api.descargarExportacion(token, rol);
+        triggerBlobDownload(blob, filename);
       }
+      setAvisoDescarga((prev) => ({ ...prev, [notifId]: 'La descarga comenzó.' }));
+    } catch (err) {
+      const seccionReportes = rol === 'admin' ? 'Reportes e Informes' : 'Reportes';
+      const mensaje =
+        err instanceof ApiError && err.status === 410
+          ? `El enlace expiró (24 horas). Generá uno nuevo desde ${seccionReportes} > Exportar.`
+          : err instanceof Error
+            ? err.message
+            : 'No se pudo descargar el archivo.';
+      setAvisoDescarga((prev) => ({ ...prev, [notifId]: mensaje }));
+    } finally {
+      setDescargandoId(null);
+    }
+  };
+
+  const destinoDe = (notif: { actionUrl?: string | null; title: string }) =>
+    resolverDestinoNotificacion(notif.actionUrl, currentUser?.role, notif.title);
+
+  const handleNotificationClick = (notif: { id: string; actionUrl?: string | null; title: string }) => {
+    const { id, actionUrl } = notif;
+    markNotificationAsRead(id);
+
+    if (actionUrl?.startsWith(PREFIJO_DESCARGA)) {
+      void handleDescargarExportacion(id, actionUrl);
+      return;
+    }
+    const destino = destinoDe(notif);
+    // Aviso solo informativo: ya se lee completo en el panel, no hay pantalla a la que ir
+    if (destino.tipo === 'ninguno') return;
+    if (destino.tipo === 'descarga') {
+      // La descarga se hace sin cerrar el panel, para mostrar cómo terminó
+      void handleDescargaBackend(id, destino.token, destino.rol);
+      return;
+    }
+
+    setIsOpen(false);
+    if (destino.tipo === 'externa') {
+      window.open(destino.href, '_blank');
+    } else if (destino.href.split('?')[0] === window.location.pathname) {
+      // Misma pantalla: solo cambia la query, así que se le avisa para que la procese
+      window.history.pushState(null, '', destino.href);
+      window.dispatchEvent(new Event(EVENTO_ENLACE_NOTIFICACION));
+    } else {
+      router.push(destino.href);
     }
   };
 
@@ -171,7 +215,7 @@ export default function NotificationCenter() {
               notifications.map((notif) => (
                 <div
                   key={notif.id}
-                  onClick={() => handleNotificationClick(notif.id, notif.actionUrl)}
+                  onClick={() => handleNotificationClick(notif)}
                   className={`relative px-5 py-4 transition-colors flex items-start gap-3 cursor-pointer ${
                     !notif.isRead ? 'bg-accentWine/[0.04] hover:bg-accentWine/[0.07]' : 'hover:bg-bgPrimary/40'
                   }`}
@@ -186,7 +230,7 @@ export default function NotificationCenter() {
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-start justify-between gap-2">
                       <h5
-                        className={`text-xs truncate ${
+                        className={`text-xs min-w-0 break-words ${
                           notif.isRead ? 'font-semibold text-textDark/70' : 'font-bold text-textDark'
                         }`}
                       >
@@ -202,21 +246,23 @@ export default function NotificationCenter() {
                       </div>
                     </div>
                     <p
-                      className={`text-xs leading-relaxed line-clamp-2 ${
+                      className={`text-xs leading-relaxed break-words whitespace-pre-line ${
                         notif.isRead ? 'text-textDark/50' : 'text-textDark/70'
                       }`}
                     >
                       {notif.message}
                     </p>
-                    {notif.actionUrl && (
-                      notif.actionUrl.startsWith(PREFIJO_DESCARGA) ? (
+                    {(() => {
+                      const destino = destinoDe(notif);
+                      if (destino.tipo === 'ninguno' && !notif.actionUrl?.startsWith(PREFIJO_DESCARGA)) return null;
+                      return notif.actionUrl?.startsWith(PREFIJO_DESCARGA) || destino.tipo === 'descarga' ? (
                         <div className="pt-1 space-y-1">
                           <button
                             type="button"
                             disabled={descargandoId !== null}
                             onClick={(e) => {
                               e.stopPropagation();
-                              void handleDescargarExportacion(notif.id, notif.actionUrl as string);
+                              handleNotificationClick(notif);
                             }}
                             className="inline-flex items-center text-[11px] font-bold text-accentWine hover:underline cursor-pointer disabled:opacity-50"
                           >
@@ -234,7 +280,7 @@ export default function NotificationCenter() {
                           <span
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleNotificationClick(notif.id, notif.actionUrl);
+                              handleNotificationClick(notif);
                             }}
                             className="inline-flex items-center text-[11px] font-bold text-accentWine hover:text-accentWine/80 hover:underline transition-colors cursor-pointer"
                           >
@@ -242,8 +288,8 @@ export default function NotificationCenter() {
                             <ExternalLink className="h-3 w-3 ml-1" />
                           </span>
                         </div>
-                      )
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
               ))
