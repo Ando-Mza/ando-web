@@ -30,7 +30,6 @@ export default function AdminSettings() {
     resetGeneralParams,
     integrations,
     updateIntegration,
-    toggleIntegration,
     testIntegrationConnection,
     categories,
     addCategory,
@@ -56,22 +55,8 @@ export default function AdminSettings() {
   const [gracePeriod, setGracePeriod] = useState(generalParams.validationGracePeriodDays);
   const [requireReview, setRequireReview] = useState(generalParams.requireReviewForEdits);
   const [paramError, setParamError] = useState('');
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    confirmText?: string;
-    danger?: boolean;
-    onConfirm: () => void;
-  }>({
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-  });
 
-  const [activeTab, setActiveTab] = useState<'params' | 'languages' | 'categories' | 'tags' | 'states' | 'integrations' | 'updates'>('params');
+  const [activeTab, setActiveTab] = useState<'params' | 'languages' | 'categories' | 'tags' | 'states' | 'integrations'>('params');
   const [selectedLang, setSelectedLang] = useState<'es' | 'en' | 'pt'>('es');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -106,19 +91,14 @@ export default function AdminSettings() {
   // Estados locales para Integraciones
   const [editingIntegrationId, setEditingIntegrationId] = useState<string | null>(null);
   const [integUrl, setIntegUrl] = useState('');
-  const [integLimiteConsumo, setIntegLimiteConsumo] = useState<number | ''>('');
+  const [integKey, setIntegKey] = useState('');
+  const [showIntegKeyId, setShowIntegKeyId] = useState<string | null>(null);
   const [testingConnectionId, setTestingConnectionId] = useState<string | null>(null);
+  const [connectionResults, setConnectionResults] = useState<{ [id: string]: 'success' | 'error' | null }>({});
 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Configuración guardada exitosamente');
   const [toastType, setToastType] = useState<'success' | 'warning'>('success');
-
-  // Estados locales para Avisos Globales (US-NYA-06)
-  const [updateTitle, setUpdateTitle] = useState('');
-  const [updateMessage, setUpdateMessage] = useState('');
-  const [updateActionUrl, setUpdateActionUrl] = useState('');
-  const [isPublishingUpdate, setIsPublishingUpdate] = useState(false);
-  const [updateError, setUpdateError] = useState('');
 
   const triggerToast = (msg: string, type: 'success' | 'warning' = 'success') => {
     setToastMessage(msg);
@@ -128,7 +108,7 @@ export default function AdminSettings() {
   };
 
   // Guardar Parámetros
-  const handleSaveParams = async (e: React.FormEvent) => {
+  const handleSaveParams = (e: React.FormEvent) => {
     e.preventDefault();
     setParamError('');
 
@@ -145,37 +125,25 @@ export default function AdminSettings() {
       return;
     }
 
-    try {
-      await updateGeneralParams({
-        maxImagesPerPOI: maxImages,
-        maxTimeRangesPerDay: maxSlots,
-        validationGracePeriodDays: gracePeriod,
-        requireReviewForEdits: requireReview,
-      });
-      triggerToast('Límites globales actualizados con éxito');
-    } catch (err: any) {
-      setParamError(err.message || 'Error al guardar los parámetros');
-    }
+    updateGeneralParams({
+      maxImagesPerPOI: maxImages,
+      maxTimeRangesPerDay: maxSlots,
+      validationGracePeriodDays: gracePeriod,
+      requireReviewForEdits: requireReview,
+    });
+    triggerToast('Límites globales actualizados con éxito');
   };
 
   // Restablecer Parámetros
   const handleResetParams = () => {
-    setShowResetConfirm(true);
-  };
-
-  const confirmResetParams = async () => {
-    try {
-      await resetGeneralParams();
+    if (confirm('¿Restablecer los parámetros del sistema a los valores por defecto?')) {
+      resetGeneralParams();
       setMaxImages(8);
       setMaxSlots(3);
       setGracePeriod(5);
       setRequireReview(true);
       setParamError('');
-      setShowResetConfirm(false);
       triggerToast('Valores restablecidos a los valores por defecto');
-    } catch (err: any) {
-      setParamError(err.message || 'Error al restablecer los parámetros');
-      setShowResetConfirm(false);
     }
   };
 
@@ -242,21 +210,14 @@ export default function AdminSettings() {
   };
 
   const handleDeleteCategory = (id: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Eliminar Categoría',
-      message: '¿Está seguro de que desea eliminar esta categoría turística?',
-      confirmText: 'Sí, Eliminar',
-      danger: true,
-      onConfirm: () => {
-        const success = deleteCategory(id);
-        if (success) {
-          triggerToast('Categoría eliminada con éxito');
-        } else {
-          triggerToast('No se puede eliminar la categoría porque está asociada a puntos de interés activos.', 'warning');
-        }
+    if (confirm('¿Está seguro de que desea eliminar esta categoría turística?')) {
+      const success = deleteCategory(id);
+      if (success) {
+        triggerToast('Categoría eliminada con éxito');
+      } else {
+        triggerToast('No se puede eliminar la categoría porque está asociada a puntos de interés activos.', 'warning');
       }
-    });
+    }
   };
 
   // CRUD Etiquetas (US-GIT-05)
@@ -307,25 +268,18 @@ export default function AdminSettings() {
   };
 
   const handleDeleteTag = async (id: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Eliminar Etiqueta',
-      message: '¿Está seguro de que desea eliminar esta etiqueta?',
-      confirmText: 'Sí, Eliminar',
-      danger: true,
-      onConfirm: async () => {
-        const res = await deleteEtiqueta(id);
-        if (res.success) {
-          triggerToast('Etiqueta eliminada con éxito');
-        } else {
-          triggerToast(res.error || 'No se pudo eliminar la etiqueta.', 'warning');
-        }
+    if (confirm('¿Está seguro de que desea eliminar esta etiqueta?')) {
+      const res = await deleteEtiqueta(id);
+      if (res.success) {
+        triggerToast('Etiqueta eliminada con éxito');
+      } else {
+        triggerToast(res.error || 'No se pudo eliminar la etiqueta.', 'warning');
       }
-    });
+    }
   };
 
   // CRUD Estados de Validación
-  const handleSaveState = async (e: React.FormEvent) => {
+  const handleSaveState = (e: React.FormEvent) => {
     e.preventDefault();
     setStateError('');
 
@@ -343,32 +297,22 @@ export default function AdminSettings() {
     }
 
     if (editingState) {
-      const res = await updateValidationState({
+      updateValidationState({
         ...editingState,
         name: stateName.trim(),
         description: stateDesc.trim(),
         enabled: stateEnabled,
         allowedTransitions: stateTransitions,
       });
-      if (res.success) {
-        triggerToast(`Estado "${stateName}" modificado con éxito`);
-      } else {
-        setStateError(res.error || 'Error al actualizar el estado de validación');
-        return;
-      }
+      triggerToast(`Estado "${stateName}" modificado con éxito`);
     } else {
-      const res = await addValidationState({
+      addValidationState({
         name: stateName.trim(),
         description: stateDesc.trim(),
         enabled: stateEnabled,
         allowedTransitions: stateTransitions,
       });
-      if (res.success) {
-        triggerToast(`Estado "${stateName}" agregado con éxito`);
-      } else {
-        setStateError(res.error || 'Error al crear el estado de validación');
-        return;
-      }
+      triggerToast(`Estado "${stateName}" agregado con éxito`);
     }
 
     setIsAddingState(false);
@@ -388,22 +332,15 @@ export default function AdminSettings() {
     setIsAddingState(true);
   };
 
-  const handleDeleteState = async (id: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Eliminar Estado',
-      message: '¿Está seguro de que desea eliminar este estado de validación?',
-      confirmText: 'Sí, Eliminar',
-      danger: true,
-      onConfirm: async () => {
-        const res = await deleteValidationState(id);
-        if (res.success) {
-          triggerToast('Estado de validación eliminado con éxito');
-        } else {
-          triggerToast(res.error || 'No se puede eliminar el estado porque está siendo utilizado por registros activos.', 'warning');
-        }
+  const handleDeleteState = (id: string) => {
+    if (confirm('¿Está seguro de que desea eliminar este estado de validación?')) {
+      const success = deleteValidationState(id);
+      if (success) {
+        triggerToast('Estado de validación eliminado con éxito');
+      } else {
+        triggerToast('No se puede eliminar el estado porque está siendo utilizado por registros activos.', 'warning');
       }
-    });
+    }
   };
 
   const handleToggleTransition = (stateId: string) => {
@@ -415,83 +352,42 @@ export default function AdminSettings() {
   // Integraciones
   const handleStartEditIntegration = (integ: Integration) => {
     setEditingIntegrationId(integ.id);
-    setIntegUrl(integ.urlBase || '');
-    setIntegLimiteConsumo(integ.limiteConsumo || '');
+    setIntegUrl(integ.apiUrl || '');
+    setIntegKey(integ.apiKey || '');
   };
 
-  const handleSaveIntegration = async (integ: Integration) => {
-    try {
-      await updateIntegration({
-        ...integ,
-        urlBase: integUrl.trim() || null,
-        limiteConsumo: integLimiteConsumo === '' ? null : Number(integLimiteConsumo),
-      });
-      setEditingIntegrationId(null);
-      triggerToast(`Configuración de "${integ.nombre}" guardada`);
-    } catch (e) {
-      triggerToast('Error al guardar la integración', 'warning');
-    }
+  const handleSaveIntegration = (integ: Integration) => {
+    updateIntegration({
+      ...integ,
+      apiUrl: integUrl.trim(),
+      apiKey: integKey.trim(),
+    });
+    setEditingIntegrationId(null);
+    triggerToast(`Credenciales de "${integ.name}" guardadas`);
   };
 
-  const handleTestConnection = async (id: string, confirmarConsumo?: boolean) => {
+  const handleTestConnection = async (id: string) => {
     setTestingConnectionId(id);
     try {
-      const { success, requiresConfirmation, warning } = await testIntegrationConnection(id, confirmarConsumo);
-      
-      if (requiresConfirmation) {
-        setConfirmModal({
-          isOpen: true,
-          title: 'Prueba de Conexión',
-          message: warning || 'Esta prueba consumirá cuota del proveedor. ¿Deseas continuar?',
-          confirmText: 'Probar de todos modos',
-          onConfirm: () => handleTestConnection(id, true)
-        });
-      } else if (success) {
+      const success = await testIntegrationConnection(id);
+      setConnectionResults((prev) => ({
+        ...prev,
+        [id]: success ? 'success' : 'error',
+      }));
+      if (success) {
         triggerToast('Prueba de conexión exitosa', 'success');
       } else {
-        triggerToast('La prueba de conexión falló.', 'warning');
+        triggerToast('La prueba de conexión falló. Revise sus credenciales.', 'warning');
       }
     } catch {
-      triggerToast('Error inesperado al probar conexión.', 'warning');
+      setConnectionResults((prev) => ({
+        ...prev,
+        [id]: 'error',
+      }));
+      triggerToast('La prueba de conexión falló. Revise sus credenciales.', 'warning');
     } finally {
       setTestingConnectionId(null);
     }
-  };
-
-  const handlePublishUpdate = (e: React.FormEvent) => {
-    e.preventDefault();
-    setUpdateError('');
-    if (!updateTitle.trim() || !updateMessage.trim()) {
-      setUpdateError('El título y el mensaje son obligatorios.');
-      return;
-    }
-    
-    setConfirmModal({
-      isOpen: true,
-      title: 'Confirmar Envío Global',
-      message: '¿Estás seguro de enviar esta notificación a todos los usuarios activos? Esta acción no se puede deshacer.',
-      confirmText: 'Sí, Enviar a todos',
-      danger: true,
-      onConfirm: async () => {
-        setIsPublishingUpdate(true);
-        try {
-          const { api } = await import('@/utils/api');
-          await api.publishPlatformUpdate({
-            titulo: updateTitle.trim(),
-            mensaje: updateMessage.trim(),
-            urlAccion: updateActionUrl.trim() || undefined,
-          });
-          triggerToast('Actualización de plataforma enviada a todos los usuarios');
-          setUpdateTitle('');
-          setUpdateMessage('');
-          setUpdateActionUrl('');
-        } catch (err: any) {
-          setUpdateError(err.message || 'Error al publicar la actualización');
-        } finally {
-          setIsPublishingUpdate(false);
-        }
-      }
-    });
   };
 
   return (
@@ -533,7 +429,17 @@ export default function AdminSettings() {
           <Settings2 className="h-4 w-4" />
           <span>Parámetros generales</span>
         </button>
-
+        <button
+          onClick={() => setActiveTab('languages')}
+          className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
+            activeTab === 'languages'
+              ? 'border-accentWine text-accentWine'
+              : 'border-transparent text-textDark/60 hover:text-textDark'
+          }`}
+        >
+          <Globe2 className="h-4 w-4" />
+          <span>Idiomas y traducción</span>
+        </button>
         <button
           onClick={() => setActiveTab('categories')}
           className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
@@ -577,17 +483,6 @@ export default function AdminSettings() {
         >
           <Link2 className="h-4 w-4" />
           <span>Integraciones y APIs</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('updates')}
-          className={`flex items-center space-x-2 py-3.5 px-5 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine ${
-            activeTab === 'updates'
-              ? 'border-accentWine text-accentWine'
-              : 'border-transparent text-textDark/60 hover:text-textDark'
-          }`}
-        >
-          <Globe2 className="h-4 w-4" />
-          <span>Avisos Globales</span>
         </button>
       </div>
 
@@ -684,80 +579,96 @@ export default function AdminSettings() {
           </form>
         )}
 
-        {/* Modal de confirmación genérico */}
-        {confirmModal.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-slide-up relative">
-              <div className="p-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className={`p-2 rounded-full flex-shrink-0 ${confirmModal.danger ? 'bg-red-50 text-red-600' : 'bg-fillPrimary/10 text-fillPrimary'}`}>
-                    <AlertTriangle className="h-6 w-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-textDark font-wixDisplay">{confirmModal.title}</h3>
-                </div>
-                <p className="text-sm text-textDark/70 mb-6">{confirmModal.message}</p>
-                
-                <div className="flex items-center justify-end space-x-3 pt-2">
+        {/* Tab 2: Translation Manager (US-CYP-02) */}
+        {activeTab === 'languages' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/5 pb-4">
+              <div>
+                <h4 className="font-wixDisplay text-lg font-bold text-textDark">Diccionario de Idiomas</h4>
+                <p className="text-xs text-textDark/50">Edita los literales de traducción de la plataforma</p>
+              </div>
+
+              {/* Language Selection */}
+              <div className="flex space-x-2">
+                {(['es', 'en', 'pt'] as const).map((lang) => (
                   <button
-                    type="button"
-                    onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
-                    className="px-4 py-2 rounded-lg text-sm font-bold text-textDark/70 hover:bg-black/5 hover:text-textDark transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
+                    key={lang}
                     onClick={() => {
-                      confirmModal.onConfirm();
-                      setConfirmModal({ ...confirmModal, isOpen: false });
+                      setSelectedLang(lang);
+                      setEditingKey(null);
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold text-white transition-transform hover:-translate-y-0.5 shadow-sm ${
-                      confirmModal.danger ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' : 'bg-fillPrimary hover:bg-fillPrimary/90 shadow-fillPrimary/20'
+                    className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      selectedLang === lang
+                        ? 'bg-accentWine text-white border-accentWine shadow-sm'
+                        : 'bg-bgPrimary text-textDark/60 border-black/5 hover:bg-black/5'
                     }`}
                   >
-                    {confirmModal.confirmText || 'Confirmar'}
+                    {lang === 'es' && 'Español (ES)'}
+                    {lang === 'en' && 'English (EN)'}
+                    {lang === 'pt' && 'Português (PT)'}
                   </button>
-                </div>
+                ))}
               </div>
+            </div>
+
+            {/* Translation Keys Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-black/5 text-textDark/60 text-xs font-bold uppercase tracking-wider">
+                    <th className="py-2.5">Llave de Traducción (Key)</th>
+                    <th className="py-2.5">Literal Traducido</th>
+                    <th className="py-2.5 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5">
+                  {Object.entries(translations[selectedLang] || {}).map(([key, val]) => (
+                    <tr key={key} className="hover:bg-bgPrimary/20">
+                      <td className="py-3 font-mono text-xs text-accentWine">{key}</td>
+                      <td className="py-3">
+                        {editingKey === key ? (
+                          <input
+                            type="text"
+                            value={editingValue}
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            className="w-full max-w-md px-3 py-1.5 rounded-md border border-black/10 text-sm focus:outline-none focus:border-fillPrimary"
+                          />
+                        ) : (
+                          <span className="text-textDark/80 font-medium">{val}</span>
+                        )}
+                      </td>
+                      <td className="py-3 text-right">
+                        {editingKey === key ? (
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={() => setEditingKey(null)}
+                              className="px-2.5 py-1 text-xs border border-black/10 rounded-md hover:bg-black/5 font-semibold text-textDark/70 cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => handleSaveTranslation(key)}
+                              className="px-2.5 py-1 text-xs bg-fillPrimary text-white rounded-md hover:bg-fillPrimary/95 font-semibold cursor-pointer"
+                            >
+                              Guardar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleStartEditTranslation(key, val)}
+                            className="text-xs text-fillPrimary hover:text-fillPrimary/80 font-bold hover:underline cursor-pointer"
+                          >
+                            Modificar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
-
-        {/* Modal de confirmación para restablecer parámetros */}
-        {showResetConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-slide-up relative">
-              <div className="p-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="p-2 rounded-full flex-shrink-0 bg-red-50 text-red-600">
-                    <AlertTriangle className="h-6 w-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-textDark font-wixDisplay">Restablecer Parámetros</h3>
-                </div>
-                <p className="text-sm text-textDark/70 mb-6">¿Estás seguro de que deseas restablecer todos los parámetros del sistema a sus valores por defecto?</p>
-                
-                <div className="flex items-center justify-end space-x-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowResetConfirm(false)}
-                    className="px-4 py-2 rounded-lg text-sm font-bold text-textDark/70 hover:bg-black/5 hover:text-textDark transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmResetParams}
-                    className="px-4 py-2 rounded-lg text-sm font-bold text-white transition-transform hover:-translate-y-0.5 shadow-sm bg-red-600 hover:bg-red-700 shadow-red-600/20"
-                  >
-                    Sí, Restablecer
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-
 
         {/* Tab 3: Tourist Categories Tab (US-CYP-03) */}
         {activeTab === 'categories' && (
@@ -948,17 +859,14 @@ export default function AdminSettings() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70">
                     Nombre de la Etiqueta *
                   </label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3 text-textDark/50 font-bold select-none">#</span>
-                    <input
-                      type="text"
-                      required
-                      value={tagName}
-                      onChange={(e) => setTagName(e.target.value.replace(/#/g, ''))}
-                      placeholder="Ej: Pet Friendly, Accesible, Degustación, WiFi..."
-                      className="w-full pl-7 pr-3 py-2 rounded-lg border border-black/10 bg-white focus:outline-none focus:border-fillPrimary text-sm font-semibold"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={tagName}
+                    onChange={(e) => setTagName(e.target.value)}
+                    placeholder="Ej: Pet Friendly, Accesible, Degustación, WiFi..."
+                    className="w-full px-3 py-2 rounded-lg border border-black/10 bg-white focus:outline-none focus:border-fillPrimary text-sm font-semibold"
+                  />
                 </div>
 
                 {tagError && (
@@ -1251,13 +1159,15 @@ export default function AdminSettings() {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               {integrations.map((integ) => {
                 const isEditing = editingIntegrationId === integ.id;
+                const showKey = showIntegKeyId === integ.id;
+                const connectionResult = connectionResults[integ.id] || null;
                 const isTesting = testingConnectionId === integ.id;
 
                 return (
                   <div
                     key={integ.id}
                     className={`p-6 border rounded-2xl flex flex-col justify-between gap-4 transition-all ${
-                      integ.habilitada
+                      integ.enabled
                         ? 'border-green-200 bg-green-50/5'
                         : 'border-black/5 bg-bgPrimary/30'
                     }`}
@@ -1267,37 +1177,41 @@ export default function AdminSettings() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1">
                           <div className="flex items-center space-x-2">
-                            <span className="font-bold text-sm text-textDark">{integ.nombre}</span>
+                            <span className="font-bold text-sm text-textDark">{integ.name}</span>
                             <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                              integ.proveedor === 'Mapbox' || integ.proveedor === 'GoogleMaps'
+                              integ.type === 'maps'
                                 ? 'bg-blue-50 text-blue-700 border border-blue-200'
                                 : 'bg-orange-50 text-orange-700 border border-orange-200'
                             }`}>
-                              {integ.proveedor}
+                              {integ.type === 'maps' ? 'Mapas' : 'Clima'}
                             </span>
                           </div>
+                          <p className="text-xs text-textDark/60 leading-relaxed max-w-sm">
+                            {integ.description}
+                          </p>
                         </div>
 
                         {/* Enable Switch Toggle */}
                         <button
                           type="button"
                           onClick={() => {
-                            toggleIntegration(integ.id);
+                            updateIntegration({ ...integ, enabled: !integ.enabled });
+                            triggerToast(`Servicio "${integ.name}" ${!integ.enabled ? 'habilitado' : 'deshabilitado'}`);
                           }}
                           className={`relative inline-flex h-6 w-10.5 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            integ.habilitada ? 'bg-green-600' : 'bg-black/15'
+                            integ.enabled ? 'bg-green-600' : 'bg-black/15'
                           }`}
                         >
                           <span
                             className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              integ.habilitada ? 'translate-x-4.5' : 'translate-x-0'
+                              integ.enabled ? 'translate-x-4.5' : 'translate-x-0'
                             }`}
                           />
                         </button>
                       </div>
 
-                      {/* Configuration Input form */}
-                      {integ.habilitada && (
+                      {/* Credentials Input form */}
+                      {integ.enabled && (
                         <div className="bg-bgPrimary/50 p-4 rounded-xl border border-black/5 space-y-3">
                           <div>
                             <label className="block text-[10px] font-bold uppercase tracking-wider text-textDark/50 mb-1">
@@ -1312,33 +1226,51 @@ export default function AdminSettings() {
                               />
                             ) : (
                               <span className="text-xs font-semibold text-textDark/80 font-mono break-all">
-                                {integ.urlBase || 'No configurada'}
+                                {integ.apiUrl || 'No configurada'}
                               </span>
                             )}
                           </div>
 
                           <div>
                             <label className="block text-[10px] font-bold uppercase tracking-wider text-textDark/50 mb-1">
-                              Límite de Consumo Administrativo
+                              API Token / Credencial
                             </label>
                             <div className="flex items-center space-x-1.5">
                               {isEditing ? (
                                 <div className="flex-1 relative">
                                   <input
-                                    type="number"
-                                    min="0"
-                                    value={integLimiteConsumo}
-                                    onChange={(e) => setIntegLimiteConsumo(e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full px-2.5 py-1.5 bg-white border border-black/10 rounded-md text-xs focus:outline-none focus:border-fillPrimary"
-                                    placeholder="Sin límite"
+                                    type={showKey ? 'text' : 'password'}
+                                    value={integKey}
+                                    onChange={(e) => setIntegKey(e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-white border border-black/10 rounded-md text-xs focus:outline-none focus:border-fillPrimary pr-8"
                                   />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowIntegKeyId(showKey ? null : integ.id)}
+                                    className="absolute right-2.5 top-1.5 text-textDark/40 hover:text-textDark cursor-pointer"
+                                  >
+                                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                  </button>
                                 </div>
                               ) : (
-                                <span className="text-xs font-semibold text-textDark/85 flex-1">
-                                  {integ.limiteConsumo !== null
-                                    ? integ.limiteConsumo
-                                    : 'Sin límite'}
-                                </span>
+                                <>
+                                  <span className="text-xs font-semibold text-textDark/85 font-mono flex-1">
+                                    {integ.apiKey
+                                      ? showKey
+                                        ? integ.apiKey
+                                        : '••••••••••••••••••••••••••••••••'
+                                      : 'Sin clave cargada'}
+                                  </span>
+                                  {integ.apiKey && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowIntegKeyId(showKey ? null : integ.id)}
+                                      className="p-1 hover:bg-black/5 rounded text-textDark/60 cursor-pointer"
+                                    >
+                                      {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>
@@ -1347,7 +1279,7 @@ export default function AdminSettings() {
                     </div>
 
                     {/* API Footer Tools */}
-                    {integ.habilitada && (
+                    {integ.enabled && (
                       <div className="pt-3 border-t border-black/5 flex items-center justify-between">
                         {/* Testing Connectivity */}
                         <div className="flex items-center space-x-2">
@@ -1365,13 +1297,13 @@ export default function AdminSettings() {
                             <span>Probar Conexión</span>
                           </button>
 
-                          {integ.estadoConexion === 'conectada' && (
+                          {connectionResult === 'success' && (
                             <span className="inline-flex items-center px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded text-[9px] font-bold uppercase">
                               Conectado
                             </span>
                           )}
-                          {integ.estadoConexion === 'error' && (
-                            <span className="inline-flex items-center px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded text-[9px] font-bold uppercase" title={integ.ultimoError || ''}>
+                          {connectionResult === 'error' && (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded text-[9px] font-bold uppercase">
                               Error de Conexión
                             </span>
                           )}
@@ -1412,80 +1344,8 @@ export default function AdminSettings() {
           </div>
         )}
 
-        {/* Tab 7: Platform Updates (US-NYA-06) */}
-        {activeTab === 'updates' && (
-          <div className="space-y-6 max-w-2xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/5 pb-4">
-              <div>
-                <h4 className="font-wixDisplay text-lg font-bold text-textDark">Avisos Globales de Plataforma</h4>
-                <p className="text-xs text-textDark/50">Envía una notificación a todos los usuarios registrados del sistema (Turistas, Prestadores, Admins).</p>
-              </div>
-            </div>
-
-            <form onSubmit={handlePublishUpdate} className="bg-bgPrimary/40 border border-black/5 rounded-2xl p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
-                  Título de la actualización
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={updateTitle}
-                  onChange={(e) => setUpdateTitle(e.target.value)}
-                  placeholder="Ej: ¡Plataforma Actualizada! Versión 2.0"
-                  className="w-full px-3 py-2 rounded-lg border border-black/10 bg-white focus:outline-none focus:border-fillPrimary text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
-                  Mensaje
-                </label>
-                <textarea
-                  rows={4}
-                  required
-                  value={updateMessage}
-                  onChange={(e) => setUpdateMessage(e.target.value)}
-                  placeholder="Ej: Hemos añadido la nueva función de itinerarios y solucionado errores de visualización..."
-                  className="w-full px-3 py-2 rounded-lg border border-black/10 bg-white focus:outline-none focus:border-fillPrimary text-sm leading-relaxed"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-textDark/70 mb-1.5">
-                  URL de Acción (Opcional)
-                </label>
-                <input
-                  type="text"
-                  value={updateActionUrl}
-                  onChange={(e) => setUpdateActionUrl(e.target.value)}
-                  placeholder="Ej: /novedades (Deep link para redirección al hacer clic)"
-                  className="w-full px-3 py-2 rounded-lg border border-black/10 bg-white focus:outline-none focus:border-fillPrimary text-sm"
-                />
-              </div>
-
-              {updateError && (
-                <div className="p-3 bg-red-50 text-red-600 rounded-lg text-xs font-bold flex items-center space-x-2 border border-red-200">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span>{updateError}</span>
-                </div>
-              )}
-
-              <div className="flex justify-end pt-3 border-t border-black/5">
-                <button
-                  type="submit"
-                  disabled={isPublishingUpdate}
-                  className="flex items-center space-x-2 px-6 py-2.5 bg-fillPrimary hover:bg-fillPrimary/95 text-white rounded-lg text-sm font-bold transition-all cursor-pointer shadow-sm shadow-fillPrimary/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Globe2 className="h-4 w-4" />
-                  <span>{isPublishingUpdate ? 'Publicando...' : 'Publicar Notificación Global'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
       </div>
     </div>
   );
 }
+

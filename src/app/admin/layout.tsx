@@ -29,7 +29,7 @@ import { Sparkles, AlertTriangle } from 'lucide-react';
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, isAuthLoading, logout } = useApp();
+  const { currentUser, logout } = useApp();
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -37,9 +37,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isErrorReportOpen, setIsErrorReportOpen] = useState(false);
 
+  // Verificar autenticación real — sin auto-login mock
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    const timer = setTimeout(() => {
+      setMounted(true);
+      if (!currentUser) {
+        router.push('/');
+      } else if (currentUser.role !== 'admin') {
+        router.push('/');
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [currentUser, router]);
 
   useEffect(() => {
     if (!mounted || isAuthLoading || !currentUser) return;
@@ -62,17 +71,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (!mounted || isAuthLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bgPrimary text-textDark">
+      <div className="flex h-screen w-screen items-center justify-center bg-bgPrimary text-textDark">
         <div className="flex flex-col items-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-accentWine border-t-transparent" />
           <p className="text-sm font-semibold text-textDark/80">Cargando panel de administración...</p>
         </div>
       </div>
     );
-  }
-
-  if (!currentUser || currentUser.role !== 'admin') {
-    return null;
   }
 
   const menuItems = [
@@ -158,8 +163,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }`}
       >
         {/* Brand/Logo */}
-        <div className="flex h-24 items-center justify-between px-6 py-4 border-b border-black/5">
-          <Link href="/admin/dashboard" className="flex items-center space-x-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine focus-visible:ring-offset-2 rounded-lg">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-black/5">
+          <Link href="/admin/dashboard" className="flex items-center space-x-2 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine focus-visible:ring-offset-2 rounded-lg">
             {isSidebarOpen ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src="/brand/logotipoColor1.svg" alt="ANDO" className="h-7 w-auto" />
@@ -237,7 +242,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }`}
       >
         {/* Top Header */}
-        <header className="flex h-24 items-center justify-between px-8 py-4 bg-white border-b border-black/5 sticky top-0 z-40">
+        <header className="flex h-16 items-center justify-between px-8 bg-white border-b border-black/5 sticky top-0 z-10">
           <div className="flex items-center">
             <h2 className="font-wixDisplay text-lg font-bold text-accentWine">
               {menuItems.find(item => item.path === pathname)?.name || 'Panel de administración'}

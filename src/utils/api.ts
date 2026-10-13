@@ -46,7 +46,7 @@ function mensajeDeError(errorData: any, fallback: string): string {
 
 async function request<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT' = 'GET',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
   body?: any,
   customHeaders: Record<string, string> = {},
   timeoutMs: number = 10000
@@ -108,16 +108,15 @@ export const api = {
   login: (body: any) => request<any>('/auth/login', 'POST', body),
   logout: (body?: any) => request<any>('/auth/logout', 'POST', body),
   registerPrestador: (body: any) => request<any>('/auth/register/prestador', 'POST', body),
-  getProfile: () => request<any>('/auth/profile', 'GET'),
+  getProfile: () => request<any>('/user/profile', 'GET'),
+
+  // Password Recovery (US-ACC-03)
   requestPasswordRecovery: (email: string) =>
-    request<{ message: string }>('/auth/password-recovery/request', 'POST', { email }),
-  validatePasswordRecoveryToken: (token: string) =>
-    request<{ valid: boolean; message: string }>(
-      `/auth/password-recovery/validate?token=${encodeURIComponent(token)}`,
-      'GET',
-    ),
-  resetPasswordWithToken: (body: { token: string; passwordNueva: string; confirmPassword: string }) =>
-    request<{ message: string }>('/auth/password-recovery/reset', 'POST', body),
+    request<any>('/auth/password-recovery/request', 'POST', { email }),
+  validateRecoveryToken: (token: string) =>
+    request<any>(`/auth/password-recovery/validate?token=${encodeURIComponent(token)}`, 'GET'),
+  resetPassword: (body: { token: string; newPassword: string; confirmPassword: string }) =>
+    request<any>('/auth/password-recovery/reset', 'POST', body),
 
   // Users & Profiles
   getUsers: (params?: { search?: string; rol?: string }) => {
@@ -167,11 +166,10 @@ export const api = {
     request<any>(`/poi/${id}/estado?estado=${encodeURIComponent(estado)}`, 'PATCH'),
 
   // Admin POI Revision (US-CYN-05, US-GIT-07)
-  getAdminRevisionPois: (params?: { estado?: string; estadoId?: string; incluirTodos?: string | boolean; fuente?: string; search?: string; page?: number; limit?: number }) => {
+  getAdminRevisionPois: (params?: { estado?: string; estadoId?: string; fuente?: string; search?: string; page?: number; limit?: number }) => {
     const qs = new URLSearchParams();
     if (params?.estadoId) qs.set('estadoId', params.estadoId);
     if (params?.estado) qs.set('estado', params.estado);
-    if (params?.incluirTodos !== undefined) qs.set('incluirTodos', String(params.incluirTodos));
     if (params?.fuente) qs.set('fuente', params.fuente);
     if (params?.search) qs.set('search', params.search);
     if (params?.page) qs.set('page', String(params.page));
@@ -179,7 +177,6 @@ export const api = {
     const queryString = qs.toString();
     return request<any>(`/poi/admin/revision${queryString ? `?${queryString}` : ''}`, 'GET');
   },
-  getAllPublicPois: () => request<any[]>('/poi', 'GET'),
   getAdminPoiRevisionDetail: (id: string) =>
     request<any>(`/poi/admin/revision/${id}`, 'GET'),
   aprobarPoi: (id: string) =>
@@ -197,8 +194,8 @@ export const api = {
 
   // POI Categories (Admin)
   getCategories: () => request<any[]>('/poi/categorias/all', 'GET'),
-  createCategory: (data: { nombre: string; descripcion?: string; activa?: boolean }) => request<any>('/poi/categorias', 'POST', data),
-  updateCategory: (id: string, data: { nombre?: string; descripcion?: string; activa?: boolean }) => request<any>(`/poi/categorias/${id}`, 'PATCH', data),
+  createCategory: (nombre: string) => request<any>('/poi/categorias', 'POST', { nombre }),
+  updateCategory: (id: string, nombre: string) => request<any>(`/poi/categorias/${id}`, 'PATCH', { nombre }),
   toggleCategoryActiva: (id: string, activa: boolean) =>
     request<any>(`/poi/categorias/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteCategory: (id: string) => request<any>(`/poi/categorias/${id}`, 'DELETE'),
@@ -211,15 +208,6 @@ export const api = {
   toggleEtiquetaActiva: (id: string, activa: boolean) =>
     request<any>(`/poi/etiquetas/${id}/activar?activa=${activa}`, 'PATCH'),
   deleteEtiqueta: (id: string) => request<any>(`/poi/etiquetas/${id}`, 'DELETE'),
-
-  // Validation States (Admin - US-CYP-04)
-  getValidationStates: (soloActivos?: boolean) =>
-    request<any[]>(`/admin/estados-validacion${soloActivos ? '?soloActivos=true' : ''}`, 'GET'),
-  createValidationState: (body: any) => request<any>('/admin/estados-validacion', 'POST', body),
-  updateValidationState: (id: string, body: any) => request<any>(`/admin/estados-validacion/${id}`, 'PATCH', body),
-  toggleValidationState: (id: string, activa: boolean) =>
-    request<any>(`/admin/estados-validacion/${id}/estado?activa=${activa}`, 'PATCH'),
-  deleteValidationState: (id: string) => request<any>(`/admin/estados-validacion/${id}`, 'DELETE'),
 
   // Ubicaciones (Regiones, Departamentos, Zonas - US-CYN-02)
   getRegiones: (includeAll?: boolean) =>
@@ -276,23 +264,16 @@ export const api = {
   // Servicios (Catálogo y Negocios - US-CYN-03)
   getCatalogoServicios: (soloActivos?: boolean) =>
     request<any>(`/poi/servicios/catalogo${soloActivos ? '?soloActivos=true' : ''}`, 'GET'),
-  getServiciosByPoi: async (poiId: string) => {
-    try {
-      return await request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'GET');
-    } catch {
-      return await request<any>(`/poi/${poiId}/servicios`, 'GET');
-    }
-  },
+  getServiciosByPoi: (poiId: string) =>
+    request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'GET'),
   createServicioPoi: (poiId: string, body: any) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios`, 'POST', body),
   updateServicioPoi: (poiId: string, servicioId: string, body: any) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}`, 'PATCH', body),
   toggleEstadoServicioPoi: (poiId: string, servicioId: string, activo: boolean) =>
     request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}/estado`, 'PATCH', { activo }),
-  deleteServicioPoi: (poiId: string, servicioId: string) =>
-    request<any>(`/poi/prestador/my-pois/${poiId}/servicios/${servicioId}`, 'DELETE'),
 
-  // Reportes y Soporte (US-CYN-08, US-AYS-03, US-AYS-05)
+  // Reportes y Soporte (US-CYN-08, US-AYS-05)
   createReporteContenido: (body: {
     poiId?: string;
     reviewId?: string;
