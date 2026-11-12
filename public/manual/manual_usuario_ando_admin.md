@@ -1,6 +1,5 @@
 # Manual de Usuario — ANDO App (Panel Web)
 ### Rol: Administrador
-**Proyecto Final de Carrera | UTN FRM — Año Académico 2026**
 
 ---
 
@@ -130,4 +129,4 @@ El módulo de parámetros del sistema permite ajustar reglas globales sin necesi
 
 ---
 
-*Manual de Usuario — ANDO App (Admin Web) v1.0 | UTN FRM 2026*
+*Manual de Usuario — ANDO App (Admin Web) v1.0*

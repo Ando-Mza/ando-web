@@ -28,7 +28,7 @@ export default function ProviderProfilePage() {
   // Redirect if not loaded or not provider (safety)
   useEffect(() => {
     if (currentUser && currentUser.role !== 'provider') {
-      router.push('/');
+      router.replace('/login');
     }
   }, [currentUser, router]);
 
@@ -287,7 +287,7 @@ export default function ProviderProfilePage() {
     if (res.success) {
       setShowDeleteModal(false);
       alert('Tu cuenta fue dada de baja correctamente.');
-      router.push('/');
+      router.replace('/login');
     } else {
       setDeleteError(res.error || 'No se pudo eliminar la cuenta. Verifica tu contraseña.');
     }

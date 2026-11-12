@@ -5,24 +5,29 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { 
   LayoutDashboard, 
-  Store, 
-  CalendarRange, 
+  CheckSquare, 
+  Settings, 
   LogOut, 
   ChevronLeft, 
   ChevronRight, 
-  User,
-  Layers,
-  MessageSquare,
+  Users,
+  BarChart3,
+  FileText,
   HelpCircle,
-  BarChart3
+  ShieldAlert,
+  Activity,
+  BadgeCheck,
+  Bug
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationCenter from '@/components/NotificationCenter';
 import OnboardingTutorialModal from '@/components/common/OnboardingTutorialModal';
+import { MENSAJE_SIN_PERMISOS, setFlashMessage } from '@/components/common/FlashMessage';
 import ErrorReportModal from '@/components/common/ErrorReportModal';
+import { HOME_BY_ROLE, LOGIN_PATH, clearSessionCookie } from '@/utils/session';
 import { Sparkles, AlertTriangle } from 'lucide-react';
 
-export default function ProviderLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { currentUser, isAuthLoading, logout } = useApp();
@@ -50,80 +55,105 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   useEffect(() => {
     if (!mounted || isAuthLoading) return;
 
-    if (!currentUser || currentUser.role !== 'provider') {
-      router.push('/');
+    if (!currentUser || currentUser.role !== 'admin') {
+      if (currentUser) {
+        setFlashMessage(MENSAJE_SIN_PERMISOS);
+        router.replace(currentUser.role === 'provider' ? HOME_BY_ROLE.provider : LOGIN_PATH);
+      } else {
+        // Sin sesión real: se limpia la pista de sesión para que el proxy no rebote de vuelta.
+        clearSessionCookie();
+        router.replace(LOGIN_PATH);
+      }
     }
   }, [mounted, isAuthLoading, currentUser, router]);
 
   if (!mounted || isAuthLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-bgPrimary text-textDark">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bgPrimary text-textDark">
         <div className="flex flex-col items-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-fillPrimary border-t-transparent" />
-          <p className="text-sm font-semibold text-textDark/80">Cargando portal del prestador...</p>
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-accentWine border-t-transparent" />
+          <p className="text-sm font-semibold text-textDark/80">Cargando panel de administración...</p>
         </div>
       </div>
     );
   }
 
-  if (!currentUser || currentUser.role !== 'provider') {
+  if (!currentUser || currentUser.role !== 'admin') {
     return null;
   }
 
   const menuItems = [
     {
       name: 'Dashboard',
-      path: '/provider/dashboard',
+      path: '/admin/dashboard',
       icon: LayoutDashboard,
-      desc: 'Resumen e interacciones'
+      desc: 'Resumen y métricas generales'
     },
     {
-      name: 'Mis Negocios',
-      path: '/provider/business',
-      icon: Store,
-      desc: 'Información y fotos del local'
+      name: 'Catálogo y Validación',
+      path: '/admin/validation',
+      icon: CheckSquare,
+      desc: 'Atractivos y moderación'
     },
     {
-      name: 'Días y Horarios',
-      path: '/provider/schedules',
-      icon: CalendarRange,
-      desc: 'Franjas de atención'
+      name: 'Validaciones de Usuario',
+      path: '/admin/validaciones',
+      icon: BadgeCheck,
+      desc: 'Documentación y verificación de cuentas'
     },
     {
-      name: 'Servicios y Ofertas',
-      path: '/provider/services',
-      icon: Layers,
-      desc: 'Comodidades y actividades'
+      name: 'Moderación de Contenido',
+      path: '/admin/moderacion',
+      icon: ShieldAlert,
+      desc: 'Reportes y contenido detectado por IA'
     },
     {
-      name: 'Reseñas de Turistas',
-      path: '/provider/reviews',
-      icon: MessageSquare,
-      desc: 'Opiniones y respuestas'
+      name: 'Actividad Sospechosa',
+      path: '/admin/actividad-sospechosa',
+      icon: Activity,
+      desc: 'Alertas de seguridad y fraude'
     },
     {
-      name: 'Reportes y Métricas',
-      path: '/provider/reports',
+      name: 'Gestión de Usuarios',
+      path: '/admin/users',
+      icon: Users,
+      desc: 'Prestadores y administradores'
+    },
+    {
+      name: 'Reportes e Informes',
+      path: '/admin/reports',
       icon: BarChart3,
-      desc: 'Desempeño y ranking'
+      desc: 'Métricas, visitas y analíticas'
     },
     {
-      name: 'Mi Perfil y Cuenta',
-      path: '/provider/profile',
-      icon: User,
-      desc: 'Datos comerciales y seguridad'
+      name: 'Auditoría y Logs',
+      path: '/admin/logs',
+      icon: FileText,
+      desc: 'Historial de actividades'
+    },
+    {
+      name: 'Reportes de Error',
+      path: '/admin/error-reports',
+      icon: Bug,
+      desc: 'Errores reportados por usuarios'
+    },
+    {
+      name: 'Configuración del Sistema',
+      path: '/admin/settings',
+      icon: Settings,
+      desc: 'Categorías, etiquetas y parámetros'
     },
     {
       name: 'Centro de Ayuda',
-      path: '/provider/help',
+      path: '/admin/help',
       icon: HelpCircle,
-      desc: 'Preguntas y soporte'
+      desc: 'Guías y documentación'
     }
   ];
 
   const handleLogout = () => {
     logout();
-    router.push('/');
+    router.replace(LOGIN_PATH);
   };
 
   return (
@@ -136,7 +166,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       >
         {/* Brand/Logo */}
         <div className="flex h-24 items-center justify-between px-6 py-4 border-b border-black/5">
-          <Link href="/provider/dashboard" className="flex items-center space-x-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 rounded-lg">
+          <Link href="/admin/dashboard" className="flex items-center space-x-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine focus-visible:ring-offset-2 rounded-lg">
             {isSidebarOpen ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src="/brand/logotipoColor1.svg" alt="ANDO" className="h-7 w-auto" />
@@ -145,14 +175,14 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
               <img src="/brand/iconoClaro.svg" alt="ANDO" className="h-6 w-auto invert opacity-75" />
             )}
             {isSidebarOpen && (
-              <span className="text-[10px] bg-fillPrimary/10 text-fillPrimary px-2 py-0.5 rounded-full font-semibold uppercase flex-shrink-0">
-                Socio
+              <span className="text-[10px] bg-accentWine/10 text-accentWine px-2 py-0.5 rounded-full font-semibold uppercase flex-shrink-0">
+                Admin
               </span>
             )}
           </Link>
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="hidden md:flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5 text-textDark/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary cursor-pointer"
+            className="hidden md:flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5 text-textDark/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine cursor-pointer"
             aria-label={isSidebarOpen ? "Colapsar menú lateral" : "Expandir menú lateral"}
           >
             {isSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -171,9 +201,9 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
                 key={item.path}
                 href={item.path}
                 data-tour={item.path}
-                className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary focus-visible:ring-offset-2 ${
+                className={`group flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine focus-visible:ring-offset-2 ${
                   isActive
-                    ? 'bg-fillPrimary text-white shadow-md shadow-fillPrimary/10'
+                    ? 'bg-accentWine text-white shadow-md shadow-accentWine/10'
                     : 'text-textDark/70 hover:text-textDark hover:bg-black/5'
                 }`}
               >
@@ -216,24 +246,17 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
         {/* Top Header */}
         <header className="flex h-24 items-center justify-between px-8 py-4 bg-white border-b border-black/5 sticky top-0 z-40">
           <div className="flex items-center">
-            <h2 className="font-wixDisplay text-lg font-bold text-fillPrimary">
-              {menuItems.find(item => item.path === pathname)?.name || 'Portal del prestador'}
+            <h2 className="font-wixDisplay text-lg font-bold text-accentWine">
+              {menuItems.find(item => item.path === pathname)?.name || 'Panel de administración'}
             </h2>
           </div>
           
           {/* Header Actions */}
           <div className="flex items-center space-x-3">
-            {currentUser.businessName && (
-              <div className="hidden lg:flex items-center space-x-1.5 bg-fillPrimary/5 text-fillPrimary px-3 py-1 rounded-full text-xs font-semibold border border-fillPrimary/10">
-                <Store className="h-3.5 w-3.5" />
-                <span>{currentUser.businessName}</span>
-              </div>
-            )}
-
             <button
               type="button"
               onClick={() => setIsOnboardingOpen(true)}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-fillPrimary/20 bg-fillPrimary/5 text-fillPrimary hover:bg-fillPrimary/10 text-xs font-bold transition cursor-pointer"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-accentWine/20 bg-accentWine/5 text-accentWine hover:bg-accentWine/10 text-xs font-bold transition cursor-pointer"
               data-tour="tutorial"
               title="Ver Tutorial de Onboarding"
             >
@@ -259,10 +282,10 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
             <div className="flex items-center space-x-2.5">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-textDark">{currentUser.name}</p>
-                <p className="text-[10px] text-textDark/60 font-medium">Prestador asociado</p>
+                <p className="text-[10px] text-textDark/60 font-medium">Administrador de sistemas</p>
               </div>
-              <div className="h-8 w-8 rounded-full bg-fillPrimary text-white flex items-center justify-center font-semibold text-sm uppercase">
-                {currentUser.name ? currentUser.name.slice(0, 2) : 'PR'}
+              <div className="h-8 w-8 rounded-full bg-accentWine text-white flex items-center justify-center font-semibold text-sm uppercase">
+                {currentUser.name ? currentUser.name.slice(0, 2) : 'AD'}
               </div>
             </div>
           </div>
@@ -278,7 +301,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-black/5 animate-scale-up space-y-4">
-            <div className="flex items-center space-x-2.5 text-fillPrimary">
+            <div className="flex items-center space-x-2.5 text-accentWine">
               <LogOut className="h-5 w-5" />
               <h4 className="font-wixDisplay font-bold text-textDark">Cerrar sesión</h4>
             </div>
@@ -289,7 +312,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
               <button
                 type="button"
                 onClick={() => setShowLogoutConfirm(false)}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fillPrimary cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg hover:bg-black/5 text-textDark/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accentWine cursor-pointer"
               >
                 Cancelar
               </button>
@@ -307,7 +330,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
 
       {/* Interactive Onboarding Tutorial (US-AYS-04) */}
       <OnboardingTutorialModal
-        role="provider"
+        role="admin"
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
       />

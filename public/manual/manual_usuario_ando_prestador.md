@@ -1,6 +1,5 @@
 # Manual de Usuario — ANDO App
 ### Rol: Prestador de Servicios Turísticos
-**Proyecto Final de Carrera | UTN FRM — Año Académico 2026**
 
 ---
 
@@ -652,5 +651,4 @@ Referencia rápida de los mensajes más frecuentes para el rol Prestador:
 
 ---
 
-*Manual de Usuario — ANDO App v1.0 | UTN FRM 2026*  
-*Proyecto Final de Carrera — Diseño y desarrollo de aplicación de turismo inteligente para el Gran Mendoza*
+*Manual de Usuario — ANDO App v1.0*
