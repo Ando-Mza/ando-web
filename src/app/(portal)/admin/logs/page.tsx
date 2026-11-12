@@ -223,7 +223,7 @@ export default function AdminLogsPage() {
             </p>
           </div>
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/login')}
             className="w-full py-2.5 bg-accentWine text-white rounded-xl text-xs font-bold hover:bg-accentWine/90 transition-all cursor-pointer"
           >
             Volver al Inicio

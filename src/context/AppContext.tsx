@@ -30,6 +30,7 @@ import { api } from '../utils/api';
 import { clearReportCache } from '../utils/reportCache';
 import { DEFAULT_GENERAL_PARAMS } from '../config/constants';
 import { USER_ROLES } from '../constants/enums';
+import { clearSessionCookie, setSessionCookie } from '../utils/session';
 import { mapBackendRoleToFrontend, mapBackendStatusToFrontend } from '../utils/roleUtils';
 
 interface AppContextProps {
@@ -557,6 +558,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         console.warn('El token de sesión ha expirado.');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        clearSessionCookie();
         localStorage.removeItem('ando_user');
         setCurrentUser(null);
         setIsAuthLoading(false);
@@ -589,6 +591,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             console.warn('Acceso denegado: El rol no está autorizado para acceder a este portal.');
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
+        clearSessionCookie();
             localStorage.removeItem('ando_user');
             setCurrentUser(null);
             setIsAuthLoading(false);
@@ -640,6 +643,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setCurrentUser(loggedUser);
           if (typeof window !== 'undefined') {
             localStorage.setItem('ando_user', JSON.stringify(loggedUser));
+            if (detectedRole === 'admin' || detectedRole === 'provider') setSessionCookie(detectedRole, jwtData?.exp);
           }
           await loadBackendData(detectedRole, profileId);
         }
@@ -649,6 +653,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('Unauthorized') || errMsg.includes('jwt') || errMsg.includes('Session expired')) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
+        clearSessionCookie();
           localStorage.removeItem('ando_user');
           setCurrentUser(null);
         }
@@ -681,6 +686,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
+        setSessionCookie(mappedRole, decodeJwt(data.accessToken)?.exp);
         
         let businessName = '';
         let cuit = '';
@@ -744,6 +750,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+        clearSessionCookie();
       localStorage.removeItem('ando_user');
       localStorage.removeItem('ando_real_pois');
       localStorage.removeItem('selectedProviderPoiId');
@@ -936,6 +943,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (currentUser?.id === id) {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+        clearSessionCookie();
       setCurrentUser(null);
     }
     

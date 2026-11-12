@@ -181,7 +181,7 @@ function ResetPasswordContent() {
               <div className="pt-2">
                 <button
                   type="button"
-                  onClick={() => router.push('/')}
+                  onClick={() => router.push('/login')}
                   className="w-full py-3 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -210,7 +210,7 @@ function ResetPasswordContent() {
               <div className="pt-2">
                 <button
                   type="button"
-                  onClick={() => router.push('/')}
+                  onClick={() => router.push('/login')}
                   className="w-full py-3 bg-fillPrimary hover:bg-fillPrimary/95 text-white font-bold rounded-xl text-xs shadow-md shadow-fillPrimary/10 hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer"
                 >
                   <span>Ir al Inicio de Sesión</span>

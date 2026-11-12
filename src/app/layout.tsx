@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { Unbounded, Wix_Madefor_Display, Wix_Madefor_Text } from "next/font/google";
-import { AppProvider } from "@/context/AppContext";
-import FlashMessage from "@/components/common/FlashMessage";
 import "./globals.css";
 
 const unbounded = Unbounded({
@@ -23,8 +21,9 @@ const wixText = Wix_Madefor_Text({
 });
 
 export const metadata: Metadata = {
-  title: "ANDO - Portal de Gestión Turística",
-  description: "Portal de administración y gestión para prestadores de servicios y administradores de ANDO.",
+  title: "ANDO | Descubrí el Gran Mendoza a tu manera",
+  description:
+    "ANDO es la plataforma de planificación de viajes por Mendoza: armá tu itinerario a mano o con inteligencia artificial, explorá el mapa y recorré cada parada.",
 };
 
 export default function RootLayout({
@@ -38,10 +37,7 @@ export default function RootLayout({
       className={`${unbounded.variable} ${wixDisplay.variable} ${wixText.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-wixText bg-bgPrimary text-textDark">
-        <AppProvider>
-          {children}
-          <FlashMessage />
-        </AppProvider>
+        {children}
       </body>
     </html>
   );

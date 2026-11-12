@@ -20,6 +20,7 @@ import {
   FileText
 } from 'lucide-react';
 import { api } from '@/utils/api';
+import { HOME_BY_ROLE, safeNextPath } from '@/utils/session';
 
 type SubView = 'login' | 'register' | 'forgot_password' | 'recovery_sent' | 'reset_password' | 'registration_pending';
 
@@ -27,14 +28,19 @@ export default function LoginPage() {
   const router = useRouter();
   const { currentUser, isAuthLoading, loginWithCredentials, registerProvider, users } = useApp();
 
+  // Destino post-login: respeta ?next= (puesto por el proxy) solo si es del portal del rol.
+  const resolveHome = (role: 'admin' | 'provider'): string => {
+    const next = safeNextPath(new URLSearchParams(window.location.search).get('next'));
+    return next && next.startsWith(`/${role}/`) ? next : HOME_BY_ROLE[role];
+  };
+
   useEffect(() => {
     if (!isAuthLoading && currentUser) {
-      if (currentUser.role === 'admin') {
-        router.push('/admin/dashboard');
-      } else if (currentUser.role === 'provider') {
-        router.push('/provider/dashboard');
+      if (currentUser.role === 'admin' || currentUser.role === 'provider') {
+        router.replace(resolveHome(currentUser.role));
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, isAuthLoading, router]);
 
   // Navigation & Subview
@@ -103,11 +109,7 @@ export default function LoginPage() {
       setIsLoading(false);
       
       if (response.success) {
-        if (response.role === 'admin') {
-          router.push('/admin/dashboard');
-        } else {
-          router.push('/provider/dashboard');
-        }
+        router.replace(resolveHome(response.role === 'admin' ? 'admin' : 'provider'));
       } else {
         setLoginError(response.error || 'Credenciales inválidas. Inténtelo de nuevo.');
         setShake(true);
