@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Unbounded, Wix_Madefor_Display, Wix_Madefor_Text } from "next/font/google";
 import "./globals.css";
 
@@ -24,6 +24,13 @@ export const metadata: Metadata = {
   title: "ANDO | Descubrí el Gran Mendoza a tu manera",
   description:
     "ANDO es la plataforma de planificación de viajes por Mendoza: armá tu itinerario a mano o con inteligencia artificial, explorá el mapa y recorré cada parada.",
+  applicationName: "ANDO",
+  appleWebApp: { title: "ANDO" },
+};
+
+// Color de la barra del navegador en móviles (Chrome Android, Safari).
+export const viewport: Viewport = {
+  themeColor: "#E96509",
 };
 
 export default function RootLayout({
